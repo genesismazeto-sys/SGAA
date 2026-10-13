@@ -377,3 +377,26 @@ def test_m4_ending_the_older_sessions_after_the_lift_commit_is_never_read_as_not
     with pytest.raises(ledger.CommitUncertain):
         observer.lift_barrier("5" * 64, ls.CODE, {"hash": "e" * 64})
     assert committed == ["e" * 64]
+
+
+def test_m1_admission_refuses_a_barrier_close_applied_but_could_not_record(position):
+    directory, observer = position
+    reference = ledger.status(directory)["opening_reference"]
+    twin = "dpl_" + "T" * 24
+    ls.deploy(directory, observer, twin, admission="OPEN", opening_reference=reference)
+    observer.barrier = {"setting": True}  # applied in PROD, never recorded
+    assert _code(ledger.admit_deployment, directory, twin, observer=observer) == "BARRIER_IN_FORCE"
+
+
+def test_m4_resume_names_the_head_it_moved_to_when_its_last_check_cannot_read(position, monkeypatch):
+    directory, observer = position
+    ledger.close(directory, observer=observer)
+
+    def writable():  # read only after the lift (the barrier is recorded): the database cannot be read
+        raise ledger.Refused("DATABASE_UNREACHABLE")
+
+    monkeypatch.setattr(observer, "writable", writable)
+    with pytest.raises(ledger.Refused) as caught:
+        ledger.resume(directory, observer=observer, backup_root=directory.parent, off_platform=directory.parent)
+    assert caught.value.code == "DATABASE_UNREACHABLE"
+    assert caught.value.head == ledger.status(directory)["head"] and ledger.status(directory)["barrier"] == "LIFTED"

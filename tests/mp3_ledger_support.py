@@ -284,6 +284,10 @@ class FakeObserver:
         self._commit(entry, apply)
 
     def admit(self, reference_sha256, deployment_id, entry):
+        from tools import cutover_ledger as ledger
+
+        if any((row["reference"], row["deployment"]) == (reference_sha256, deployment_id) for row in self.admissions):
+            raise ledger.Refused("PROD_TRANSACTION_FAILED")  # the table's primary key: refused before any COMMIT
         self._commit(entry, lambda: self.admissions.append({
             "reference": reference_sha256, "deployment": deployment_id,
             "entry": json.dumps(entry, sort_keys=True, separators=(",", ":"))}))

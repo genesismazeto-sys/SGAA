@@ -207,3 +207,19 @@ def test_real_pg_a_deployment_admission_commits_with_its_marker_and_is_what_the_
         observer.admit(REFERENCE, "dpl_" + "L" * 24, {"hash": "c" * 64, "type": "admission"})
     assert caught.value.code == "PROD_TRANSACTION_FAILED"
     assert observer.operation_committed("c" * 64) is False
+
+
+@real_pg
+def test_real_pg_a_forward_fix_authorization_admits_exactly_its_own_deployment(database):
+    """A19 (17): `authorize-code`'s transaction writes the code's authorization AND the admission of the one
+    deployment its entry names (the entry itself), with its marker; no other deployment is admitted."""
+    import psycopg
+
+    observer = _observer(database)
+    observer.authorize(REFERENCE, "7" * 64, {"hash": "a" * 64, "type": "reference"}, first=True)
+    fix = {"hash": "b" * 64, "type": "authorization", "deployment_id": "dpl_" + "F" * 24}
+    observer.authorize(REFERENCE, "9" * 64, fix, first=False)
+    assert observer.operation_committed(fix["hash"]) is True
+    with psycopg.connect(database, autocommit=True) as conn:
+        admitted = conn.execute("SELECT deployment_id, entry FROM sgaa_cutover.admission").fetchall()
+    assert [row[0] for row in admitted] == ["dpl_" + "F" * 24] and '"hash":"' + "b" * 64 in admitted[0][1]

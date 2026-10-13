@@ -616,9 +616,12 @@ it reads PROD only, so it runs under the barrier); then it lifts the barrier as 
 (SPEC A19 (17): its entry first; the role default reset, the authorization restored and its marker in
 one PROD transaction; then every session that started read-only ended; a lost answer leaves it to
 `reconcile` with every other act refused; `BARRIER_STILL_IN_FORCE` if, recorded, a fresh session still
-cannot write); every sweep is of the recorded project only (`PROVIDER_NOT_THE_PROJECT`); restore `CRON_SECRET`, `deploy_audit
-deploy … --admission open --opening-reference <status opening_reference>` and `promote`; re-enable
-the external trigger if it was used; record C13 with the changed fingerprint. `resume` also lifts a
+cannot write: `close`, then `resume` again); every sweep is of the recorded project only
+(`PROVIDER_NOT_THE_PROJECT`); restore `CRON_SECRET`, `deploy_audit deploy … --admission open
+--opening-reference <status opening_reference>`, `cutover_ledger admit-deployment --deployment <its id>`
+(**user terminal**; BEFORE C13 is recorded: after it an open deployment is admitted only by a forward
+fix's `authorize-code`) and `promote`; re-enable the external trigger if it was used; record C13 with
+the changed fingerprint. `resume` also lifts a
 barrier `close` applied but could not record. Every act that lets users in re-proves the backup
 first: an open deployment of the authorized code (before upload, once its code is known) and its
 promotion are refused `BACKUP_TOO_OLD_TO_OPEN` when the newest generation or object set is out of its

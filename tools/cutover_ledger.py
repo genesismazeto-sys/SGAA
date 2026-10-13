@@ -2268,8 +2268,13 @@ def resume(directory: Path, *, expect_head: str | None = None, observer: Observe
             "type": "barrier", "action": "LIFTED", "database_identity_sha256": identity,
             "authorization": "RESTORED" if current else "NONE",
         }, lambda entry: observer.lift_barrier(reference["hash"], current, entry))
-    if not observer.writable():  # recorded (the lift committed), yet a fresh session cannot write: say so
-        raise Refused("BARRIER_STILL_IN_FORCE", "a fresh session of the writers' role still cannot write",
+    try:
+        writable = observer.writable()
+    except Refused as refusal:  # the lift is recorded: the operator binds the next command to the new head
+        refusal.head = _head(read_ledger(directory))
+        raise
+    if not writable:  # recorded (the lift committed), yet a fresh session cannot write: say so
+        raise Refused("BARRIER_STILL_IN_FORCE", "a fresh session still cannot write: `close`, then `resume`",
                       head=_head(read_ledger(directory)))
     return entry
 
@@ -2307,6 +2312,8 @@ def admit_deployment(directory: Path, deployment_id: str, *, expect_head: str | 
             raise Refused("DEPLOYMENT_ALREADY_ADMITTED")
         _require_fresh(summary, reference)
         identity = _production_database(summary, observer)
+        if not observer.writable():  # a barrier `close` applied but could not record
+            raise Refused("BARRIER_IN_FORCE", "`resume` lifts the barrier before production is opened again")
         project = _require_provider_project(summary, observer)
         if observer.deployment_files_sha256(deployment_id) != deployment["files_sha256"]:
             raise Refused("DEPLOYMENT_NOT_THE_RECORDED_ONE")

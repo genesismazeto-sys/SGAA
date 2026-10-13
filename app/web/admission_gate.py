@@ -215,10 +215,13 @@ def _read_authorization() -> bool:
     except Exception:
         logger.warning("event=opening_authorization_unreadable")
         return False
-    authorized = row is not None and hosting.opening_entry_authorizes(
-        row[0], reference=reference, database_identity=identity, code=code, project=project)         and admitted is not None and hosting.deployment_entry_admits(
+    authorized = (
+        row is not None and hosting.opening_entry_authorizes(
+            row[0], reference=reference, database_identity=identity, code=code, project=project)
+        and admitted is not None and hosting.deployment_entry_admits(
             admitted[0], reference=reference, database_identity=identity, code=code, project=project,
             deployment=deployment)
+    )
     if not authorized:
         logger.warning("event=opening_not_authorized")
     return authorized

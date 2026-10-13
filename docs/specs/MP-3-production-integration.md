@@ -1233,8 +1233,19 @@ Executor amendments (consequences of the above; not material beyond what the use
   sessions follows the COMMIT and any failure there is an unknown outcome, never a refusal; `reconcile`
   reads the marker; an open promotion is also refused while the ledger records the barrier applied.
   The (15) and (16) guards stay (an open redeployment of the authorized code after the PONR; the code of
-  an unproven open upload), now as defence in depth. Accepted residual: an out-of-band `vercel promote`
-  by hand is outside the ledger; the runbook forbids it. Evidence: section 17.
+  an unproven open upload), now as defence in depth. Code from before (17) does not read the admission
+  table, but it is never authorized again: no code is authorized in PROD now (seq 84 kept none), an
+  earlier or the reference code is refused `CODE_ALREADY_AUTHORIZED`, and a deployment of any code that
+  does not name its deployment (every code before (17)) can no longer be recorded, so it never reaches
+  `authorize-code`. A fresh-context same-family review of the remediation found no material defect; its
+  non-material points were fixed (the runbook's refused-rollback path names `admit-deployment` before
+  C13; `resume` prints the head it moved to when its post-commit check cannot read; `admit-deployment`
+  refuses a barrier `close` applied but could not record) or are accepted here. Accepted residuals: an
+  out-of-band `vercel promote` by hand is outside the ledger (the runbook forbids it); after a lift whose
+  post-commit session ending failed, pooled read-only sessions may remain (availability only: `close`,
+  then `resume`); in a fresh ledger an aborted first attempt fixes the recorded project, and a first
+  promotion to an address with no alias yet is refused by the provider read (liveness only, fail
+  closed; the production ledger has both). Evidence: section 17.
 
 ## 17. Closure
 
