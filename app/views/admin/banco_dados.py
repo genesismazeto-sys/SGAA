@@ -1825,7 +1825,8 @@ def _postgres_backup_now():
     """MP-3 A19: "Gerar backup agora" under PostgreSQL; the outcome flashed as the SQLite route did."""
     conn = get_db_connection()
     if not _hosted_backup.backup_lock(conn):
-        # A20: the scheduled pass and the manual route never run together (one advisory lock per database).
+        # A20: the scheduled pass and the manual backup button never run together (one advisory
+        # lock per database; the restore's safety copy runs inside the restore's own lock window)
         flash("Outro backup está em andamento. Aguarde a conclusão e tente novamente.", "warning")
         return redirect(url_for("admin_banco_dados"))
     try:

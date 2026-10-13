@@ -56,6 +56,7 @@ RESULT_DATABASE_UNREADABLE = "DATABASE_UNREADABLE"
 RESULT_NO_DRIVE = "NO_DRIVE"
 RESULT_SNAPSHOT_FAILED = "SNAPSHOT_FAILED"
 RESULT_SNAPSHOT_NOT_RECORDED = "SNAPSHOT_NOT_RECORDED"
+RESULT_OBJECTS_NOT_DELIVERED = "OBJECTS_NOT_DELIVERED"
 RESULT_UPLOAD_FAILED = "UPLOAD_FAILED"
 
 _PROVIDERS = ("google", "onedrive")
@@ -159,6 +160,8 @@ def _deliver(*, prune: bool, with_objects: bool, store=None, build_objects=None)
     targets = [provider for provider in _PROVIDERS if active_cloud_account(conn, provider)]
     result["targets"] = targets
     if not targets:
+        # nothing to send: not a failed snapshot (the caller distinguishes NO_DRIVE from it)
+        result["sent"] = []
         return result
     started = time.monotonic()
     sent, failed, uploaded, exported, drives, registers_failed, folders = [], [], {}, {}, {}, [], {}
@@ -238,14 +241,17 @@ def _deliver(*, prune: bool, with_objects: bool, store=None, build_objects=None)
             })
             conn.commit()
     result.update(sent=sent, failed=failed, registers_failed=registers_failed)
+    # A set is only claimed when at least one drive actually received its archive (M1): an upload
+    # failure leaves the object layer unclaimed and due, so the next wake retries it (never silent).
+    claimed_objects = built["report"] is not None and bool(object_files)
     published = False
     if sent and raw is not None:
         receipt = pg_posture.run_record(
             generation_at=snapshot["generation_at"], manifest_sha256=snapshot["sha256"],
             dump_sha256=snapshot["sha256"], source_identity_sha256=snapshot["source_identity_sha256"],
-            object_set_name=built["set_name"], object_set_digest=(built["report"].objects_digest
-                                                                  if built["report"] is not None else None),
-            object_manifest_sha256=built["manifest_sha256"],
+            object_set_name=built["set_name"] if claimed_objects else None,
+            object_set_digest=(built["report"].objects_digest if claimed_objects else None),
+            object_manifest_sha256=built["manifest_sha256"] if claimed_objects else None,
             run_seconds=int(time.monotonic() - started), at=snapshot["generation_at"],
             kind=pg_posture.SNAPSHOT_KIND, provenance=pg_posture.HOSTED_PROVENANCE, destinations=tuple(sent),
             files=uploaded, exports=exported, drives=drives,
@@ -260,7 +266,7 @@ def _deliver(*, prune: bool, with_objects: bool, store=None, build_objects=None)
         prune_owned(conn, raw, sent, folders, keep, registers_skip=registers_failed)
     result["manifest"] = snapshot["sha256"] if published else None
     result["object_files"] = dict(object_files)
-    if built["report"] is not None:
+    if claimed_objects:
         result["object_set_name"] = built["set_name"]
         result["object_set_digest"] = built["report"].objects_digest
         result["object_manifest_sha256"] = built["manifest_sha256"]
@@ -377,6 +383,13 @@ def run_backup_pass(*, store=None, build_objects=None) -> dict:
         if result["manifest"] is None:
             return {"result_code": RESULT_SNAPSHOT_NOT_RECORDED, "action": action,
                     "sent": report["sent"], "failed": report["failed"]}
+        if due_objects and not result["object_files"]:
+            # the sealed set reached no drive: the database copy stays recorded (its own layer),
+            # the object layer is NOT claimed and stays due for the next wake
+            return {"result_code": RESULT_OBJECTS_NOT_DELIVERED, "action": "SNAPSHOT",
+                    "database_due": due_database, "objects_due": due_objects,
+                    "sent": report["sent"], "failed": report["failed"],
+                    "objects_failed": report["objects_failed"]}
         return report
     finally:
         backup_unlock(conn)
@@ -384,8 +397,8 @@ def run_backup_pass(*, store=None, build_objects=None) -> dict:
 
 __all__ = [
     "BACKUP_LOCK_KEY", "OBJECTS_ARCHIVE_NAME", "OBJECTS_ARCHIVE_PREFIX", "PG_SNAPSHOT_DEFAULT_FOLDER",
-    "RESULT_DATABASE_UNREADABLE", "RESULT_NOT_DUE", "RESULT_NOT_POSTGRES", "RESULT_NO_DRIVE", "RESULT_OK",
-    "RESULT_POLICY_INVALID", "RESULT_SKIPPED_BUSY", "RESULT_SNAPSHOT_FAILED", "RESULT_SNAPSHOT_NOT_RECORDED",
+    "RESULT_DATABASE_UNREADABLE", "RESULT_NOT_DUE", "RESULT_NOT_POSTGRES", "RESULT_NO_DRIVE", "RESULT_OBJECTS_NOT_DELIVERED",
+    "RESULT_OK", "RESULT_POLICY_INVALID", "RESULT_SKIPPED_BUSY", "RESULT_SNAPSHOT_FAILED", "RESULT_SNAPSHOT_NOT_RECORDED",
     "RESULT_UPLOAD_FAILED", "active_cloud_account", "backup_lock", "backup_unlock", "cloud_drive_folder_setting",
     "prune_owned", "run_backup_pass", "send_snapshot",
 ]

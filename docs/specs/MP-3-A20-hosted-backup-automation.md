@@ -88,8 +88,12 @@ After confirmation and the gated deploy, without any operator workstation or man
   token), uploaded with the snapshot, recorded in the receipt's additive `object_files` map,
   downloadable from the same row, pruned per kind to the policy keeping only receipt-named files.
 - Failure model: fixed codes only (`OK`, `NOT_DUE`, `POLICY_INVALID`, `NO_DRIVE`, `SKIPPED_BUSY`,
-  `SET_REFUSED_*`, `SNAPSHOT_*`, `JOB_FAILED`); a refusal never reverts a completed generation; the page
-  already renders LATE/next-due from the receipts.
+  `SET_*`, `OBJECTS_NOT_DELIVERED`, `SNAPSHOT_*`, `JOB_FAILED`); a refusal never reverts a completed
+  generation; the page already renders LATE/next-due from the receipts.  A due object set that cannot
+  be built stops the pass before any upload or receipt; a set that is built but reaches no drive is
+  never claimed as protection (the database copy is recorded as its own layer and the object layer
+  stays due — `OBJECTS_NOT_DELIVERED`).  A workspace beyond the function envelope therefore needs the
+  deferred batching (§15), never partial claims.
 
 ## 4. Decisions
 

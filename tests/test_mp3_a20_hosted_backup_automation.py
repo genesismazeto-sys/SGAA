@@ -95,7 +95,7 @@ def _delivered(*, sent=("google",), manifest="a" * 64, set_error=None, objects_f
     return {"targets": list(sent), "sent": list(sent) if manifest is not None else None, "failed": [],
             "registers_failed": [], "objects_failed": list(objects_failed), "manifest": manifest,
             "set_error": set_error, "object_set_name": None, "object_set_digest": None,
-            "object_manifest_sha256": None, "object_files": {}}
+            "object_manifest_sha256": None, "object_files": {"google": "objects-1"}}
 
 
 # ---------------------------------------------------------------------------
@@ -227,6 +227,8 @@ def test_a_busy_lock_reports_skipped_busy_without_touching_the_database(env):
     (dict(_delivered(), manifest=None), hosted_backup.RESULT_SNAPSHOT_NOT_RECORDED),
     (dict(_delivered(), sent=[]), hosted_backup.RESULT_NO_DRIVE),
     (dict(_delivered(), sent=None), hosted_backup.RESULT_SNAPSHOT_FAILED),
+    (dict(_delivered(), object_files={}, objects_failed=["OneDrive"]),
+     hosted_backup.RESULT_OBJECTS_NOT_DELIVERED),
 ])
 def test_partial_delivery_failures_map_to_their_codes(env, result, code):
     env.posture = _posture(latest_hours=None, latest_objects_hours=None)
@@ -305,6 +307,104 @@ def test_an_unreachable_store_is_a_fixed_code_not_an_exception(monkeypatch, tmp_
 
 
 # ---------------------------------------------------------------------------
+# the real delivery: a set that reaches no drive is never claimed as protection
+# ---------------------------------------------------------------------------
+
+
+def _deliver_env(monkeypatch, tmp_path, *, upload_objects_ok=True):
+    """The real ``_deliver`` with every boundary scripted (no database, no provider)."""
+    from pathlib import Path
+
+    from app import cloud_drives
+    from app.backup import pg_snapshot
+
+    calls = {"uploads": [], "published": [], "deleted": []}
+    monkeypatch.setattr(hosted_backup, "get_db_connection", lambda: _Conn())
+    monkeypatch.setattr(hosted_backup, "active_cloud_account", lambda conn, provider: provider == "google")
+    monkeypatch.setattr(hosted_backup, "cloud_drive_folder_setting",
+                        lambda conn, provider: {"folder_id": "F", "drive_id": ""})
+    monkeypatch.setattr(hosted_backup, "_save_drive_config", lambda conn, updates: None)
+    monkeypatch.setattr(hosted_backup.pg_posture, "read_policy",
+                        lambda raw, strict=False: {"pg_retention_generations": 2})
+    monkeypatch.setattr(hosted_backup.pg_posture, "publish",
+                        lambda raw, entries, **k: calls["published"].extend(entries) or {"published": 1})
+
+    def create(directory, **_kwargs):
+        db, csv_file = Path(directory) / "snap.db", Path(directory) / "regs.zip"
+        db.write_bytes(b"db")
+        csv_file.write_bytes(b"zip")
+        return {"path": str(db), "file_name": "sgaa-pg-snapshot-20261013T100000Z-aaaaaaaaaaaa-00000001.db",
+                "registers_path": str(csv_file),
+                "registers_file_name": "sgaa-registros-20261013T100000Z-aaaaaaaaaaaa-00000001.zip",
+                "sha256": "e" * 64, "generation_at": "2026-10-13T10:00:00Z",
+                "source_identity_sha256": "a" * 64}
+
+    monkeypatch.setattr(pg_snapshot, "create", create)
+
+    def upload(conn, provider, *, zip_path, file_name, folder_name, folder_id=None, drive_id=None, replace=True):
+        assert replace is False
+        calls["uploads"].append(file_name)
+        if file_name.startswith(hosted_backup.OBJECTS_ARCHIVE_PREFIX) and not upload_objects_ok:
+            raise RuntimeError("upload refused")
+        return {"file_id": f"{provider}-{len(calls['uploads'])}", "folder_id": folder_id or "default"}
+
+    monkeypatch.setattr(hosted_backup._cloud_connections, "upload_backup_zip", upload)
+    monkeypatch.setattr(hosted_backup._cloud_connections, "get_authenticated_access_token",
+                        lambda conn, provider: ("tok", "x"))
+    monkeypatch.setattr(cloud_drives, "google_list_folder_files", lambda token, folder, prefix: [])
+    monkeypatch.setattr(cloud_drives, "google_delete_file", lambda token, file_id: calls["deleted"].append(file_id))
+    return calls
+
+
+def _builder(tmp_path, code=None):
+    def build(conn, scratch, snapshot, *, store=None):
+        if code is not None:
+            return {"archive": None, "report": None, "manifest_sha256": None, "set_name": None, "code": code}
+        archive = tmp_path / "sgaa-pg-objetos-20261013T100000Z-aaaaaaaaaaaa-0000000000000001.zip"
+        archive.write_bytes(b"zip")
+        return {"archive": str(archive), "report": SimpleNamespace(objects_digest="ab" * 32),
+                "manifest_sha256": "cd" * 32, "set_name": "20261013T100000Z-hosted", "code": None}
+
+    return build
+
+
+def test_a_set_that_cannot_reach_a_drive_is_never_claimed_as_object_protection(monkeypatch, tmp_path):
+    calls = _deliver_env(monkeypatch, tmp_path, upload_objects_ok=False)
+    result = hosted_backup._deliver(prune=False, with_objects=True, build_objects=_builder(tmp_path))
+    assert result["object_files"] == {} and result["objects_failed"] == ["Google Drive"]
+    [receipt] = calls["published"]
+    assert receipt["object_set_name"] == "NONE" and "object_files" not in receipt
+    assert result["manifest"] == "e" * 64  # the database copy is still recorded (its own layer)
+
+
+def test_the_pass_reports_objects_not_delivered_through_the_real_deliver(monkeypatch, tmp_path):
+    _deliver_env(monkeypatch, tmp_path, upload_objects_ok=False)
+    monkeypatch.setattr(hosted_backup, "backup_lock", lambda conn: True)
+    monkeypatch.setattr(hosted_backup, "backup_unlock", lambda conn: None)
+    monkeypatch.setattr(hosted_backup.pg_posture, "read",
+                        lambda raw, now=None: _posture(latest_hours=None, latest_objects_hours=None))
+    report = hosted_backup.run_backup_pass(build_objects=_builder(tmp_path))
+    assert report["result_code"] == hosted_backup.RESULT_OBJECTS_NOT_DELIVERED
+    assert report["action"] == "SNAPSHOT" and report["objects_failed"] == ["Google Drive"]
+
+
+def test_a_refused_object_set_stops_the_pass_before_any_upload_or_receipt(monkeypatch, tmp_path):
+    calls = _deliver_env(monkeypatch, tmp_path)
+    result = hosted_backup._deliver(prune=False, with_objects=True,
+                                    build_objects=_builder(tmp_path, code="SET_TOO_MANY_OBJECTS"))
+    assert result["set_error"] == "SET_TOO_MANY_OBJECTS"
+    assert calls["uploads"] == [] and calls["published"] == []
+
+
+def test_no_connected_drive_is_no_drive_not_a_failed_snapshot(monkeypatch, tmp_path):
+    calls = _deliver_env(monkeypatch, tmp_path)
+    monkeypatch.setattr(hosted_backup, "active_cloud_account", lambda conn, provider: None)
+    result = hosted_backup._deliver(prune=False, with_objects=False)
+    assert result["targets"] == [] and result["sent"] == [] and result["manifest"] is None
+    assert calls["uploads"] == []
+
+
+# ---------------------------------------------------------------------------
 # retention: the object archives are a third kind, and only owned files are deleted
 # ---------------------------------------------------------------------------
 
@@ -357,16 +457,63 @@ def test_no_owned_object_archive_means_nothing_is_deleted(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_the_receipt_carries_the_object_files_and_the_ownership_reads_them():
+def test_the_receipt_carries_the_object_files_and_the_ownership_reads_them(monkeypatch):
+    from app import hosting
+
+    source = {"database": "db", "user": "u", "login_user": "u", "host": "h", "port": "5432",
+              "system_identifier": "1"}
+    identity = hosting.source_identity_sha256(source)
     receipt = pg_posture.run_record(
         generation_at="2026-10-13T10:00:00Z", manifest_sha256="a" * 64, dump_sha256="b" * 64,
-        source_identity_sha256="c" * 64, object_set_name="20261013T100000Z-hosted",
+        source_identity_sha256=identity, object_set_name="20261013T100000Z-hosted",
         object_set_digest="d" * 64, object_manifest_sha256="e" * 64, run_seconds=1, at="2026-10-13T10:00:00Z",
         kind=pg_posture.SNAPSHOT_KIND, provenance=pg_posture.HOSTED_PROVENANCE, destinations=("google",),
         files={"google": "snap-1"}, exports={"google": "csv-1"}, drives={},
         object_files={"google": "obj-1"})
     assert receipt["object_files"] == {"google": "obj-1"}
     assert pg_posture._intact(receipt)
+    # the ownership read (retention's only deletion source) picks the object files up too
+    monkeypatch.setattr(hosting, "database_source", lambda conn: dict(source))
+    rows = [(json.dumps(receipt, sort_keys=True), None)]
+    owned = pg_posture.owned_files(_FakeRaw(rows))
+    assert ("google", "", "obj-1") in owned and ("google", "", "snap-1") in owned
+
+
+class _FakeCursor:
+    def __init__(self, raw):
+        self._raw = raw
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, sql, params=None):
+        self._raw.last_sql = sql
+        return self
+
+    def fetchall(self):
+        return list(self._raw.rows)
+
+    def fetchone(self):
+        return (True,) if self._raw.last_sql == pg_posture.EXISTS_SQL else None
+
+
+class _FakeRaw:
+    """The minimum psycopg surface ``pg_posture.owned_files`` reads (rows only, no server)."""
+
+    def __init__(self, rows):
+        self.rows, self.last_sql = rows, None
+        self.info = SimpleNamespace(user="u", host="h", port=5432, dbname="db")
+
+    def transaction(self):
+        import contextlib
+
+        return contextlib.nullcontext()
+
+    def cursor(self, row_factory=None):
+        return _FakeCursor(self)
 
 
 # ---------------------------------------------------------------------------
@@ -482,16 +629,33 @@ def _posture_of(env):
         raw.close()
 
 
+def _public_counts(url):
+    conn = raw_connection(url, autocommit=True)
+    try:
+        tables = [row[0] for row in conn.execute(
+            "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename").fetchall()]
+        return {table: conn.execute(f'SELECT count(*) FROM "{table}"').fetchone()[0] for table in tables}
+    finally:
+        conn.close()
+
+
 @needs_pg
 def test_a_scheduled_wake_ships_a_verified_snapshot_and_a_sealed_set_and_records_the_receipt(production):
     """AC2/AC3: the full automatic pass on real PostgreSQL, with the page's own reading."""
     env = production
     _set_policy(env, database_cadence_hours=24, object_cadence_days=7, retention_generations=2,
                 restore_test_days=30)
+    before = _public_counts(env.url)
     with env.app.app_context():
         report = hosted_backup.run_backup_pass(store=env.store, build_objects=object_sets.build_objects_archive)
     assert report["result_code"] == hosted_backup.RESULT_OK
     assert report["action"] == "SNAPSHOT+OBJECTS" and report["sent"] == ["google"]
+    # the pass writes `sgaa_ops` (receipts, outside public) and the target-side settings keys only:
+    # no business table changes (configuracoes_backup records the upload clock/policy, as the manual
+    # button did; the R8 route lane excludes the same settings table)
+    after = _public_counts(env.url)
+    assert {table: n for table, n in after.items() if table not in ("cloud_drive_settings", "configuracoes_backup")} == \
+        {table: n for table, n in before.items() if table not in ("cloud_drive_settings", "configuracoes_backup")}
     names = [item["name"] for item in env.drive.remote["google"]]
     assert sum(name.startswith("sgaa-pg-snapshot-") for name in names) == 1
     assert sum(name.startswith("sgaa-registros-") for name in names) == 1
@@ -516,14 +680,12 @@ def test_a_scheduled_wake_ships_a_verified_snapshot_and_a_sealed_set_and_records
 
 
 @needs_pg
-def test_the_scheduler_front_wakes_the_full_pass_with_the_injected_object_builder(production):
+def test_the_scheduler_front_wakes_the_full_pass_with_the_injected_object_builder(production, monkeypatch):
     """AC2/AC6: the platform's wake path itself -- bearer, dispatch, due-ness, objects, receipt."""
     env = production
     _set_policy(env, database_cadence_hours=24, object_cadence_days=7, retention_generations=2,
                 restore_test_days=30)
-    import os as _os
-
-    _os.environ["CRON_SECRET"] = SECRET
+    monkeypatch.setenv("CRON_SECRET", SECRET)
     client = Client(scheduler.application)
     response = client.post(scheduler.ROUTE_BACKUP, headers={"Authorization": f"Bearer {SECRET}"})
     assert response.status_code == 200
@@ -557,8 +719,8 @@ def test_the_receipt_makes_the_banco_de_dados_page_show_the_generation_without_a
 
 @needs_pg
 def test_a_full_backup_survives_the_restore_path_the_admin_page_offers(production, tmp_path):
-    """AC1: the scheduled snapshot restores through the qualified Path-B reader into an empty database
-    and the restored business fingerprint equals the source's."""
+    """AC1: the exact snapshot the pass ships (same creator) restores through the qualified Path-B
+    reader into an empty database and the restored business fingerprint equals the source's."""
     import sqlite3
 
     from app import pg_migrate_from_sqlite as pathb

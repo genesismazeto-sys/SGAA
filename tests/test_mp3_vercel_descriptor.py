@@ -61,9 +61,10 @@ def test_the_scheduler_route_is_rewritten_before_the_catch_all_and_to_the_schedu
     assert rewrites[catch_all[0]]["destination"] == {"service": "web"}
 
 
-def test_the_cron_targets_the_scheduler_route_at_most_once_a_day():
+def test_the_cron_targets_the_scheduler_routes_at_most_once_a_day():
     crons = DESCRIPTOR["crons"]
-    assert [cron["path"] for cron in crons] == [scheduler.ROUTE_MIRROR]
+    # A20: the mirror and the scheduled backup pass, both on the scheduler service
+    assert [cron["path"] for cron in crons] == [scheduler.ROUTE_MIRROR, scheduler.ROUTE_BACKUP]
     for cron in crons:
         minute, hour, day, month, weekday = cron["schedule"].split()
         # Hobby: an expression that would run more than once a day fails the deployment.
