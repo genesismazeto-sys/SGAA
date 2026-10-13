@@ -39,6 +39,10 @@
     {
       "path": "/internal/scheduler/mirror",
       "schedule": "17 4 * * *"
+    },
+    {
+      "path": "/internal/scheduler/backup",
+      "schedule": "47 4 * * *"
     }
   ]
 }

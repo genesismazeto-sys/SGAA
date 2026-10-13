@@ -1749,6 +1749,11 @@
                       <i class="lucide" data-lucide="file-spreadsheet"></i>
                     </a>
                     {% endif %}
+                    {% if item.object_files %}
+                    <a class="btn db-icon-btn" href="{{ url_for('admin_banco_dados_download', generation=item.manifest, kind='objetos') }}" title="Baixar arquivos do armazenamento (ZIP)" aria-label="Baixar arquivos do armazenamento (ZIP)">
+                      <i class="lucide" data-lucide="package"></i>
+                    </a>
+                    {% endif %}
                     {% else %}
                     <span class="btn db-icon-btn" aria-disabled="true" title="Cópia guardada na máquina de operação (diretório de backups do operador)" style="opacity:.45;cursor:not-allowed;">
                       <i class="lucide" data-lucide="download"></i>

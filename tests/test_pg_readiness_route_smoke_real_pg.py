@@ -785,6 +785,13 @@ def _backup_now_fakes(monkeypatch, view, cloud_drives, remote, uploads, deleted,
                         lambda conn, provider: {"account_email": "x@example.invalid"} if provider == "google" else None)
     monkeypatch.setattr(view, "_get_cloud_drive_folder_setting",
                         lambda conn, provider: {"folder_id": folder_id, "drive_id": ""})
+    # A20: the send body lives in app.backup.hosted_backup -- its collaborator reads are patched there
+    from app.backup import hosted_backup
+
+    monkeypatch.setattr(hosted_backup, "active_cloud_account",
+                        lambda conn, provider: {"account_email": "x@example.invalid"} if provider == "google" else None)
+    monkeypatch.setattr(hosted_backup, "cloud_drive_folder_setting",
+                        lambda conn, provider: {"folder_id": folder_id, "drive_id": ""})
     monkeypatch.setattr(view._cloud_connections, "upload_backup_zip", upload)
     monkeypatch.setattr(view._cloud_connections, "get_authenticated_access_token", lambda conn, provider: ("tok", "x"))
     monkeypatch.setattr(cloud_drives, "google_list_folder_files", listed)
@@ -946,7 +953,11 @@ def test_r8_recuperar_banco_restores_a_snapshot_after_sending_a_safety_copy(env,
         # no connected drive: no safety copy possible, so nothing is restored
         _seed_activity_base(env.observer, "RSMK Sem nuvem", [40])
         before = bases()
+        from app.backup import hosted_backup
+
         monkeypatch.setattr(view, "_get_active_cloud_account", lambda conn, provider: None)
+        # A20: the safety copy is sent by the hosted backup owner; its account read is patched there too
+        monkeypatch.setattr(hosted_backup, "active_cloud_account", lambda conn, provider: None)
         response = admin_client.post("/admin/banco-dados/restaurar/upload", content_type="multipart/form-data",
                                      data={"backup_file": (io.BytesIO(body), "sgaa-pg-snapshot-x.db")})
         flashes = _pop_flashes(admin_client)

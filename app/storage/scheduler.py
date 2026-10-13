@@ -11,7 +11,10 @@ route, RBAC and CSRF inventories do not grow.
 CONTRACT
     ``GET`` or ``POST`` ``/internal/scheduler/mirror`` with
     ``Authorization: Bearer <CRON_SECRET>`` runs ONE bounded mirror pass
-    (``drive_mirror.run_mirror_pass``) and answers a value-free JSON report:
+    (``drive_mirror.run_mirror_pass``); ``/internal/scheduler/backup`` runs ONE
+    policy-driven backup pass (``hosted_backup.run_backup_pass``: the database
+    cadence and the object cadence decide, so the wake interval is not contract).
+    Both answer a value-free JSON report:
 
         200  the pass ran (including "nothing due")
         503  not runnable: canonical store or Drive unavailable (``result_code``)
@@ -54,6 +57,8 @@ from app.storage import mirror_outbox
 logger = logging.getLogger(__name__)
 
 ROUTE_MIRROR = "/internal/scheduler/mirror"
+#: A20: the policy-driven hosted backup pass (snapshots + sealed object sets on the cadences).
+ROUTE_BACKUP = "/internal/scheduler/backup"
 BATCH_ENV = "SCHEDULER_MIRROR_BATCH"
 LEASE_ENV = "SCHEDULER_MIRROR_LEASE_SECONDS"
 DEFAULT_BATCH = 5
@@ -128,6 +133,34 @@ def _run_mirror() -> tuple[int, dict]:
     return status, result.as_dict()
 
 
+def _run_backup() -> tuple[int, dict]:
+    """MP-3 A20: one policy-driven backup pass; the decision and the codes live in the owner.
+
+    The object-set builder is a background capability (I3) injected here, in the scheduler
+    service, so the web-runtime modules never reach ``object_backup``."""
+    from app.db import close_db_connection
+    from app.backup import hosted_backup, object_sets
+
+    try:
+        flask_app = _flask_app()
+    except Exception as exc:
+        logger.error("scheduler startup failed (%s)", type(exc).__name__)
+        return 500, {"result_code": SCHEDULER_STARTUP_FAILED}
+    try:
+        with flask_app.app_context():
+            try:
+                report = hosted_backup.run_backup_pass(build_objects=object_sets.build_objects_archive)
+            finally:
+                close_db_connection(None)
+    except Exception as exc:
+        # Exception text may carry a locator or a provider message: only the class is logged.
+        logger.error("scheduler job backup failed (%s)", type(exc).__name__)
+        return 500, {"result_code": SCHEDULER_JOB_FAILED}
+    ok = report.get("result_code") in (hosted_backup.RESULT_OK, hosted_backup.RESULT_NOT_DUE,
+                                       hosted_backup.RESULT_SKIPPED_BUSY)
+    return (200 if ok else 503), report
+
+
 def _respond(start_response, status: int, body: dict | None = None, *, headers=()):
     payload = json.dumps(body if body is not None else {}, sort_keys=True).encode("utf-8")
     reasons = {200: "OK", 401: "Unauthorized", 404: "Not Found", 405: "Method Not Allowed",
@@ -142,12 +175,16 @@ def _respond(start_response, status: int, body: dict | None = None, *, headers=(
 
 def application(environ, start_response):
     secret = hosting.cron_secret()
-    if secret is None or environ.get("PATH_INFO") != ROUTE_MIRROR:
+    path = environ.get("PATH_INFO")
+    if secret is None or path not in (ROUTE_MIRROR, ROUTE_BACKUP):
         return _respond(start_response, 404)
     if environ.get("REQUEST_METHOD") not in ("GET", "POST"):
         return _respond(start_response, 405, headers=[("Allow", "GET, POST")])
     if not _authorized(str(environ.get("HTTP_AUTHORIZATION") or ""), secret):
         return _respond(start_response, 401, headers=[("WWW-Authenticate", "Bearer")])
+    if path == ROUTE_BACKUP:
+        status, report = _run_backup()
+        return _respond(start_response, status, {"command": "backup", **report})
     status, report = _run_mirror()
     return _respond(start_response, status, {"command": "mirror", **report})
 
@@ -155,6 +192,7 @@ def application(environ, start_response):
 __all__ = [
     "DEFAULT_BATCH",
     "MAX_BATCH",
+    "ROUTE_BACKUP",
     "ROUTE_MIRROR",
     "SCHEDULER_JOB_FAILED",
     "SCHEDULER_STARTUP_FAILED",

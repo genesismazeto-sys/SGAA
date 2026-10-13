@@ -104,8 +104,8 @@ def test_the_recent_list_is_newest_first_bounded_and_value_free():
     recent = _summary(_rows(*entries))["recent"]
     assert [item["generation_at"] for item in recent] == sorted((NOW - timedelta(hours=h) for h in (1, 3, 5, 9, 30)),
                                                                 reverse=True)
-    assert set(recent[0]) == {"generation_at", "baseline", "snapshot", "manifest", "files", "exports", "drives",
-                              "destinations", "objects", "off_platform", "governed", "manifest_short"}
+    assert set(recent[0]) == {"generation_at", "baseline", "snapshot", "manifest", "files", "exports", "object_files",
+                              "drives", "destinations", "objects", "off_platform", "governed", "manifest_short"}
     assert len(recent[0]["manifest_short"]) == 12
 
 
@@ -946,7 +946,7 @@ def test_r8_the_snapshot_upload_never_replaces_existing_onedrive_content(monkeyp
 def _fake_view(monkeypatch, tmp_path, *, owned=frozenset(), listed=(), upload_drive="D"):
     """TEST ONLY: the Banco de dados view's PostgreSQL backup path with every boundary scripted."""
     from app import cloud_drives
-    from app.backup import pg_snapshot
+    from app.backup import hosted_backup, pg_snapshot
     from app.views.admin import banco_dados as view
 
     calls = {"uploads": [], "deleted": [], "listed": []}
@@ -974,6 +974,13 @@ def _fake_view(monkeypatch, tmp_path, *, owned=frozenset(), listed=(), upload_dr
     monkeypatch.setattr(view, "_get_active_cloud_account", lambda conn, provider: provider == "onedrive")
     monkeypatch.setattr(view, "_get_cloud_drive_folder_setting", lambda conn, provider: {"folder_id": "F", "drive_id": "D"})
     monkeypatch.setattr(view, "_save_drive_config", lambda conn, updates: None)
+    # A20: the send/prune bodies live in app.backup.hosted_backup -- the collaborators it reads
+    # are patched on that owner; the view wrappers delegate to it.
+    monkeypatch.setattr(hosted_backup, "get_db_connection", lambda: Conn())
+    monkeypatch.setattr(hosted_backup, "active_cloud_account", lambda conn, provider: provider == "onedrive")
+    monkeypatch.setattr(hosted_backup, "cloud_drive_folder_setting",
+                        lambda conn, provider: {"folder_id": "F", "drive_id": "D"})
+    monkeypatch.setattr(hosted_backup, "_save_drive_config", lambda conn, updates: None)
     monkeypatch.setattr(pg_snapshot, "create", create)
     monkeypatch.setattr(view.pg_posture, "read_policy", lambda raw, strict=False: {"pg_retention_generations": 2})
     monkeypatch.setattr(view.pg_posture, "publish", lambda raw, entries, **_k: {"published": 1, "already": 0})

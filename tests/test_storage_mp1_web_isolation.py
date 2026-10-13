@@ -19,6 +19,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKGROUND = frozenset({
+    # the scheduled object-set builder (MP-3 A20): background by design; only the scheduler
+    # service injects it, exactly like the CLI fronts the other members
+    "app.backup.object_sets",
     "app.storage.cli",
     "app.storage.drive_mirror",
     "app.storage.legacy_convergence",

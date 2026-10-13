@@ -260,10 +260,12 @@ def run_record(*, generation_at: str, manifest_sha256: str, dump_sha256: str, so
                object_set_name: str | None, object_set_digest: str | None, object_manifest_sha256: str | None,
                run_seconds: int, at: str, kind: str = "GENERATION", provenance: str = RUN_PROVENANCE,
                off_platform: str = "VERIFIED", destinations: tuple[str, ...] = (),
-               files: dict | None = None, exports: dict | None = None, drives: dict | None = None) -> dict:
+               files: dict | None = None, exports: dict | None = None, drives: dict | None = None,
+               object_files: dict | None = None) -> dict:
     """The self-hashed receipt of a run outside the ledger (same shape as the ledger's ``backup`` entry,
-    no chain): an ``ops_backup`` run (``OPERATOR_RUN``) or "Gerar backup agora" (``SNAPSHOT``,
-    ``HOSTED_RUN``, the cloud drives that received it)."""
+    no chain): an ``ops_backup`` run (``OPERATOR_RUN``), "Gerar backup agora" or the scheduled pass
+    (``SNAPSHOT``, ``HOSTED_RUN``, the cloud drives that received it).  ``object_files`` names the
+    drives that received the sealed object set (A20)."""
     body = {
         "type": BACKUP_TYPE, "kind": kind, "at": at, "generation_at": generation_at,
         "manifest_sha256": manifest_sha256, "dump_sha256": dump_sha256,
@@ -280,6 +282,8 @@ def run_record(*, generation_at: str, manifest_sha256: str, dump_sha256: str, so
         body["exports"] = {provider: str(file_id) for provider, file_id in sorted(exports.items())}
     if drives:  # the drive each file lives in (OneDrive item ids are scoped to their drive)
         body["drives"] = {provider: str(drive_id) for provider, drive_id in sorted(drives.items())}
+    if object_files:
+        body["object_files"] = {provider: str(file_id) for provider, file_id in sorted(object_files.items())}
     return dict(body, hash=hosting.ledger_entry_hash(body))
 
 
@@ -487,6 +491,7 @@ def summarize(stored, *, identity, policy: dict | None = None, ceiling_hours: in
              "manifest": str(entry.get("manifest_sha256") or ""),
              "files": _files(entry),
              "exports": _files(entry, "exports"),
+             "object_files": _files(entry, "object_files"),
              "drives": _files(entry, "drives"),
              "destinations": [d for d in (entry.get("destinations") or []) if d in ("google", "onedrive")],
              "objects": entry.get("object_set_name") not in (None, "NONE"),
@@ -525,7 +530,7 @@ def owned_files(raw) -> set:
                 or entry.get("kind") != SNAPSHOT_KIND:
             continue
         drives = _files(entry, "drives")
-        for key in ("files", "exports"):
+        for key in ("files", "exports", "object_files"):
             for provider, file_id in _files(entry, key).items():
                 owned.add((provider, drives.get(provider, ""), file_id))
     return owned
