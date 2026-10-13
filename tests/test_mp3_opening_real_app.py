@@ -143,9 +143,10 @@ def _reference(lane, closed):
 
 
 def _lift(lane, taken):
-    opened = lane["serve"]("open", SGAA_OPENING_REFERENCE=taken["hash"])
+    opened = lane["serve"]("open", SGAA_OPENING_REFERENCE=taken["hash"], VERCEL_DEPLOYMENT_ID=LIFT)
     ls.record_served(lane["ledger"], lane["platform"], LIFT, opened.url, code=_CODE, admission="OPEN",
                      opening_reference=taken["hash"])
+    ledger.admit_deployment(lane["ledger"], LIFT, observer=lane["observer"]())  # its own platform identity
     ls.promote_served(lane["ledger"], lane["platform"], LIFT, code=_CODE, host=LOCAL_HOST)
     return opened
 

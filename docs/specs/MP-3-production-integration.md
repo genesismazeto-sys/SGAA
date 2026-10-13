@@ -1202,6 +1202,39 @@ Executor amendments (consequences of the above; not material beyond what the use
   what makes a shared name harmless: exclusive local creation, OneDrive refusing to replace, Google Drive
   always creating a new file, and retention and downloads acting only on the file ids this database's
   receipts name. Evidence: section 17.
+  (17) The cross-family rereview of `b83b5fc` (FAIL, 4 material), each reproduced first: the reviewer's
+  five probes, run unchanged in the executor's worktree, failed on `b83b5fc` for the reported reasons.
+  Root cause: admission was decided by the CODE, so any platform deployment of an authorized code -- a
+  late, duplicate or unrecorded upload -- inherited the authorization, and the ledger had to prove by
+  observation everything an asynchronous provider did. Admission is now bound to a DEPLOYMENT. An open
+  process admits users only while PROD holds both the authorization of its code (unchanged) and an
+  admission of its own platform deployment (`sgaa_cutover.admission`, a new table in the control schema:
+  an intact ledger entry of type `admission`, or the forward-fix `authorization` itself, naming the
+  reference, the database, the code, the project and the deployment), as the platform names it to the
+  process (`VERCEL_DEPLOYMENT_ID`, a documented system variable available at build and at runtime, the
+  mechanism the gate already relies on for `VERCEL_PROJECT_ID`; a process without it admits no one).
+  The ledger writes an admission only for one recorded deployment: `admit-deployment` (new, before the
+  PONR: a recorded open deployment of the authorized code under the reference, its recorded files in
+  the recorded project, no barrier, fresh backups; a two-phase PROD act with its marker) and
+  `authorize-code` (both forms: the authorization and its deployment's admission in one transaction).
+  Every response of a hosted production process announces its deployment (`X-SGAA-Deployment`) and the
+  governed deploy records a deployment only once it names itself as the platform does
+  (`DEPLOYMENT_IDENTITY_NOT_OBSERVED`), which validates the platform identity on the real runtime before
+  any admission depends on it; an open deployment is promoted only once admitted. A delayed, duplicate,
+  superseded or unnamed deployment therefore admits no one, whatever the ledger concluded about it. M2 --
+  a promotion is sent only when it changes what the address serves (`PROMOTION_NOT_A_CHANGE`; the entry
+  records `serving_before`): with no other request for that deployment outstanding, the address serving
+  it is this request's own effect; the documented recovery no longer re-sends a promotion (wait, or
+  remove the deployment). M3 -- every provider observation is of the recorded project
+  (`_require_provider_project` in every sweep, in `reconcile` and in both `authorize-code` paths; the
+  attempt now records its project) and a promotion's reconciliation observes the address it was sent for
+  (`ADDRESS_NOT_THE_PROMOTION`). M4 -- `resume` is a two-phase act: its entry first; the role default
+  reset, the code's authorization restored and its marker in one PROD transaction; ending the older
+  sessions follows the COMMIT and any failure there is an unknown outcome, never a refusal; `reconcile`
+  reads the marker; an open promotion is also refused while the ledger records the barrier applied.
+  The (15) and (16) guards stay (an open redeployment of the authorized code after the PONR; the code of
+  an unproven open upload), now as defence in depth. Accepted residual: an out-of-band `vercel promote`
+  by hand is outside the ledger; the runbook forbids it. Evidence: section 17.
 
 ## 17. Closure
 

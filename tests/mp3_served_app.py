@@ -31,6 +31,8 @@ SERVED_SECRET_KEY = "p" + "3" * 47
 # The value an open application starts from: ``served_app`` replaces it with the reference of an authorization
 # it writes, unless the lane names its own (a lane that tests the opening itself).
 SERVED_OPENING_REFERENCE = "5" * 64
+#: The platform's name for a served application (``VERCEL_DEPLOYMENT_ID``; MP-3 A19 (17)).
+SERVED_DEPLOYMENT = "dpl_" + "S" * 24
 # APPDATA / LOCALAPPDATA: libpq finds the workstation password file there (the live lanes).
 _KEEP = ("SYSTEMROOT", "SystemDrive", "WINDIR", "COMSPEC", "PATHEXT", "PATH", "USERPROFILE", "OS",
          "APPDATA", "LOCALAPPDATA", "HOMEDRIVE", "HOMEPATH")
@@ -63,16 +65,19 @@ def hosted_environment(database_url: str, tmp_path, **extra_env) -> dict:
         "GOOGLE_CLIENT_ID": "", "GOOGLE_CLIENT_SECRET": "",
     })
     env.setdefault("VERCEL_PROJECT_ID", PROJECT_ID)
+    env.setdefault("VERCEL_DEPLOYMENT_ID", SERVED_DEPLOYMENT)
     env.update({key: str(value) for key, value in extra_env.items()})
     return env
 
 
-def authorize_opening(database_url: str) -> str:
-    """TEST ONLY: what the ledger's ``reference`` writes into PROD, for this database and the served code.
+def authorize_opening(database_url: str, deployment: str = SERVED_DEPLOYMENT) -> str:
+    """TEST ONLY: what the ledger's ``reference`` and ``admit-deployment`` write into PROD, for this database,
+    the served code and the served deployment.
 
     A ledger-shaped reference entry naming the database's live identity, the code the served
-    application runs and the platform project, stored through the ledger's own writer; returns the
-    entry's hash (the value an open application is lifted with).
+    application runs and the platform project, and an admission entry naming ``deployment``, both stored
+    through the ledger's own writers; returns the reference's hash (the value an open application is
+    lifted with).
     """
     import hashlib
     import secrets
@@ -92,6 +97,10 @@ def authorize_opening(database_url: str) -> str:
     entry = dict(body, hash=hosting.ledger_entry_hash(body))
     observer = cutover_ledger.Observer(database_url=database_url, source_connector=local_connector(database_url))
     observer.authorize(entry["hash"], body["code_sha256"], entry, first=False)
+    admitted = {"seq": body["seq"] + 1, "prev": entry["hash"], "at": body["at"], "type": "admission",
+                "opening_reference": entry["hash"], "deployment_id": deployment, "code_sha256": body["code_sha256"],
+                "database_identity_sha256": identity, "vercel_project_sha256": body["vercel_project_sha256"]}
+    observer.admit(entry["hash"], deployment, dict(admitted, hash=hosting.ledger_entry_hash(admitted)))
     return entry["hash"]
 
 

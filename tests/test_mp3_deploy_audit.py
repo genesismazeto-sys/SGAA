@@ -10,6 +10,7 @@ on the runtime allowlist, and an output that would echo a path.
 from __future__ import annotations
 
 import ast
+import hashlib
 import io
 import json
 import os
@@ -610,9 +611,11 @@ def at_c8(tmp_path, monkeypatch):
     for index, gate in enumerate(ls.ALL_GATES):
         ledger.grant(directory, gate, f"m-{index}")
     ls.drive(directory, "C8", ls.FakeObserver(), {"C0": {"commit": _head()}})
-    answers = {"admission": "closed", "code": None}
+    answers = {"admission": "closed", "code": None, "deployment": None}
+    # the platform's name a deployment announces: its own (the scripted platform's host is its id)
     monkeypatch.setattr(da, "_observed", lambda url, *, allow_insecure: (
-        answers["admission"], _code_of_head() if answers["code"] is None else answers["code"]))
+        answers["admission"], _code_of_head() if answers["code"] is None else answers["code"],
+        url.split("//", 1)[-1].split(".", 1)[0] if answers["deployment"] is None else answers["deployment"]))
     monkeypatch.setattr(time, "sleep", lambda seconds: None)
     return {"directory": directory, "answers": answers}
 
@@ -654,6 +657,10 @@ def test_anything_that_changed_between_the_verification_and_the_upload_is_never_
     ({"code": ""}, "DEPLOYMENT_CODE_NOT_OBSERVED"),           # a protection page, or nothing announced
     ({"admission": "open"}, "LEDGER_DEPLOYMENT_NOT_CLOSED"),  # an operator deployment that admits users
     ({"admission": "unknown"}, "LEDGER_DEPLOYMENT_NOT_CLOSED"),
+    # A19 (17): admission binds the platform's name for the process; one that does not name itself as the
+    # platform does (no name, another deployment's) is never recorded
+    ({"deployment": ""}, "DEPLOYMENT_IDENTITY_NOT_OBSERVED"),
+    ({"deployment": "dpl_" + "Q" * 24}, "DEPLOYMENT_IDENTITY_NOT_OBSERVED"),
 ])
 def test_a_deployment_that_does_not_run_and_refuse_as_recorded_is_removed_not_recorded(at_c8, answers, code):
     at_c8["answers"].update(answers)
@@ -724,6 +731,8 @@ def test_promotion_points_the_public_address_at_a_recorded_deployment_and_record
 
     def reconciled(provider):  # the promotion stayed unresolved: `reconcile` observes the alias and the platform
         observer = type("Platform", (), {
+            "provider_project_sha256": lambda self: hashlib.sha256(provider.project_id.encode()).hexdigest(),
+            "host_sha256": lambda self: hosted_smoke.host_digest(public),
             "alias_deployment": lambda self: provider.alias_target("sgaa.example.test"),
             "provider_deployments": lambda self: [{"id": key, "url": "", "state": provider.state}
                                                   for key in provider.received if key not in provider.removed]})()
@@ -749,6 +758,11 @@ def test_promotion_points_the_public_address_at_a_recorded_deployment_and_record
     assert reconciled(stuck) == "PROMOTION_PENDING"  # accepted, not applied yet: it may still land
     stuck.alias = identifier  # the platform applied it late
     assert reconciled(stuck) == "COMMITTED"
+    sent = list(platform.promoted)
+    with pytest.raises(da.Refused) as caught:  # already served: a no-op request is never sent (rereview of b83b5fc)
+        da.promote(identifier, ledger_dir=at_c8["directory"], provider=platform, public_url=public)
+    assert caught.value.code == "LEDGER_PROMOTION_NOT_A_CHANGE" and platform.promoted == sent
+    platform.alias = None  # the address serves something else meanwhile
     result = da.promote(identifier, ledger_dir=at_c8["directory"], provider=platform, public_url=public)
     assert result["result"] == "PROMOTED" and result["public_host_sha256"] == hosted_smoke.host_digest(public)
 
@@ -801,6 +815,8 @@ def _scripted_export(monkeypatch, code):
     monkeypatch.setattr(hosting, "code_sha256", lambda found: code)
     monkeypatch.setattr(hosted_smoke, "probe_code", lambda *args, **kwargs: code)
     monkeypatch.setattr(hosted_smoke, "probe_admission", lambda *args, **kwargs: "open")
+    # each scripted deployment answers at <its id>.invalid and names itself as the platform does
+    monkeypatch.setattr(hosted_smoke, "probe_deployment", lambda address, **kwargs: address.split("//", 1)[-1].split(".", 1)[0])
     monkeypatch.setattr(hosted_smoke, "host_digest", lambda address: ls.PUBLIC_HOST)
     return files
 
@@ -817,6 +833,7 @@ def test_m1_no_other_ledger_act_interleaves_a_promotion_between_its_precheck_and
 
     class Provider:
         alias = ls.DEPLOYMENT
+        project_id = ls.PROJECT_ID
 
         def deployment(self, identity):
             with pytest.raises(cutover_ledger.Refused) as caught:  # another command, started meanwhile
@@ -867,7 +884,7 @@ def test_m2_a_gf1_is_reserved_before_the_upload_so_an_overlapping_deploy_never_r
                 nested["code"] = caught.value.code
             identity = "dpl_" + "X" * 24
             ready.append(identity)
-            return {"id": identity, "state": "READY", "target": "production", "url": "synthetic.invalid",
+            return {"id": identity, "state": "READY", "target": "production", "url": identity + ".invalid",
                     "aliased": False}
 
         def files(self, identity):
@@ -905,7 +922,7 @@ def test_m2_a_lost_upload_answer_blocks_everything_until_the_platform_is_reconci
                                            "admission": "open", "code": ls.OTHER_CODE}
             if len(self.ready) == 1:  # the platform made it; its answer was lost
                 raise vp.Refused("PROVIDER_UNAVAILABLE")
-            return {"id": identity, "state": "READY", "target": "production", "url": "synthetic.invalid",
+            return {"id": identity, "state": "READY", "target": "production", "url": identity + ".invalid",
                     "aliased": False}
 
         def files(self, identity):

@@ -148,8 +148,9 @@ class FakeObserver:
         self.project_id = PROJECT_ID
         self.platform: dict[str, dict] = {}  # id -> {"url", "state", "files", "admission", "code"}
         self.alias = None
-        # the opening authorization rows and the barrier
+        # the opening authorization rows, the deployment admissions (A19 (17)) and the barrier
         self.rows: list[dict] = []
+        self.admissions: list[dict] = []
         self.barrier = None  # the state a fresh session observes once applied
         self.lift_works = True
         self.applied_calls = 0
@@ -276,8 +277,16 @@ class FakeObserver:
                         row["revoked"] = True
             self.rows.append({"reference": reference_sha256, "code": code_sha256, "revoked": False,
                               "entry": json.dumps(entry, sort_keys=True, separators=(",", ":"))})
+            if entry.get("deployment_id"):  # a forward fix admits its one recorded deployment
+                self.admissions.append({"reference": reference_sha256, "deployment": entry["deployment_id"],
+                                        "entry": json.dumps(entry, sort_keys=True, separators=(",", ":"))})
 
         self._commit(entry, apply)
+
+    def admit(self, reference_sha256, deployment_id, entry):
+        self._commit(entry, lambda: self.admissions.append({
+            "reference": reference_sha256, "deployment": deployment_id,
+            "entry": json.dumps(entry, sort_keys=True, separators=(",", ":"))}))
 
     def supersede(self, reference_sha256, keep_code, entry):
         def apply():
@@ -299,13 +308,22 @@ class FakeObserver:
     def restore_marker(self, marker_sha256, identity):
         return self.restore_markers.get(marker_sha256)
 
-    def authorization_valid(self, reference_sha256, code_sha256, project_sha256):
+    def authorization_valid(self, reference_sha256, code_sha256, project_sha256, deployment_id=None):
+        """The application's own test: the code's authorization (and, with ``deployment_id``, that deployment's
+        admission) as an open process reads them."""
         identity = hosting.source_identity_sha256(self.facts)
-        return any(not row["revoked"] and row["reference"] == reference_sha256 and row["code"] == code_sha256
-                   and hosting.opening_entry_authorizes(row["entry"], reference=reference_sha256,
-                                                        database_identity=identity, code=code_sha256,
-                                                        project=project_sha256)
-                   for row in self.rows)
+        authorized = any(not row["revoked"] and row["reference"] == reference_sha256 and row["code"] == code_sha256
+                         and hosting.opening_entry_authorizes(row["entry"], reference=reference_sha256,
+                                                              database_identity=identity, code=code_sha256,
+                                                              project=project_sha256)
+                         for row in self.rows)
+        if deployment_id is None:
+            return authorized
+        return authorized and any(
+            row["reference"] == reference_sha256 and row["deployment"] == deployment_id
+            and hosting.deployment_entry_admits(row["entry"], reference=reference_sha256, database_identity=identity,
+                                                code=code_sha256, project=project_sha256, deployment=deployment_id)
+            for row in self.admissions)
 
     # -- the barrier
     def apply_barrier(self):
@@ -322,14 +340,17 @@ class FakeObserver:
                     "authorizations_in_force": sum(not row["revoked"] for row in self.rows)}
         return dict(self.barrier)
 
-    def lift_barrier(self, reference_sha256, code_sha256):
-        if not self.lift_works:
-            return False
-        self.barrier = None
-        for row in self.rows:
-            if row["reference"] == reference_sha256 and code_sha256 and row["code"] == code_sha256:
-                row["revoked"] = False
-        return True
+    def lift_barrier(self, reference_sha256, code_sha256, entry):
+        """One PROD transaction with the act's marker (``_commit``); ``lift_works`` False: it commits, yet a
+        fresh session still cannot write."""
+        def apply():
+            if self.lift_works:
+                self.barrier = None
+            for row in self.rows:
+                if row["reference"] == reference_sha256 and code_sha256 and row["code"] == code_sha256:
+                    row["revoked"] = False
+
+        self._commit(entry, apply)
 
     def writable(self):
         return self.barrier is None
@@ -413,7 +434,7 @@ def deployment_receipt(deployment_id=DEPLOYMENT, *, admission="OPERATOR", openin
         "vercel_project_sha256": PLATFORM_PROJECT, "commit": commit, "deploy_tree_sha256": H["h"],
         "code_sha256": code, "files_sha256": FILES, "admission": admission, "opening_reference": opening_reference,
         "forward_fix_ref": forward_fix_ref, "observed_admission": "CLOSED" if admission == "OPERATOR" else "OPEN",
-        "aliased": False,
+        "aliased": False, "observed_deployment_id": deployment_id,
     }
     receipt.update(overrides)
     return receipt
@@ -434,7 +455,12 @@ def deploy(directory, observer, deployment_id=DEPLOYMENT, **receipt_overrides):
 def promote(directory, observer, deployment_id=DEPLOYMENT, *, host=PUBLIC_HOST):
     from tools import cutover_ledger as ledger
 
-    intent = ledger.begin_promotion(directory, deployment_id, host)  # written before the address moves
+    summary = ledger._summary(ledger.read_ledger(directory))
+    found = ledger._deployment(summary, deployment_id)
+    if found is not None and found["admission"] == "OPEN" and found["forward_fix_ref"] == "NONE"             and not ledger._admitted(summary, deployment_id):
+        ledger.admit_deployment(directory, deployment_id, observer=observer)  # the operator admits it first
+    # written before the address moves, naming what it served (a promotion is always a change)
+    intent = ledger.begin_promotion(directory, deployment_id, host, serving=observer.alias)
     observer.alias = deployment_id
     observer.code_seen = observer.platform[deployment_id]["code"]
     return ledger.complete_promotion(directory, intent["hash"], {
@@ -462,7 +488,8 @@ def reserve_and_receipt(directory, deployment_id=DEPLOYMENT, **receipt_overrides
     receipt = deployment_receipt(deployment_id, **receipt_overrides)
     attempt = ledger.begin_deployment(directory, commit=receipt["commit"], admission=receipt["admission"],
                                       opening_reference=receipt["opening_reference"],
-                                      forward_fix_ref=receipt["forward_fix_ref"], code=receipt["code_sha256"])
+                                      forward_fix_ref=receipt["forward_fix_ref"], code=receipt["code_sha256"],
+                                      vercel_project_sha256=receipt["vercel_project_sha256"])
     return dict(receipt, attempt=attempt["hash"])
 
 
@@ -519,8 +546,11 @@ def take(directory, observer, name="reference.json"):
 
 
 def lift(directory, observer, taken, deployment_id=LIFT):
-    """GO: the governed open deployment of the candidate, carrying the reference, promoted."""
+    """GO: the governed open deployment of the candidate, carrying the reference, admitted, promoted."""
+    from tools import cutover_ledger as ledger
+
     deploy(directory, observer, deployment_id, admission="OPEN", opening_reference=taken["hash"])
+    ledger.admit_deployment(directory, deployment_id, observer=observer)
     promote(directory, observer, deployment_id)
     observer.admission_state = "open"
     observer.tag = hosting.opening_tag(taken["hash"])
@@ -661,7 +691,7 @@ def record_served(directory, platform, deployment_id, url, *, code, admission="O
 def promote_served(directory, platform, deployment_id, *, code, host):
     from tools import cutover_ledger as ledger
 
-    intent = ledger.begin_promotion(directory, deployment_id, host)  # written before the address moves
+    intent = ledger.begin_promotion(directory, deployment_id, host, serving=platform.alias)
     platform.alias = deployment_id
     return ledger.complete_promotion(directory, intent["hash"], {
         "deployment_id": deployment_id, "public_host_sha256": host, "alias_deployment_id": deployment_id,

@@ -715,6 +715,7 @@ def test_the_smoked_address_must_be_the_one_promoted_to_the_candidate(directory,
     assert _code(ledger.advance, directory, "C10", GOOD["C10"]) == "PUBLIC_ADDRESS_NOT_PROMOTED"
     ls.promote(directory, observer, host=H["a"])
     assert _code(ledger.advance, directory, "C10", GOOD["C10"]) == "PUBLIC_ADDRESS_NOT_PROMOTED"
+    observer.alias = None  # (the smoked address is another one: promoted there, the deployment is a change)
     ls.promote(directory, observer)
     assert ledger.advance(directory, "C10", GOOD["C10"])["state"] == "C10"
 
@@ -724,27 +725,30 @@ def test_a_promotion_is_recorded_only_for_the_recorded_deployment_the_platform_r
     the platform and the address are observed serving it; otherwise it stays unresolved for `reconcile`."""
     _grant_all(directory)
     _drive(directory, "C9", observer=observer)
-    assert _code(ledger.begin_promotion, directory, "dpl_" + "Z" * 24, H["m"]) == "DEPLOYMENT_NOT_RECORDED"
+    assert _code(ledger.begin_promotion, directory, "dpl_" + "Z" * 24, H["m"], serving=None) == "DEPLOYMENT_NOT_RECORDED"
     base = {"deployment_id": DEPLOYMENT, "public_host_sha256": H["m"], "alias_deployment_id": DEPLOYMENT,
             "files_sha256": ls.FILES, "observed_code": CODE}
     for wrong, code in (({"files_sha256": H["a"]}, "DEPLOYMENT_NOT_THE_RECORDED_ONE"),
                         ({"observed_code": OTHER_CODE}, "DEPLOYMENT_NOT_THE_RECORDED_ONE"),
                         ({"alias_deployment_id": "dpl_" + "Z" * 24}, "ALIAS_NOT_THE_DEPLOYMENT")):
-        intent = ledger.begin_promotion(directory, DEPLOYMENT, H["m"])
+        intent = ledger.begin_promotion(directory, DEPLOYMENT, H["m"], serving=observer.alias)
         assert _code(ledger.complete_promotion, directory, intent["hash"], {**base, **wrong}) == code
         assert ledger.status(directory)["unresolved_operation"] == intent["hash"]  # nothing proceeds meanwhile
-        assert _code(ledger.begin_promotion, directory, DEPLOYMENT, H["m"]) == "OPERATION_UNRESOLVED"
+        assert _code(ledger.begin_promotion, directory, DEPLOYMENT, H["m"], serving=None) == "OPERATION_UNRESOLVED"
         observer.alias = "dpl_" + "Z" * 24  # not served yet: the platform may still apply it (rereview of 2fdeee6)
         assert _code(ledger.reconcile, directory, observer=observer) == "PROMOTION_PENDING"
         observer.platform[DEPLOYMENT]["state"] = "CANCELED"  # it can never land now
         assert ledger.reconcile(directory, observer=observer)["result"] == "ABORTED"
         observer.platform[DEPLOYMENT]["state"] = "READY"  # (the scripted platform holds it again)
         assert ledger._summary(ledger.read_ledger(directory))["promotions"] == []
-    intent = ledger.begin_promotion(directory, DEPLOYMENT, H["m"])
+    intent = ledger.begin_promotion(directory, DEPLOYMENT, H["m"], serving=observer.alias)
     observer.alias = DEPLOYMENT  # the platform moved it, then the answer was lost: observed, it counts
     assert ledger.reconcile(directory, observer=observer)["result"] == "COMMITTED"
     assert [p["hash"] for p in ledger._summary(ledger.read_ledger(directory))["promotions"]] == [intent["hash"]]
-    intent = ledger.begin_promotion(directory, DEPLOYMENT, H["m"])
+    # a request that changes nothing is never sent (rereview of b83b5fc, M2)
+    assert _code(ledger.begin_promotion, directory, DEPLOYMENT, H["m"], serving=DEPLOYMENT) == "PROMOTION_NOT_A_CHANGE"
+    observer.alias = "dpl_" + "Z" * 24  # the address serves another deployment meanwhile
+    intent = ledger.begin_promotion(directory, DEPLOYMENT, H["m"], serving=observer.alias)
     assert ledger.complete_promotion(directory, intent["hash"], base)["type"] == "promotion"
     assert ledger.status(directory)["unresolved_operation"] is None
 
@@ -2288,17 +2292,17 @@ def test_rr3_m1_an_unchanged_address_never_proves_that_a_sent_promotion_was_abor
     _drive(directory, "C13", observer=observer)
     ls.deploy(directory, observer, "dpl_" + "Q" * 24, forward_fix_ref=_gf1(directory, "m-op"))  # operator-only
     observer.alias = LIFT
-    intent = ledger.begin_promotion(directory, "dpl_" + "Q" * 24, H["m"])  # sent; the address has not moved yet
+    intent = ledger.begin_promotion(directory, "dpl_" + "Q" * 24, H["m"], serving=observer.alias)  # sent; the address has not moved yet
     assert _code(ledger.reconcile, directory, observer=observer) == "PROMOTION_PENDING"
     assert ledger.status(directory)["unresolved_operation"] == intent["hash"]  # every other act still waits
     assert _code(ledger.supersede, directory, observer=observer) == "OPERATION_UNRESOLVED"
     observer.alias = "dpl_" + "Q" * 24  # the platform applied it late
     assert ledger.reconcile(directory, observer=observer)["result"] == "COMMITTED"
-    intent = ledger.begin_promotion(directory, LIFT, H["m"])
+    intent = ledger.begin_promotion(directory, LIFT, H["m"], serving=observer.alias)
     assert _code(ledger.reconcile, directory, observer=observer) == "PROMOTION_PENDING"
     observer.platform[LIFT] = dict(observer.platform[LIFT], state="DELETED")  # removed: it can never land
     assert ledger.reconcile(directory, observer=observer)["result"] == "ABORTED"
-    intent = ledger.begin_promotion(directory, DEPLOYMENT, H["m"])
+    intent = ledger.begin_promotion(directory, DEPLOYMENT, H["m"], serving=observer.alias)
     del observer.platform[DEPLOYMENT]  # no longer held by the platform at all
     assert ledger.reconcile(directory, observer=observer)["of"] == intent["hash"]
     assert ledger.read_ledger(directory)[-1]["result"] == "ABORTED"
@@ -2319,7 +2323,7 @@ def test_rr3_m2_a_code_whose_upload_was_never_proven_absent_is_never_authorized(
     fix = dict(admission="OPEN", opening_reference=reference, commit=OTHER_COMMIT, code=OTHER_CODE,
                observed_admission="CLOSED")
     ledger.begin_deployment(directory, commit=OTHER_COMMIT, admission="OPEN", opening_reference=reference,
-                            forward_fix_ref=_gf1(directory, "m-lost"), code=OTHER_CODE)  # its answer was lost
+                            forward_fix_ref=_gf1(directory, "m-lost"), code=OTHER_CODE, vercel_project_sha256=PLATFORM_PROJECT)  # its answer was lost
     assert ledger.reconcile(directory, observer=observer)["result"] == "ABORTED"  # nothing visible yet
     assert _code(ls.deploy, directory, observer, "dpl_" + "F" * 24, forward_fix_ref=_gf1(directory, "m-next"),
                  **fix) == "CODE_OF_AN_UNPROVEN_UPLOAD"
@@ -2329,7 +2333,7 @@ def test_rr3_m2_a_code_whose_upload_was_never_proven_absent_is_never_authorized(
     ls.deploy(directory, observer, "dpl_" + "G" * 24, forward_fix_ref=_gf1(directory, "m-g"),
               **dict(fix, code=other))
     ledger.begin_deployment(directory, commit=OTHER_COMMIT, admission="OPEN", opening_reference=reference,
-                            forward_fix_ref=_gf1(directory, "m-g2"), code=other)
+                            forward_fix_ref=_gf1(directory, "m-g2"), code=other, vercel_project_sha256=PLATFORM_PROJECT)
     assert ledger.reconcile(directory, observer=observer)["result"] == "ABORTED"
     assert _code(ledger.authorize_code, directory, "dpl_" + "G" * 24, observer=observer,
                  **_ROOTS(directory)) == "CODE_OF_AN_UNPROVEN_UPLOAD"
@@ -2337,7 +2341,7 @@ def test_rr3_m2_a_code_whose_upload_was_never_proven_absent_is_never_authorized(
     # an operator-only upload never admits anyone, whatever its code: it marks nothing
     third = "6" * 64
     ledger.begin_deployment(directory, commit=OTHER_COMMIT, admission="OPERATOR", opening_reference=None,
-                            forward_fix_ref=_gf1(directory, "m-op"), code=third)
+                            forward_fix_ref=_gf1(directory, "m-op"), code=third, vercel_project_sha256=PLATFORM_PROJECT)
     assert ledger.reconcile(directory, observer=observer)["result"] == "ABORTED"
     ls.deploy(directory, observer, "dpl_" + "H" * 24, forward_fix_ref=_gf1(directory, "m-h"), **dict(fix, code=third))
     assert ledger.authorize_code(directory, "dpl_" + "H" * 24, observer=observer,

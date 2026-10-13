@@ -166,3 +166,44 @@ def test_real_pg_the_stored_authorization_is_the_entry_the_application_accepts(d
         stored = conn.execute("SELECT entry FROM sgaa_cutover.opening").fetchone()[0]
     assert hosting.opening_entry_authorizes(stored, reference=REFERENCE, database_identity="1" * 64,
                                             code="9" * 64, project="2" * 64)
+
+
+@real_pg
+def test_real_pg_a_lift_and_its_marker_commit_together_and_a_lost_answer_is_uncertain(database):
+    """Rereview of b83b5fc M4: `resume`'s lift is a transaction act -- the role default reset, the code's
+    authorization restored and the act's marker commit together; a lost COMMIT answer is uncertain (never
+    read as not committed) and `reconcile` finds the marker."""
+    import psycopg
+
+    _observer(database).authorize(REFERENCE, "7" * 64, {"hash": "a" * 64, "type": "reference"}, first=True)
+    with psycopg.connect(database, autocommit=True) as conn:  # the barrier, as `close` leaves it
+        conn.execute(ledger.Observer._role_statement(conn, "SET default_transaction_read_only = on"))
+        conn.execute(hosting.OPENING_REVOKE_SQL)
+    assert _observer(database).writable() is False
+    lift = {"hash": "f" * 64, "type": "barrier"}
+    with pytest.raises(ledger.CommitUncertain):
+        _observer(database, wrap=_LostAnswer).lift_barrier(REFERENCE, "7" * 64, lift)
+    assert _observer(database, read_only=True).operation_committed(lift["hash"]) is True
+    assert _observer(database).writable() is True  # the role default was reset with it
+    assert _rows(database)[1] == [("7" * 64, True)]  # and the authorization restored with it
+
+
+@real_pg
+def test_real_pg_a_deployment_admission_commits_with_its_marker_and_is_what_the_application_reads(database):
+    """A19 (17): `admit-deployment` writes the admission of one deployment with its marker; the application's
+    own statement finds it for that deployment only."""
+    import psycopg
+
+    observer = _observer(database)
+    observer.authorize(REFERENCE, "7" * 64, {"hash": "a" * 64, "type": "reference"}, first=True)
+    admitted = {"hash": "b" * 64, "type": "admission", "deployment_id": "dpl_" + "L" * 24}
+    observer.admit(REFERENCE, "dpl_" + "L" * 24, admitted)
+    assert observer.operation_committed(admitted["hash"]) is True
+    with psycopg.connect(database, autocommit=True) as conn:
+        found = conn.execute(hosting.ADMISSION_SELECT_SQL, (REFERENCE, "dpl_" + "L" * 24)).fetchone()
+        other = conn.execute(hosting.ADMISSION_SELECT_SQL, (REFERENCE, "dpl_" + "U" * 24)).fetchone()
+    assert found is not None and other is None
+    with pytest.raises(ledger.Refused) as caught:  # admitted once: a second write refuses, nothing commits
+        observer.admit(REFERENCE, "dpl_" + "L" * 24, {"hash": "c" * 64, "type": "admission"})
+    assert caught.value.code == "PROD_TRANSACTION_FAILED"
+    assert observer.operation_committed("c" * 64) is False

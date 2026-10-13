@@ -50,6 +50,14 @@ WHY THIS EXISTS
     only once its deployment can never be served; an open upload closed without its deployment leaves
     its code never authorized, so a late copy of it admits no one.
 
+    Admission is bound to a DEPLOYMENT, not only to a code (rereview of b83b5fc, SPEC A19 (17)): an open
+    process admits users only while PROD holds both the authorization of its code and an admission of
+    its own platform deployment (``VERCEL_DEPLOYMENT_ID``), which the ledger writes for one recorded
+    deployment -- ``admit-deployment`` before the point of no return, ``authorize-code`` for a forward
+    fix.  A late, duplicate, superseded or unnamed deployment is admitted by nothing.  Every provider
+    observation is bound to the recorded project (and a promotion's to its recorded address); a
+    promotion is sent only when it changes what the address serves; ``resume`` is a two-phase act.
+
 WHAT IT STORES
     One append-only JSON-lines file, ``ledger.jsonl``, in a directory outside
     the repository.  Every entry carries the SHA-256 of the previous entry, so
@@ -98,6 +106,8 @@ COMMANDS
     authorize-code after the point of no return, for a recorded forward-fix deployment (GF1):
                    authorize its code under the same opening reference.  With ``--contract-ref`` (A19),
                    at C12: re-open the amended candidate's recorded open deployment under its GC2 grant
+    admit-deployment before the point of no return: admit users at one recorded open deployment of the
+                   authorized code (its own platform identity), in a PROD transaction (A19 (17))
     reconcile      resolve an act whose outcome is unknown: for a PROD transaction read its marker in PROD; for
                    an upload require that no unrecorded deployment exists; for a promotion observe the alias
                    (ABORTED only once its deployment is removed or failed) -- then record COMMITTED or
@@ -144,7 +154,7 @@ STATES = (
 ENTRY_TYPES = frozenset({
     "init", "advance", "grant", "amendment", "rollback", "reference", "backup", "qualification", "deployment",
     "promotion", "barrier", "restore", "authorization", "supersession", "outcome", "attestation",
-    "deployment_attempt",
+    "deployment_attempt", "admission",
 })
 #: UD4: the rollback window W, counted from the point of no return (C13) to its closing (C14).
 ROLLBACK_WINDOW_DAYS = 30
@@ -569,7 +579,7 @@ def _summary(entries: list[dict]) -> dict:
     backups: list[dict] = []
     collected = {"qualification": None, "deployments": [], "promotions": [], "barriers": [], "restores": [],
                  "authorizations": [], "grants": [], "amendments": [], "supersessions": [], "attestations": [],
-                 "attempts": []}
+                 "attempts": [], "admissions": []}
     # An act whose PROD transaction did not commit, or whose outcome is still unknown, has no effect.
     committed = {e["of"] for e in entries if e["type"] == "outcome" and e["result"] == "COMMITTED"}
     committed |= {e["attempt"] for e in entries if e["type"] == "deployment" and e.get("attempt")}
@@ -615,6 +625,8 @@ def _summary(entries: list[dict]) -> dict:
             collected["supersessions"].append(entry)
         elif kind == "attestation":
             collected["attestations"].append(entry)
+        elif kind == "admission":
+            collected["admissions"].append(entry)
     # An open upload whose answer was lost and that `reconcile` closed while the platform showed nothing may
     # still appear: its code is never authorized, so it never admits anyone (rereview of 2fdeee6, M2).
     unproven = {e["of"] for e in entries if e["type"] == "outcome" and e["resolved_by"] == "RECONCILED"}
@@ -1323,7 +1335,7 @@ class Observer:
             try:
                 conn.execute("SET default_transaction_read_only = off")
                 with conn.transaction():  # committed before the act: `reconcile` can always wait on the table
-                    for statement in (*hosting.OPENING_DDL, *OPERATIONS_DDL):
+                    for statement in (*hosting.OPENING_DDL, *hosting.ADMISSION_DDL, *OPERATIONS_DDL):
                         conn.execute(statement)
                 with conn.transaction():
                     conn.execute("SET LOCAL statement_timeout = '20s'")
@@ -1351,8 +1363,17 @@ class Observer:
             conn.execute(hosting.OPENING_INSERT_SQL, (reference_sha256, code_sha256, text))
             if not first:  # the new code replaces every other one of the reference (A19 R3 M2)
                 conn.execute(hosting.OPENING_SUPERSEDE_SQL, (reference_sha256, code_sha256))
+            if entry.get("deployment_id"):  # and admits its one recorded deployment (A19 (17))
+                conn.execute(hosting.ADMISSION_INSERT_SQL, (reference_sha256, entry["deployment_id"], text))
 
         self._transact(entry, statements)
+
+    def admit(self, reference_sha256: str, deployment_id: str, entry: dict) -> None:
+        """Admit users at one recorded deployment (the entry itself, which the application verifies) in the
+        act's PROD transaction (``_transact``; A19 (17))."""
+        text = json.dumps(entry, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+        self._transact(entry, lambda conn: conn.execute(hosting.ADMISSION_INSERT_SQL,
+                                                        (reference_sha256, deployment_id, text)))
 
     def supersede(self, reference_sha256: str, keep_code: str | None, entry: dict) -> int:
         """Revoke every authorization of the reference except ``keep_code`` (all when ``None``) in the act's
@@ -1413,15 +1434,25 @@ class Observer:
         except (TypeError, ValueError):
             return None
 
-    def authorization_valid(self, reference_sha256: str, code_sha256: str, project_sha256: str) -> bool:
-        """Whether the PROD database authorizes an open deployment of this code -- the app's own test."""
+    def authorization_valid(self, reference_sha256: str, code_sha256: str, project_sha256: str,
+                            deployment_id: str | None = None) -> bool:
+        """Whether the PROD database authorizes an open deployment of this code -- the app's own test; with
+        ``deployment_id``, whether it admits users at that deployment (both rows, as the application reads)."""
         with self._connection() as conn:
             if not conn.execute(hosting.OPENING_EXISTS_SQL).fetchone()[0]:
                 return False
             row = conn.execute(hosting.OPENING_SELECT_SQL, (reference_sha256, code_sha256)).fetchone()
+            admitted = None
+            if deployment_id is not None and conn.execute(hosting.ADMISSION_EXISTS_SQL).fetchone()[0]:
+                admitted = conn.execute(hosting.ADMISSION_SELECT_SQL, (reference_sha256, deployment_id)).fetchone()
             identity = hosting.source_identity_sha256(hosting.database_source(conn))
-        return row is not None and hosting.opening_entry_authorizes(
+        authorized = row is not None and hosting.opening_entry_authorizes(
             row[0], reference=reference_sha256, database_identity=identity, code=code_sha256, project=project_sha256)
+        if deployment_id is None:
+            return authorized
+        return authorized and admitted is not None and hosting.deployment_entry_admits(
+            admitted[0], reference=reference_sha256, database_identity=identity, code=code_sha256,
+            project=project_sha256, deployment=deployment_id)
 
     # -- the write barrier ----------------------------------------------------------
 
@@ -1499,19 +1530,25 @@ class Observer:
         return {"setting": setting, "fresh_read_only": fresh_read_only, "write_refused": write_refused,
                 "older_sessions": older, "authorizations_in_force": open_rows}
 
-    def lift_barrier(self, reference_sha256: str, code_sha256: str | None) -> bool:
-        """Reset the role default, restore the authorization of ``code_sha256`` only (the code the ledger
-        currently authorizes; none when ``None``) and end every session that started read-only; True
-        when a fresh session can write."""
-        with self._connection() as conn:
-            conn.execute("SET default_transaction_read_only = off")
-            with conn.transaction():
-                conn.execute(self._role_statement(conn, "RESET default_transaction_read_only"))
-                if code_sha256 and conn.execute(hosting.OPENING_EXISTS_SQL).fetchone()[0]:
-                    conn.execute(hosting.OPENING_RESTORE_CODE_SQL, (reference_sha256, code_sha256))
-            lifted_at = conn.execute("SELECT clock_timestamp()").fetchone()[0]
-            self._end_sessions_before(conn, lifted_at)
-        return self.writable()
+    def lift_barrier(self, reference_sha256: str, code_sha256: str | None, entry: dict) -> None:
+        """Reset the role default and restore the authorization of ``code_sha256`` only (the code the ledger
+        currently authorizes; none when ``None``) in the act's PROD transaction (``_transact``: its marker
+        commits with them; rereview of b83b5fc, M4), then end every session that started read-only.
+
+        Ending those sessions follows the COMMIT: any failure there is ``CommitUncertain`` (never a
+        refusal, which would read as "not committed"), and ``reconcile`` finds the marker."""
+        def statements(conn):
+            conn.execute(self._role_statement(conn, "RESET default_transaction_read_only"))
+            if code_sha256:
+                conn.execute(hosting.OPENING_RESTORE_CODE_SQL, (reference_sha256, code_sha256))
+
+        self._transact(entry, statements)
+        try:
+            with self._connection() as conn:
+                lifted_at = conn.execute("SELECT clock_timestamp()").fetchone()[0]
+                self._end_sessions_before(conn, lifted_at)
+        except BaseException:
+            raise CommitUncertain() from None
 
     def writable(self) -> bool:
         """Whether a fresh session of the writers' role may write (no barrier in force)."""
@@ -1561,8 +1598,18 @@ def _require_the_deployment(summary: dict, observer: Observer) -> None:
         raise Refused("ADDRESS_NOT_THE_DEPLOYMENT", "probe the public address recorded at C10")
 
 
+def _recorded_project(summary: dict):
+    """The production project, as the ledger recorded it: its deployments', else its first attempt's."""
+    if summary["deployments"]:
+        return summary["deployments"][0]["vercel_project_sha256"]
+    attempts = [a for a in summary["attempts"] if a.get("vercel_project_sha256")]
+    return attempts[0]["vercel_project_sha256"] if attempts else None
+
+
 def _require_provider_project(summary: dict, observer: Observer) -> str:
-    project = summary["deployments"][0]["vercel_project_sha256"] if summary["deployments"] else None
+    """Every provider observation is of the recorded project (rereview of b83b5fc, M3): another project's
+    empty list, alias or missing deployment proves nothing about production."""
+    project = _recorded_project(summary)
     if project is None or observer.provider_project_sha256() != project:
         raise Refused("PROVIDER_NOT_THE_PROJECT", "name the production project the deployments were recorded in")
     return project
@@ -1813,8 +1860,9 @@ def record_restore(directory: Path, receipt: dict) -> dict:
 
 _DEPLOYMENT_KEYS = ("deployment_id", "url_sha256", "vercel_project_sha256", "commit", "deploy_tree_sha256",
                     "code_sha256", "files_sha256", "admission", "opening_reference", "forward_fix_ref",
-                    "observed_admission", "aliased", "attempt")
-_ATTEMPT_KEYS = ("commit", "code_sha256", "admission", "opening_reference", "forward_fix_ref")
+                    "observed_admission", "aliased", "attempt", "observed_deployment_id")
+_ATTEMPT_KEYS = ("commit", "code_sha256", "admission", "opening_reference", "forward_fix_ref",
+                 "vercel_project_sha256")
 
 
 def deployment_preconditions(directory: Path, *, commit: str, admission: str, opening_reference: str | None,
@@ -1917,25 +1965,34 @@ def _promotion_rules(summary: dict, deployment: dict) -> None:
         raise Refused("OPEN_DEPLOYMENT_NOT_AUTHORIZED", "only the code the ledger currently authorizes is promoted open")
     if deployment["admission"] == "OPEN":  # the public address lets users in (rereview R5)
         _require_fresh(summary, summary["any_reference"])
+        if _barrier_applied(summary) is not None:  # rereview of b83b5fc, M4 (defence in depth)
+            raise Refused("BARRIER_APPLIED", "`resume` lifts the barrier before an open deployment is promoted")
+        if not _admitted(summary, deployment["deployment_id"]):
+            raise Refused("DEPLOYMENT_NOT_ADMITTED", "admit the deployment (`admit-deployment`, `authorize-code`) first")
 
 
 def begin_deployment(directory: Path, *, commit: str, admission: str, opening_reference: str | None,
-                     forward_fix_ref: str | None, code: str, held: bool = False) -> dict:
+                     forward_fix_ref: str | None, code: str, vercel_project_sha256: str,
+                     held: bool = False) -> dict:
     """Reserve a deployment before anything is uploaded (rereview of 1245bf2, M2): every rule is checked
     with its code and a ``deployment_attempt`` is written, which consumes its GF1 at once.  The attempt is
     resolved by the ``deployment`` entry that records its upload, by ABORTED once the upload is removed, or
     by ``reconcile``; until then every other act is refused."""
-    if not _hex64(code):
-        raise Refused("DEPLOYMENT_RECEIPT_INVALID", "code_sha256")
+    if not _hex64(code) or not _hex64(vercel_project_sha256):
+        raise Refused("DEPLOYMENT_RECEIPT_INVALID", "code_sha256, vercel_project_sha256")
     with _lock(directory, held):
         entries = read_ledger(directory)
         _require_resolved(entries)
-        _deployment_rules(_summary(entries), commit=commit, admission=admission, opening_reference=opening_reference,
+        summary = _summary(entries)
+        _deployment_rules(summary, commit=commit, admission=admission, opening_reference=opening_reference,
                           forward_fix_ref=forward_fix_ref, code=code)
+        recorded = _recorded_project(summary)
+        if recorded is not None and vercel_project_sha256 != recorded:
+            raise Refused("DEPLOYMENT_PROJECT_CHANGED", "every deployment goes to the one production project")
         return _append(directory, entries, {
             "type": "deployment_attempt", "commit": commit, "code_sha256": code, "admission": admission,
             "opening_reference": opening_reference or "NONE", "forward_fix_ref": forward_fix_ref or "NONE",
-            "outcome_required": True,
+            "vercel_project_sha256": vercel_project_sha256, "outcome_required": True,
         })
 
 
@@ -1971,6 +2028,9 @@ def record_deployment(directory: Path, receipt: dict, *, held: bool = False) -> 
             raise Refused("DEPLOYMENT_PROJECT_CHANGED", "every deployment goes to the one production project")
         if receipt["admission"] == "OPERATOR" and receipt["observed_admission"] != "CLOSED":
             raise Refused("DEPLOYMENT_NOT_CLOSED", "an operator deployment must refuse users at its own address")
+        if receipt["observed_deployment_id"] != receipt["deployment_id"]:
+            # Admission binds the platform's own name for the process (A19 (17)): proven before it is recorded.
+            raise Refused("DEPLOYMENT_IDENTITY_NOT_OBSERVED", "the deployment must name itself as the platform does")
         candidate = _candidate_code(summary)
         if receipt["forward_fix_ref"] == "NONE" and candidate is not None and receipt["code_sha256"] != candidate:
             raise Refused("DEPLOYMENT_CODE_CHANGED", "the same commit must run the same code")
@@ -1980,7 +2040,8 @@ def record_deployment(directory: Path, receipt: dict, *, held: bool = False) -> 
         return _append(directory, entries, {"type": "deployment", **receipt})
 
 
-def begin_promotion(directory: Path, deployment_id: str, public_host_sha256: str, *, held: bool = False) -> dict:
+def begin_promotion(directory: Path, deployment_id: str, public_host_sha256: str, *, serving: str | None,
+                    held: bool = False) -> dict:
     """Write the promotion BEFORE the public address is moved (rereview of 1245bf2, M1): every rule is
     checked now, and the entry takes effect only once ``complete_promotion`` (or ``reconcile``) has observed
     the address serving it; until then every other act is refused."""
@@ -1996,8 +2057,13 @@ def begin_promotion(directory: Path, deployment_id: str, public_host_sha256: str
         _promotion_rules(summary, deployment)
         if not _hex64(public_host_sha256):
             raise Refused("ALIAS_NOT_THE_DEPLOYMENT")
+        if serving == deployment_id:
+            # A request that changes nothing cannot be told apart from its own effect, and could still apply
+            # after a later promotion (rereview of b83b5fc, M2): it is never sent.
+            raise Refused("PROMOTION_NOT_A_CHANGE", "the address already serves that deployment")
         return _append(directory, entries, {"type": "promotion", "deployment_id": deployment_id,
-                                            "public_host_sha256": public_host_sha256, "outcome_required": True})
+                                            "public_host_sha256": public_host_sha256,
+                                            "serving_before": serving or "NONE", "outcome_required": True})
 
 
 def complete_promotion(directory: Path, promotion_sha256: str, receipt: dict, *, held: bool = False) -> dict:
@@ -2118,8 +2184,9 @@ def open_admission(directory: Path, *, expect_head: str | None = None, observer:
             raise Refused("DEPLOYMENT_NOT_THE_RECORDED_ONE")
         if _barrier_applied(summary) is not None or not observer.writable():
             raise Refused("BARRIER_IN_FORCE", "`resume` lifts the barrier before production is opened again")
-        if not observer.authorization_valid(reference["hash"], reference["code_sha256"], project):
-            raise Refused("OPENING_NOT_AUTHORIZED", "the PROD database holds no valid authorization for this opening")
+        if not observer.authorization_valid(reference["hash"], reference["code_sha256"], project,
+                                            serving["deployment_id"]):
+            raise Refused("OPENING_NOT_AUTHORIZED", "the PROD database holds no valid admission for this opening")
         if observer.admission() != "open":
             raise Refused("ADMISSION_NOT_OPEN")
         if observer.opening_tag() != hosting.opening_tag(reference["hash"]):
@@ -2195,10 +2262,59 @@ def resume(directory: Path, *, expect_head: str | None = None, observer: Observe
         _require_reopening_backup(summary, observer, backup_root, off_platform, identity, require_current=False,
                                   reference=reference)
         current = _authorized_code(summary)
-        if not observer.lift_barrier(reference["hash"], current):
-            raise Refused("BARRIER_STILL_IN_FORCE", "a fresh session of the writers' role still cannot write")
-        return _append(directory, entries, {"type": "barrier", "action": "LIFTED", "database_identity_sha256": identity,
-                                            "authorization": "RESTORED" if current else "NONE"})
+        # Written first; it takes effect with its PROD transaction (the marker commits with the lift), and a
+        # lost answer leaves it to `reconcile` with every other act refused (rereview of b83b5fc, M4).
+        entry = _commit_act(directory, entries, {
+            "type": "barrier", "action": "LIFTED", "database_identity_sha256": identity,
+            "authorization": "RESTORED" if current else "NONE",
+        }, lambda entry: observer.lift_barrier(reference["hash"], current, entry))
+    if not observer.writable():  # recorded (the lift committed), yet a fresh session cannot write: say so
+        raise Refused("BARRIER_STILL_IN_FORCE", "a fresh session of the writers' role still cannot write",
+                      head=_head(read_ledger(directory)))
+    return entry
+
+
+def _admitted(summary: dict, deployment_id: str) -> bool:
+    """Whether the ledger admitted users at that deployment: an ``admission`` or an ``authorization`` naming it."""
+    return any(e.get("deployment_id") == deployment_id for e in (*summary["admissions"], *summary["authorizations"]))
+
+
+def admit_deployment(directory: Path, deployment_id: str, *, expect_head: str | None = None,
+                     observer: Observer | None = None) -> dict:
+    """Before the point of no return: admit users at ONE recorded open deployment of the authorized code
+    (rereview of b83b5fc, SPEC A19 (17)).
+
+    The code's authorization alone admits no one: the application also needs PROD's admission of its own
+    platform deployment.  Written for a deployment the governed deploy recorded (its platform identity
+    observed), in the recorded project, holding the recorded files, under the opening reference; fresh
+    backups first.  After the PONR a forward fix is admitted by its own ``authorize-code``.
+    """
+    observer = observer or Observer()
+    with _locked(directory):
+        entries = read_ledger(directory)
+        _check_head(entries, expect_head)
+        summary = _summary(entries)
+        reference = _require_pending_opening(summary)
+        if _barrier_applied(summary) is not None:
+            raise Refused("BARRIER_APPLIED", "`resume` lifts the barrier before production is opened again")
+        deployment = _deployment(summary, deployment_id)
+        if deployment is None or deployment["admission"] != "OPEN" or deployment["forward_fix_ref"] != "NONE" \
+                or deployment["opening_reference"] != reference["hash"]:
+            raise Refused("NOT_AN_OPEN_DEPLOYMENT_OF_THE_REFERENCE")
+        if deployment["code_sha256"] != _authorized_code(summary):
+            raise Refused("OPEN_DEPLOYMENT_NOT_AUTHORIZED", "only the code the ledger currently authorizes is admitted")
+        if _admitted(summary, deployment_id):
+            raise Refused("DEPLOYMENT_ALREADY_ADMITTED")
+        _require_fresh(summary, reference)
+        identity = _production_database(summary, observer)
+        project = _require_provider_project(summary, observer)
+        if observer.deployment_files_sha256(deployment_id) != deployment["files_sha256"]:
+            raise Refused("DEPLOYMENT_NOT_THE_RECORDED_ONE")
+        return _commit_act(directory, entries, {
+            "type": "admission", "opening_reference": reference["hash"], "deployment_id": deployment_id,
+            "code_sha256": deployment["code_sha256"], "database_identity_sha256": identity,
+            "vercel_project_sha256": project,
+        }, lambda entry: observer.admit(reference["hash"], deployment_id, entry))
 
 
 def _quiescent(observer: Observer) -> None:
@@ -2331,6 +2447,7 @@ def _require_reopening_backup(summary: dict, observer: Observer, backup_root, of
 
 def _require_every_deployment_recorded(summary: dict, observer: Observer) -> None:
     """No deployment the ledger never recorded may still be served when users are let back in."""
+    _require_provider_project(summary, observer)
     for deployment in observer.provider_deployments():
         if deployment["state"] in TERMINAL_DEPLOYMENT_STATES:
             continue
@@ -2338,12 +2455,13 @@ def _require_every_deployment_recorded(summary: dict, observer: Observer) -> Non
             raise Refused("UNRECORDED_DEPLOYMENT", "a deployment the ledger never recorded may admit users")
 
 
-def _require_deployment_gone(observer: Observer, deployment_id: str) -> None:
+def _require_deployment_gone(summary: dict, observer: Observer, deployment_id: str) -> None:
     """The platform no longer holds the deployment, or holds it failed or removed: no promotion can land."""
+    _require_provider_project(summary, observer)
     for deployment in observer.provider_deployments():
         if deployment["id"] == deployment_id and deployment["state"] not in TERMINAL_DEPLOYMENT_STATES:
-            raise Refused("PROMOTION_PENDING", "the platform may still apply it: promote the deployment again "
-                          "(`vercel promote`) or remove it (`vercel remove`), then `reconcile`")
+            raise Refused("PROMOTION_PENDING", "the platform may still apply it: `reconcile` again once it has, "
+                          "or remove the deployment (`vercel remove`) and `reconcile`; never promote it again")
 
 
 def supersede(directory: Path, *, expect_head: str | None = None, observer: Observer | None = None) -> dict:
@@ -2474,11 +2592,17 @@ def reconcile(directory: Path, *, expect_head: str | None = None, observer: Obse
             _require_every_deployment_recorded(summary, observer)
             committed = False
         elif pending["type"] == "promotion":
+            # Observed in the recorded project at the recorded address only (rereview of b83b5fc, M3).  A
+            # promotion is sent only when it changes what the address serves (M2): the address serving its
+            # deployment is then this request's own effect.
+            _require_provider_project(summary, observer)
+            if observer.host_sha256() != pending["public_host_sha256"]:
+                raise Refused("ADDRESS_NOT_THE_PROMOTION", "observe the public address the promotion was sent for")
             committed = observer.alias_deployment() == pending["deployment_id"]
             if not committed:
                 # An unchanged address proves nothing: the platform may still apply a promotion it accepted
                 # (rereview of 2fdeee6, M1).  ABORTED only once its deployment can never be served.
-                _require_deployment_gone(observer, pending["deployment_id"])
+                _require_deployment_gone(summary, observer, pending["deployment_id"])
         else:
             _production_database(summary, observer)
             committed = observer.operation_committed(pending["hash"])
@@ -2558,7 +2682,7 @@ def main(argv=None, *, out=None, err=None) -> int:
     for name in ("init", "status", "verify"):
         commands.add_parser(name, allow_abbrev=False).add_argument("--ledger-dir", required=True)
     bound = ("grant", "advance", "amend", "qualify", "rollback", "reference", "open", "close", "resume",
-             "authorize-code", "supersede", "reconcile", "attest-ponr")
+             "authorize-code", "supersede", "reconcile", "attest-ponr", "admit-deployment")
     for name in bound:
         sub = commands.add_parser(name, allow_abbrev=False)
         sub.add_argument("--ledger-dir", required=True)
@@ -2567,7 +2691,7 @@ def main(argv=None, *, out=None, err=None) -> int:
         if name in {"rollback", "reference", "open", "reconcile"}:
             sub.add_argument("--base-url", default=None, help="the public address, probed without any credential")
             sub.add_argument("--allow-insecure", action="store_true", help="tests only: accept http")
-        if name in {"reference", "open", "authorize-code", "resume", "reconcile"}:
+        if name in {"reference", "open", "authorize-code", "resume", "reconcile", "admit-deployment"}:
             sub.add_argument("--vercel-team", default=None, help="the team id of the production project")
             sub.add_argument("--vercel-project", default=None, help="the production project's id")
         if name == "resume":
@@ -2595,6 +2719,8 @@ def main(argv=None, *, out=None, err=None) -> int:
             sub.add_argument("--reference", default=None, help="from the opening: the reference fingerprint file")
             sub.add_argument("--derived-class", action="append", default=None,
                              help="from the opening: each derived-write class the ledger observed, named exactly")
+        elif name == "admit-deployment":
+            sub.add_argument("--deployment", required=True, help="the recorded open deployment id")
         elif name == "authorize-code":
             sub.add_argument("--deployment", required=True, help="the recorded forward-fix deployment id")
             sub.add_argument("--contract-ref", default=None,
@@ -2649,6 +2775,8 @@ def main(argv=None, *, out=None, err=None) -> int:
             result = authorize_code(directory, args.deployment, expect_head=args.expect_head, observer=observer,
                                     contract_ref=args.contract_ref, backup_root=args.backup_root,
                                     off_platform=args.off_platform)
+        elif args.command == "admit-deployment":
+            result = admit_deployment(directory, args.deployment, expect_head=args.expect_head, observer=observer)
         elif args.command == "status":
             result = status(directory)
         else:

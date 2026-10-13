@@ -41,6 +41,15 @@ THE OPENING (MP-3 A15, A17)
     a closed deployment (503 ``X-SGAA-Admission: closed``).  A well-formed value alone opens
     nothing.  Every response of an open deployment announces ``X-SGAA-Opening: <tag>``.
 
+THE DEPLOYMENT IDENTITY (MP-3 A19 (17))
+    The code's authorization is necessary, not sufficient: any upload of the same code -- a late or a
+    duplicate one the ledger never recorded -- runs the same code.  An open process therefore also
+    needs PROD's admission of ITS OWN deployment, as the platform names it to the process
+    (``VERCEL_DEPLOYMENT_ID``; ``app.hosting.deployment_entry_admits``), written by the ledger for one
+    recorded deployment.  A process the platform did not name admits no one.  Every response of a
+    hosted production process announces it (``X-SGAA-Deployment``), so the governed deploy proves the
+    platform's name before it records the deployment.
+
 THE CODE IDENTITY
     Every response of a hosted production process names the code it runs
     (``X-SGAA-Code``: ``app.hosting.runtime_code_sha256`` of its own files), so the deploy
@@ -66,6 +75,7 @@ ADMISSION_PATH = "/operator-admission"
 ADMISSION_COOKIE_SECONDS = 8 * 60 * 60
 ADMISSION_OPENING_HEADER = "X-SGAA-Opening"
 ADMISSION_CODE_HEADER = hosting.CODE_HEADER
+ADMISSION_DEPLOYMENT_HEADER = hosting.DEPLOYMENT_HEADER
 #: How long an open process trusts its last reading of the authorization (a revocation takes effect
 #: within this time on every running instance).
 OPENING_CHECK_SECONDS = 15
@@ -179,6 +189,8 @@ def _runtime_code() -> str:
 
 def _announce_code(response):
     response.headers[ADMISSION_CODE_HEADER] = current_app.config["SGAA_CODE"]
+    if current_app.config["SGAA_DEPLOYMENT"]:
+        response.headers[ADMISSION_DEPLOYMENT_HEADER] = current_app.config["SGAA_DEPLOYMENT"]
     return response
 
 
@@ -188,10 +200,15 @@ def _read_authorization() -> bool:
 
     config = current_app.config
     reference, code, project = config["SGAA_OPENING_REFERENCE"], config["SGAA_CODE"], config["SGAA_PLATFORM_PROJECT"]
+    deployment = config["SGAA_DEPLOYMENT"]
+    if deployment is None:  # a process the platform did not name is never admitted
+        logger.warning("event=opening_deployment_unnamed")
+        return False
     try:
         raw = get_db_connection().raw_connection
         try:
             row = raw.execute(hosting.OPENING_SELECT_SQL, (reference, code)).fetchone()
+            admitted = raw.execute(hosting.ADMISSION_SELECT_SQL, (reference, deployment)).fetchone()
             identity = hosting.source_identity_sha256(hosting.database_source(raw))
         finally:
             raw.rollback()  # the gate runs first: nothing of the request is on this connection yet
@@ -199,7 +216,9 @@ def _read_authorization() -> bool:
         logger.warning("event=opening_authorization_unreadable")
         return False
     authorized = row is not None and hosting.opening_entry_authorizes(
-        row[0], reference=reference, database_identity=identity, code=code, project=project)
+        row[0], reference=reference, database_identity=identity, code=code, project=project)         and admitted is not None and hosting.deployment_entry_admits(
+            admitted[0], reference=reference, database_identity=identity, code=code, project=project,
+            deployment=deployment)
     if not authorized:
         logger.warning("event=opening_not_authorized")
     return authorized
@@ -240,6 +259,7 @@ def install(app, environ=None) -> str:
     decided = hosting.admission_must_be_decided(environ, production=production)
     if decided:
         app.config["SGAA_CODE"] = _runtime_code()
+        app.config["SGAA_DEPLOYMENT"] = hosting.deployment_id(environ)
         app.after_request(_announce_code)
     if mode != hosting.ADMISSION_OPERATOR:
         reference = hosting.opening_reference(environ)
@@ -267,6 +287,7 @@ def install(app, environ=None) -> str:
 __all__ = [
     "ADMISSION_CLOSED",
     "ADMISSION_CODE_HEADER",
+    "ADMISSION_DEPLOYMENT_HEADER",
     "ADMISSION_COOKIE",
     "ADMISSION_HEADER",
     "ADMISSION_OPENING_HEADER",

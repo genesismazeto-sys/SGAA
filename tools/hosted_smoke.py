@@ -70,6 +70,9 @@ ADMISSION_STATE_HEADER = "x-sgaa-admission"
 OPENING_HEADER = "x-sgaa-opening"
 #: The code identity every hosted response announces (``app.hosting.CODE_HEADER``).
 CODE_HEADER = "x-sgaa-code"
+#: The platform deployment a hosted response names (``app.hosting.DEPLOYMENT_HEADER``, MP-3 A19 (17)).
+DEPLOYMENT_HEADER = "x-sgaa-deployment"
+_DEPLOYMENT_NAME = re.compile(r"dpl_[A-Za-z0-9]{8,64}")
 _HEX64 = re.compile(r"[0-9a-f]{64}")
 #: Keys the DATA_API check must never send: a server-side secret proves nothing about the public API
 #: and would leave the operator's machine for a check that needs only the browser-safe key.
@@ -211,6 +214,14 @@ def probe_code(base_url: str, *, allow_insecure: bool = False) -> str:
     _status, seen, _data, _cookies = client.request("GET", "/health")
     code = seen.get(CODE_HEADER, "").strip().lower()
     return code if _HEX64.fullmatch(code) else ""
+
+
+def probe_deployment(base_url: str, *, allow_insecure: bool = False) -> str:
+    """The platform deployment a hosted deployment names on ``/health`` (``X-SGAA-Deployment``; '' when none)."""
+    client = _Client(base_url, allow_insecure=allow_insecure)
+    _status, seen, _data, _cookies = client.request("GET", "/health")
+    named = seen.get(DEPLOYMENT_HEADER, "").strip()
+    return named if _DEPLOYMENT_NAME.fullmatch(named) else ""
 
 
 def probe_scheduler_front(base_url: str, *, allow_insecure: bool = False) -> str:

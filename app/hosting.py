@@ -21,6 +21,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import tempfile
 from dataclasses import dataclass
 
@@ -329,6 +330,8 @@ CODE_PATHS = (
 )
 #: Every hosted response names the code that produced it (``app.web.admission_gate``).
 CODE_HEADER = "X-SGAA-Code"
+#: ... and the platform deployment that serves it, as the platform names it to the process.
+DEPLOYMENT_HEADER = "X-SGAA-Deployment"
 
 
 def git_blob_id(data: bytes) -> str:
@@ -408,7 +411,30 @@ OPENING_SUPERSEDE_SQL = (
 OPENING_RESTORE_CODE_SQL = (
     "UPDATE sgaa_cutover.opening SET revoked_at = NULL WHERE reference_sha256 = %s AND code_sha256 = %s"
 )
+#: MP-3 A19 (17), the rereview of b83b5fc: an authorized CODE no longer admits by itself.  Every platform
+#: deployment of that code -- a late or duplicate upload, one the ledger never recorded -- would inherit
+#: it.  A deployment admits users only while PROD also holds an admission for ITS OWN platform identity,
+#: written by the ledger for one recorded deployment (``admit-deployment`` before the point of no return,
+#: ``authorize-code`` for a forward fix): an intact ledger entry naming the reference, this database, the
+#: code, the project and the deployment.
+ADMISSION_DDL = (
+    "CREATE TABLE IF NOT EXISTS sgaa_cutover.admission ("
+    " reference_sha256 text NOT NULL, deployment_id text NOT NULL, entry text NOT NULL,"
+    " created_at timestamptz NOT NULL DEFAULT now(), revoked_at timestamptz,"
+    " PRIMARY KEY (reference_sha256, deployment_id))",
+    "REVOKE ALL ON sgaa_cutover.admission FROM PUBLIC",
+)
+ADMISSION_INSERT_SQL = "INSERT INTO sgaa_cutover.admission (reference_sha256, deployment_id, entry) VALUES (%s, %s, %s)"
+ADMISSION_SELECT_SQL = (
+    "SELECT entry FROM sgaa_cutover.admission WHERE reference_sha256 = %s AND deployment_id = %s"
+    " AND revoked_at IS NULL"
+)
+ADMISSION_EXISTS_SQL = "SELECT to_regclass('sgaa_cutover.admission') IS NOT NULL"
 VERCEL_PROJECT_ENV = "VERCEL_PROJECT_ID"
+#: The platform's own name for the deployment a process belongs to (a system variable, set at build and at
+#: runtime, ``dpl_...``); an upload cannot choose it.
+VERCEL_DEPLOYMENT_ENV = "VERCEL_DEPLOYMENT_ID"
+_DEPLOYMENT_ID = re.compile(r"dpl_[A-Za-z0-9]{8,64}")
 
 
 def ledger_canonical(entry: dict) -> bytes:
@@ -426,7 +452,14 @@ def vercel_project_sha256(environ=None) -> str | None:
     return hashlib.sha256(project.encode("utf-8")).hexdigest() if project else None
 
 
+def deployment_id(environ=None) -> str | None:
+    """The platform deployment this process belongs to (``VERCEL_DEPLOYMENT_ID``), else None."""
+    raw = str(_environ(environ).get(VERCEL_DEPLOYMENT_ENV) or "").strip()
+    return raw if _DEPLOYMENT_ID.fullmatch(raw) else None
+
+
 _AUTHORIZING_TYPES = frozenset({"reference", "authorization"})
+_ADMITTING_TYPES = frozenset({"admission", "authorization"})
 
 
 def opening_entry_authorizes(entry_text, *, reference: str, database_identity, code: str, project) -> bool:
@@ -451,6 +484,27 @@ def opening_entry_authorizes(entry_text, *, reference: str, database_identity, c
         entry.get("opening_reference") == reference
     return (names_reference and entry.get("database_identity_sha256") == database_identity
             and entry.get("code_sha256") == code and entry.get("vercel_project_sha256") == project)
+
+
+def deployment_entry_admits(entry_text, *, reference: str, database_identity, code: str, project,
+                            deployment) -> bool:
+    """Whether a stored ledger entry admits users at THIS deployment under ``reference`` (A19 (17)).
+
+    The entry must be intact (its own hash), be an ``admission`` or a forward-fix ``authorization``
+    naming the reference, and name this database, this code, this project and this platform deployment.
+    No deployment identity -- a process the platform did not name -- is admitted by nothing.
+    """
+    if not (reference and database_identity and code and project and deployment):
+        return False
+    try:
+        entry = json.loads(entry_text)
+        claimed = entry.pop("hash")
+        intact = isinstance(claimed, str) and ledger_entry_hash(entry) == claimed
+    except (TypeError, ValueError, KeyError, AttributeError):
+        return False
+    return (intact and entry.get("type") in _ADMITTING_TYPES and entry.get("opening_reference") == reference
+            and entry.get("database_identity_sha256") == database_identity and entry.get("code_sha256") == code
+            and entry.get("vercel_project_sha256") == project and entry.get("deployment_id") == deployment)
 
 
 def startup_blockers(environ=None, *, production: bool) -> tuple[Blocker, ...]:
@@ -525,8 +579,12 @@ __all__ = [
     "SUPABASE_POOLER_SUFFIX",
     "SUPABASE_TRANSACTION_PORT",
     "connection_kind",
+    "ADMISSION_DDL",
     "CODE_HEADER",
     "CODE_PATHS",
+    "DEPLOYMENT_HEADER",
+    "deployment_entry_admits",
+    "deployment_id",
     "OPENING_DDL",
     "OPENING_SCHEMA",
     "code_sha256",

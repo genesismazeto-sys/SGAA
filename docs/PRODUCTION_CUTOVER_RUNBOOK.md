@@ -105,10 +105,13 @@ that would cost money is not performed; stop and say so.
   a schema outside `public`) is written by `reference` together with the reference entry, revoked
   by `close`, restored by `resume`, and authorized for a forward fix by `authorize-code`. The write
   barrier (the writers' role defaults to read-only in the PROD database and every older session of
-  it is ended) is applied by `close` and lifted by `resume`. Nothing else in PROD is written by the
-  ledger, except the marker of each of its own PROD transactions (`sgaa_cutover.operations`, below).
-- **An act whose PROD outcome is unknown (SPEC A19 (14) R2).** `reference`, `authorize-code`, a
-  product-contract `amend` and `supersede` write their entry first, then run their PROD transaction
+  it is ended) is applied by `close` and lifted by `resume`. Since SPEC A19 (17) an authorized code
+  admits users only at a deployment the ledger also ADMITTED by its platform identity
+  (`sgaa_cutover.admission`, written by `admit-deployment` before the PONR and by `authorize-code`
+  for a forward fix). Nothing else in PROD is written by the ledger, except the marker of each of its
+  own PROD transactions (`sgaa_cutover.operations`, below).
+- **An act whose PROD outcome is unknown (SPEC A19 (14) R2).** `reference`, `authorize-code`,
+  `admit-deployment`, `resume`, a product-contract `amend` and `supersede` write their entry first, then run their PROD transaction
   (which records the entry's hash in `sgaa_cutover.operations`), then append its outcome. A refusal
   before the COMMIT appends ABORTED (the entry has no effect). If the COMMIT's answer is lost the
   command refuses `OPERATION_UNRESOLVED` and so does every later command (`status` names it as
@@ -130,8 +133,12 @@ that would cost money is not performed; stop and say so.
   A19 (16)). A promotion whose outcome is unknown is resolved the same way with `--base-url <public
   address>`: `reconcile` records COMMITTED once the address serves the deployment; while it does not and
   the platform still holds that deployment, it refuses `PROMOTION_PENDING` (the platform may still apply
-  it): either `vercel promote <deployment>` again and `reconcile` (COMMITTED), or `vercel remove
-  <deployment>` and `reconcile` (ABORTED: a removed deployment can never be served).
+  it): wait and `reconcile` again, or `vercel remove <deployment>` and `reconcile` (ABORTED: a removed
+  deployment can never be served; deploy a new one). **Never `vercel promote` by hand**, and never
+  promote a deployment the address already serves (`PROMOTION_NOT_A_CHANGE`): a second request for the
+  same deployment could still apply after a later promotion (SPEC A19 (17)). `reconcile` observes only
+  the recorded project (`PROVIDER_NOT_THE_PROJECT`) and, for a promotion, the address it was sent for
+  (`ADDRESS_NOT_THE_PROMOTION`).
 - **Two terminals: production commands and restore drills never share one.** The PROD terminal
   has `DATABASE_URL` = the PROD session address; a restore drill runs in a separate terminal where
   `DATABASE_URL` is unset (`DRILL_SOURCE_URL_SET` otherwise) and the scratch database is named
@@ -464,11 +471,21 @@ authorization that only the reference writes.
    (`BACKUP_TOO_OLD_TO_OPEN`) only after users are admitted. Then
    `python tools/deploy_audit.py deploy --commit <reviewed commit> --ledger-dir <ledger>
    --vercel-team <team id> --vercel-project <project id> --admission open --opening-reference <that
-   hash>` and `promote` it (C10). The tool refuses any other value (`LEDGER_OPEN_WITHOUT_THE_REFERENCE`).
-   An open production deployment admits users only while the PROD database holds the authorization
-   for that reference and its own code: a deployment lifted with any other value, before the
-   reference, with other code or after a revocation answers like a closed one (503), and it re-reads
-   the authorization at most every 15 s. Every response announces `X-SGAA-Opening` (a tag of the
+   hash>`, then **(user terminal**, `PGPASSWORD`**)** `python tools/cutover_ledger.py
+   admit-deployment --ledger-dir <ledger> --expect-head <head> --deployment <its id> --vercel-team
+   <team id> --vercel-project <project id>`, then `promote` it (C10). The tool refuses any other value
+   (`LEDGER_OPEN_WITHOUT_THE_REFERENCE`). An open production deployment admits users only while the
+   PROD database holds the authorization for that reference and its own code AND the admission of
+   its own platform deployment (`VERCEL_DEPLOYMENT_ID`; SPEC A19 (17)): a deployment lifted with any
+   other value, before the reference, with other code, after a revocation, never admitted (a late or
+   duplicate upload), or that the platform did not name answers like a closed one (503), and it
+   re-reads them at most every 15 s. `admit-deployment` writes the admission only for a recorded open
+   deployment of the authorized code under the reference, holding its recorded files in the recorded
+   project, with no barrier and fresh backups; an open deployment is promoted only once admitted
+   (`DEPLOYMENT_NOT_ADMITTED`). The governed deploy records a deployment only once it names itself as
+   the platform does (`X-SGAA-Deployment`; `DEPLOYMENT_IDENTITY_NOT_OBSERVED`): the project must
+   expose the platform's system variables (Settings, Environment Variables), as it already does for
+   `VERCEL_PROJECT_ID`. Every response announces `X-SGAA-Opening` (a tag of the
    reference) and `X-SGAA-Code`. `status` prints the reference as `opening_reference`. Keep
    `SGAA_OPERATOR_TOKEN` in the platform until C14: a rollback deployment closes admission with it.
 4. `python tools/cutover_ledger.py open --ledger-dir <ledger> --expect-head <head> --base-url
@@ -595,9 +612,11 @@ When a rollback is refused (`FINGERPRINT_CHANGED`), production goes forward:
 deployment the platform may serve is recorded (`UNRECORDED_DEPLOYMENT`), and the newest recorded
 generation, with objects, is within the cadence and found intact on disk and off-platform
 (`BACKUP_TOO_OLD_TO_OPEN`, `BACKUP_NOT_THE_RECORDED_ONE`: record a new governed generation first --
-it reads PROD only, so it runs under the barrier); then it lifts the barrier (resets the role
-default, ends every session that started read-only, restores the authorization;
-`BARRIER_STILL_IN_FORCE` if a fresh session still cannot write); restore `CRON_SECRET`, `deploy_audit
+it reads PROD only, so it runs under the barrier); then it lifts the barrier as a two-phase act
+(SPEC A19 (17): its entry first; the role default reset, the authorization restored and its marker in
+one PROD transaction; then every session that started read-only ended; a lost answer leaves it to
+`reconcile` with every other act refused; `BARRIER_STILL_IN_FORCE` if, recorded, a fresh session still
+cannot write); every sweep is of the recorded project only (`PROVIDER_NOT_THE_PROJECT`); restore `CRON_SECRET`, `deploy_audit
 deploy … --admission open --opening-reference <status opening_reference>` and `promote`; re-enable
 the external trigger if it was used; record C13 with the changed fingerprint. `resume` also lifts a
 barrier `close` applied but could not record. Every act that lets users in re-proves the backup
@@ -625,7 +644,8 @@ authorized; an open redeployment of the code already authorized is refused,
 terminal**: it re-verifies the newest generation on disk (after C14, when the ledger records none,
 the newest on disk -- its Layer-2 set and its object set, each by its own creation time -- must
 itself be within the cadence) and its cadence, refuses while any unrecorded deployment exists, and
-writes the authorization for that code under the same reference, revoking every other code of it)
+writes the authorization for that code under the same reference, revoking every other code of it,
+together with the admission of that one deployment: any other upload of the same code stays closed)
 and `promote` (an open deployment is promoted only while its code is the one the ledger authorizes
 and the backup is within its cadence). `cutover_ledger supersede` (**user
 terminal**) revokes, at any time from C12 on, every authorization whose code the ledger no longer

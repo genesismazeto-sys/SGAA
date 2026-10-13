@@ -76,7 +76,13 @@ control, so the hosted runtime carries a fail-closed admission switch
   ledger entry itself: it must hash to the reference (or, for a forward fix, be an authorization
   entry naming it), name this database's live identity (`app.hosting.source_identity_sha256` of the
   process's own connection), this process's code and this platform project (`VERCEL_PROJECT_ID`),
-  and not be revoked. The check is the first request hook, re-read at most every 15 s
+  and not be revoked. Since MP-3 SPEC A19 (17) the code's authorization alone admits no one: the
+  process must also be the deployment PROD admitted (`sgaa_cutover.admission`, an intact ledger
+  entry naming the reference, the database, the code, the project and the deployment), as the
+  platform names it to the process (`VERCEL_DEPLOYMENT_ID`, a system variable available at build
+  and at runtime once the project exposes system variables; `app.hosting.deployment_entry_admits`).
+  A process without that name admits no one. Every response of a hosted production process
+  announces it (`X-SGAA-Deployment`), and the governed deploy records a deployment only once it does. The check is the first request hook, re-read at most every 15 s
   (`OPENING_CHECK_SECONDS`), and fails closed: a missing, forged, revoked or foreign authorization,
   or a database that cannot be asked, is answered like a closed deployment (`503`,
   `X-SGAA-Admission: closed`; `/health` and static files stay reachable). Every response of an open

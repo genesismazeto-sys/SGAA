@@ -446,23 +446,25 @@ def _exported_files(directory: Path) -> tuple[dict, dict]:
     return blobs, sha1s
 
 
-def _observed(url: str, *, allow_insecure: bool) -> tuple[str, str]:
-    """The admission and the code a deployment address answers with, retried while it starts."""
+def _observed(url: str, *, allow_insecure: bool) -> tuple[str, str, str]:
+    """The admission, the code and the platform deployment name a deployment address answers with,
+    retried while it starts."""
     import time
 
     from tools import hosted_smoke
 
-    admission, code = "unknown", ""
+    admission, code, named = "unknown", "", ""
     for _attempt in range(PROBE_ATTEMPTS):
         try:
             code = hosted_smoke.probe_code(url, allow_insecure=allow_insecure)
+            named = hosted_smoke.probe_deployment(url, allow_insecure=allow_insecure)
             admission = hosted_smoke.probe_admission(url, allow_insecure=allow_insecure)
         except (OSError, hosted_smoke.Refused):
-            code, admission = "", "unknown"
-        if code and admission != "unknown":
+            code, named, admission = "", "", "unknown"
+        if code and named and admission != "unknown":
             break
         time.sleep(PROBE_PAUSE_SECONDS)
-    return admission, code
+    return admission, code, named
 
 
 def deploy(commit: str, *, ledger_dir: Path, provider, admission: str, opening_reference: str | None = None,
@@ -504,11 +506,13 @@ def deploy(commit: str, *, ledger_dir: Path, provider, admission: str, opening_r
         env = {hosting.ADMISSION_ENV: admission}
         if mode == "OPEN":
             env[hosting.OPENING_REFERENCE_ENV] = opening_reference
+        project = hashlib.sha256(provider.project_id.encode("utf-8")).hexdigest()
         with cutover_ledger.holding(Path(ledger_dir)):
             try:  # the reservation, with every rule that depends on the code; the GF1 is consumed here
                 attempt = cutover_ledger.begin_deployment(Path(ledger_dir), commit=resolved, admission=mode,
                                                           opening_reference=opening_reference,
-                                                          forward_fix_ref=forward_fix_ref, code=code, held=True)
+                                                          forward_fix_ref=forward_fix_ref, code=code,
+                                                          vercel_project_sha256=project, held=True)
             except cutover_ledger.Refused as refusal:
                 raise Refused(f"LEDGER_{refusal.code}") from None
             try:
@@ -545,9 +549,13 @@ def _record_upload(deployment, attempt, *, ledger_dir, provider, resolved, proof
             # Whatever changed between the verification and the upload is never served.
             raise Refused("DEPLOYED_FILES_DIFFER", "the platform received other files than the verified export")
         address = "https://" + deployment["url"] if not deployment["url"].startswith("http") else deployment["url"]
-        observed_admission, observed_code = _observed(address, allow_insecure=allow_insecure)
+        observed_admission, observed_code, observed_deployment = _observed(address, allow_insecure=allow_insecure)
         if observed_code != code:
             raise Refused("DEPLOYMENT_CODE_NOT_OBSERVED", "the deployment does not announce the export's code")
+        if observed_deployment != deployment["id"]:
+            # Admission binds the platform's own name for the process (A19 (17)): it must be what the platform
+            # reports for this upload, else the deployment is never recorded (and is removed).
+            raise Refused("DEPLOYMENT_IDENTITY_NOT_OBSERVED", "the deployment does not name itself as the platform does")
         receipt = {
             "deployment_id": deployment["id"], "url_sha256": hosted_smoke.host_digest(address),
             "vercel_project_sha256": hashlib.sha256(provider.project_id.encode("utf-8")).hexdigest(),
@@ -555,6 +563,7 @@ def _record_upload(deployment, attempt, *, ledger_dir, provider, resolved, proof
             "files_sha256": received, "admission": mode, "opening_reference": opening_reference or "NONE",
             "forward_fix_ref": forward_fix_ref or "NONE", "observed_admission": observed_admission.upper(),
             "aliased": bool(deployment.get("aliased")), "attempt": attempt["hash"],
+            "observed_deployment_id": observed_deployment,
         }
         try:
             entry = cutover_ledger.record_deployment(Path(ledger_dir), receipt, held=True)
@@ -606,9 +615,15 @@ def _promote_held(deployment_id, *, ledger_dir, provider, public_url, host, allo
         raise Refused(refusal.code) from None
     if current["state"] != "READY" or files != recorded["files_sha256"]:
         raise Refused("DEPLOYMENT_NOT_THE_RECORDED_ONE")
+    if hashlib.sha256(provider.project_id.encode("utf-8")).hexdigest() != recorded["vercel_project_sha256"]:
+        raise Refused("PROVIDER_NOT_THE_PROJECT")
+    try:  # what the address serves now: a promotion is sent only when it changes that (rereview of b83b5fc, M2)
+        serving = provider.alias_target(host)
+    except vercel_provider.Refused as refusal:
+        raise Refused(refusal.code) from None
     try:  # written before the address moves; it takes effect once observed
         intent = cutover_ledger.begin_promotion(Path(ledger_dir), deployment_id, hosted_smoke.host_digest(public_url),
-                                                held=True)
+                                                serving=serving, held=True)
     except cutover_ledger.Refused as refusal:
         raise Refused(f"LEDGER_{refusal.code}") from None
     try:

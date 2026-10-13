@@ -25,6 +25,7 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import secrets
 import socket
 import subprocess
 import sys
@@ -617,7 +618,9 @@ def test_the_write_barrier_on_dev_ends_older_sessions_and_refuses_every_new_writ
             with pytest.raises(psycopg.errors.ReadOnlySqlTransaction):
                 _barrier_probe(url, 2)
         with _timed("barrier_lift_seconds"):
-            assert observer.lift_barrier("0" * 64) is True
+            # a two-phase act's PROD transaction (A19 (17)): the lift and a run-owned marker commit together
+            observer.lift_barrier("0" * 64, None, {"hash": secrets.token_hex(32)})
+            assert observer.writable() is True
         applied = None
         _barrier_probe(TRANSACTION_URL, 3)  # writable again once lifted
         with _raw(SESSION_URL) as conn:
@@ -627,7 +630,7 @@ def test_the_write_barrier_on_dev_ends_older_sessions_and_refuses_every_new_writ
                                 " = ANY (setconfig)").fetchone()[0] == 0
     finally:
         if applied is not None:
-            observer.lift_barrier("0" * 64)
+            observer.lift_barrier("0" * 64, None, {"hash": secrets.token_hex(32)})
         try:
             held.close()
         except Exception:

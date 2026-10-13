@@ -26,7 +26,7 @@ import pytest
 from app import hosting
 from app.hosting import Blocker
 from tests.mp2_pg_support import ADMIN_EMAIL, ADMIN_PASSWORD, PG_URL, Registry, adapter
-from tests.mp3_served_app import REPO_ROOT, seed_admin_and_requests, served_app
+from tests.mp3_served_app import REPO_ROOT, SERVED_DEPLOYMENT, seed_admin_and_requests, served_app
 from tools import hosted_smoke
 
 NEEDS_PG = pytest.mark.skipif(not PG_URL, reason="SGAA_PG_TEST_URL is not configured -- REAL-PG EVIDENCE: ABSENT")
@@ -352,8 +352,10 @@ def _identity(url):
 
 
 def _authorization(url, *, kind="reference", identity=None, code=None, project=None, reference=None,
-                   tamper=False, revoked=False, key=None):
-    """Write one authorization row the way the ledger shapes it; returns the reference to lift with."""
+                   tamper=False, revoked=False, key=None, admit=SERVED_DEPLOYMENT):
+    """Write one authorization row the way the ledger shapes it, and (A19 (17)) the admission of the served
+    deployment ``admit`` (none when ``None``): the reference's own ``admission`` entry, or the forward-fix
+    authorization itself naming it; returns the reference to lift with."""
     import hashlib
 
     from tests.mp3_served_app import PROJECT_ID
@@ -364,8 +366,17 @@ def _authorization(url, *, kind="reference", identity=None, code=None, project=N
             "vercel_project_sha256": project or hashlib.sha256(PROJECT_ID.encode()).hexdigest()}
     if kind == "authorization":
         body["opening_reference"] = reference
+        if admit:
+            body["deployment_id"] = admit
     entry = dict(body, hash=hosting.ledger_entry_hash(body))
     lifted = key or (entry["hash"] if kind == "reference" else reference)
+    admission = entry
+    if admit and kind != "authorization":
+        admitted = {"seq": 8, "prev": entry["hash"], "at": body["at"], "type": "admission",
+                    "opening_reference": lifted, "deployment_id": admit, "code_sha256": body["code_sha256"],
+                    "database_identity_sha256": body["database_identity_sha256"],
+                    "vercel_project_sha256": body["vercel_project_sha256"]}
+        admission = dict(admitted, hash=hosting.ledger_entry_hash(admitted))
     if tamper:
         entry["seq"] = 8  # no longer the entry its hash names
     import json
@@ -373,9 +384,11 @@ def _authorization(url, *, kind="reference", identity=None, code=None, project=N
     conn = adapter(url)
     raw = conn.raw_connection  # the ledger's own SQL, with psycopg placeholders
     try:
-        for statement in hosting.OPENING_DDL:
+        for statement in (*hosting.OPENING_DDL, *hosting.ADMISSION_DDL):
             raw.execute(statement)
         raw.execute(hosting.OPENING_INSERT_SQL, (lifted, own_code, json.dumps(entry)))
+        if admit:
+            raw.execute(hosting.ADMISSION_INSERT_SQL, (lifted, admit, json.dumps(admission)))
         if revoked:
             raw.execute(hosting.OPENING_REVOKE_SQL)
         raw.commit()
@@ -387,10 +400,15 @@ def _authorization(url, *, kind="reference", identity=None, code=None, project=N
 @NEEDS_PG
 @pytest.mark.parametrize("case", [
     "no_row", "revoked", "other_code", "other_database", "other_project", "not_a_ledger_entry", "other_kind",
+    "unadmitted_deployment", "other_deployment", "unnamed_deployment",
 ])
 def test_an_open_application_admits_no_one_without_a_standing_authorization_for_itself(database, tmp_path, case):
     """A well-formed value, a revoked or edited authorization, or one for another code, database or platform
-    project opens nothing: the application answers like a closed deployment and writes nothing."""
+    project opens nothing: the application answers like a closed deployment and writes nothing.  Nor does
+    the code's authorization alone (A19 (17)): a deployment without its own admission -- a late or
+    duplicate upload --, one admitted under another platform name, or a process the platform did not
+    name is closed too."""
+    served = {}
     if case == "no_row":
         reference = "6" * 64
     elif case == "revoked":
@@ -403,16 +421,24 @@ def test_an_open_application_admits_no_one_without_a_standing_authorization_for_
         reference = _authorization(database, project="7" * 64)
     elif case == "not_a_ledger_entry":
         reference = _authorization(database, tamper=True)
+    elif case == "unadmitted_deployment":
+        reference = _authorization(database, admit=None)
+    elif case == "other_deployment":
+        reference = _authorization(database, admit="dpl_" + "O" * 24)
+    elif case == "unnamed_deployment":
+        reference = _authorization(database)
+        served = {"VERCEL_DEPLOYMENT_ID": ""}
     else:  # stored under the lifted reference, but a forward-fix authorization naming another one
         reference = _authorization(database, kind="authorization", reference="4" * 64, key="3" * 64)
     before = _whole_database(database)
-    with served_app(database, tmp_path, SGAA_ADMISSION="open", SGAA_OPENING_REFERENCE=reference) as app:
+    with served_app(database, tmp_path, SGAA_ADMISSION="open", SGAA_OPENING_REFERENCE=reference, **served) as app:
         for method, path, body, headers in STRANGER_REQUESTS[:6]:
             status, seen, _data, cookies = _request(app.url, method, path, body=body, headers=headers)
             assert (status, seen.get("x-sgaa-admission"), cookies) == (503, "closed", []), (case, method, path)
         assert hosted_smoke.probe_admission(app.url, allow_insecure=True) == "closed"
         status, seen, _data, _cookies = _request(app.url, "GET", "/health")
         assert seen.get("x-sgaa-code") == hosting.runtime_code_sha256(REPO_ROOT)  # it still names its code
+        assert seen.get("x-sgaa-deployment", "") == ("" if served else SERVED_DEPLOYMENT)  # and its deployment
     assert _whole_database(database) == before
 
 
