@@ -722,9 +722,15 @@ def test_promotion_points_the_public_address_at_a_recorded_deployment_and_record
     platform.received[identifier] = original
     from tools import cutover_ledger
 
-    def reconciled(provider):  # the promotion stayed unresolved: `reconcile` observes the alias
-        observer = type("Alias", (), {"alias_deployment": lambda self: provider.alias_target("sgaa.example.test")})()
-        return cutover_ledger.reconcile(at_c8["directory"], observer=observer)["result"]
+    def reconciled(provider):  # the promotion stayed unresolved: `reconcile` observes the alias and the platform
+        observer = type("Platform", (), {
+            "alias_deployment": lambda self: provider.alias_target("sgaa.example.test"),
+            "provider_deployments": lambda self: [{"id": key, "url": "", "state": provider.state}
+                                                  for key in provider.received if key not in provider.removed]})()
+        try:
+            return cutover_ledger.reconcile(at_c8["directory"], observer=observer)["result"]
+        except cutover_ledger.Refused as refusal:
+            return refusal.code
 
     served["code"] = "9" * 64  # the address serves something else
     with pytest.raises(da.Refused) as caught:
@@ -740,7 +746,9 @@ def test_promotion_points_the_public_address_at_a_recorded_deployment_and_record
     with pytest.raises(da.Refused) as caught:
         da.promote(identifier, ledger_dir=at_c8["directory"], provider=stuck, public_url=public)
     assert caught.value.code == "LEDGER_ALIAS_NOT_THE_DEPLOYMENT"
-    assert reconciled(stuck) == "ABORTED"
+    assert reconciled(stuck) == "PROMOTION_PENDING"  # accepted, not applied yet: it may still land
+    stuck.alias = identifier  # the platform applied it late
+    assert reconciled(stuck) == "COMMITTED"
     result = da.promote(identifier, ledger_dir=at_c8["directory"], provider=platform, public_url=public)
     assert result["result"] == "PROMOTED" and result["public_host_sha256"] == hosted_smoke.host_digest(public)
 
@@ -928,6 +936,11 @@ def test_m2_a_lost_upload_answer_blocks_everything_until_the_platform_is_reconci
                   opening_reference=reference, forward_fix_ref="REVIEW-GF1-LOST")
     assert caught.value.code == "LEDGER_FORWARD_FIX_GATE_REQUIRED" and len(provider.ready) == 1
     cutover_ledger.grant(directory, "GF1", "REVIEW-GF1-NEXT")
+    with pytest.raises(da.Refused) as caught:  # a copy of that upload may still appear: its code never opens
+        da.deploy(ls.OTHER_COMMIT, ledger_dir=directory, provider=provider, admission="open",
+                  opening_reference=reference, forward_fix_ref="REVIEW-GF1-NEXT")
+    assert caught.value.code == "LEDGER_CODE_OF_AN_UNPROVEN_UPLOAD" and len(provider.ready) == 1
+    _scripted_export(monkeypatch, "8" * 64)  # another commit: another code
     done = da.deploy(ls.OTHER_COMMIT, ledger_dir=directory, provider=provider, admission="open",
                      opening_reference=reference, forward_fix_ref="REVIEW-GF1-NEXT")
     assert done["deployment_id"] == "dpl_" + "Y" * 24 and cutover_ledger.status(directory)["unresolved_operation"] is None

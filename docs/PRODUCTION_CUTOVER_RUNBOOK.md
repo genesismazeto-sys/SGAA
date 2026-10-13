@@ -124,9 +124,14 @@ that would cost money is not performed; stop and say so.
   attempt stays unresolved: list the project's deployments, `vercel remove` the one the ledger never
   recorded, then **(user terminal)** `python tools/cutover_ledger.py reconcile --ledger-dir <ledger>
   --expect-head <head> --vercel-team <team> --vercel-project <project>` (`UNRECORDED_DEPLOYMENT` while
-  it remains); the GF1 stays used and the next deploy needs a new one. A promotion whose outcome is
-  unknown is resolved the same way with `--base-url <public address>`: `reconcile` observes which
-  deployment the address serves.
+  it remains); the GF1 stays used and the next deploy needs a new one. An open upload closed this way
+  marks its code: it is never deployed open again nor authorized (`CODE_OF_AN_UNPROVEN_UPLOAD`; a late
+  copy of that upload must never inherit an authorization): the forward fix needs another commit (SPEC
+  A19 (16)). A promotion whose outcome is unknown is resolved the same way with `--base-url <public
+  address>`: `reconcile` records COMMITTED once the address serves the deployment; while it does not and
+  the platform still holds that deployment, it refuses `PROMOTION_PENDING` (the platform may still apply
+  it): either `vercel promote <deployment>` again and `reconcile` (COMMITTED), or `vercel remove
+  <deployment>` and `reconcile` (ABORTED: a removed deployment can never be served).
 - **Two terminals: production commands and restore drills never share one.** The PROD terminal
   has `DATABASE_URL` = the PROD session address; a restore drill runs in a separate terminal where
   `DATABASE_URL` is unset (`DRILL_SOURCE_URL_SET` otherwise) and the scratch database is named

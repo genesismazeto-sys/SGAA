@@ -1182,6 +1182,26 @@ Executor amendments (consequences of the above; not material beyond what the use
   (14). N1 -- the evidence index cited files the packet did not hold; corrected. N2 -- a refused local
   name collision deleted the file that was already there: the snapshot file is created exclusively and only a
   file this run created is ever removed; the generation token is 64 bits. Evidence: section 17.
+  (16) The cross-family rereview of `2fdeee6` (FAIL, 2 material, 2 non-material), each reproduced first by
+  a failing test on `2fdeee6`. One rule answers both material findings: not seeing a provider act never
+  proves it did not happen. M1 -- a promotion the platform accepted but had not applied yet was read by
+  `reconcile` as ABORTED from the unchanged address, and could land after the block was lifted. `reconcile`
+  now records COMMITTED once the address serves the deployment, ABORTED only once the platform no longer
+  holds that deployment or holds it failed or removed (it can never be served), and otherwise refuses
+  `PROMOTION_PENDING`: the operator promotes it again or removes it. M2 -- an open upload whose answer was
+  lost, closed by `reconcile` while the platform showed nothing, could appear later and inherit a new
+  authorization of the same code. Such an attempt (resolved RECONCILED, open) marks its code: it is never
+  deployed open again and never authorized (`CODE_OF_AN_UNPROVEN_UPLOAD`, in the deployment rules and in
+  both `authorize-code` paths), so a late copy can never admit anyone; the forward fix is made from another
+  commit. An operator-only upload marks nothing (it refuses users whatever its code). Unchanged: before
+  the PONR an open deployment may carry the code already authorized (R5 of (14)). N1 -- the registers
+  ZIP was written with a plain create and could replace a file already there: both files of a run are now
+  reserved exclusively before anything is written, and a refused run removes only the files it created.
+  N2 -- the names were documented as never shared; they are unique only with high probability (64 random
+  bits per generation, after the installation and the second). The documentation now states that, and
+  what makes a shared name harmless: exclusive local creation, OneDrive refusing to replace, Google Drive
+  always creating a new file, and retention and downloads acting only on the file ids this database's
+  receipts name. Evidence: section 17.
 
 ## 17. Closure
 

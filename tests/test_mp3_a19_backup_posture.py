@@ -1095,3 +1095,62 @@ def test_n2_a_name_collision_never_deletes_the_file_that_was_already_there(tmp_p
         pg_snapshot.create(tmp_path, now=now, connect=Connection)
     assert caught.value.code == "SNAPSHOT_EXISTS"
     assert target.read_bytes() == b"preexisting snapshot"
+
+
+def test_rr3_n1_the_registers_zip_never_replaces_a_file_already_there(tmp_path, monkeypatch):
+    """Rereview of 2fdeee6 N1: the companion ZIP is created exclusively, like the snapshot; a collision
+    refuses the run, leaves the existing file untouched and removes only what this run created."""
+    from app.backup import pg_snapshot
+    from tests import mp3_ledger_support as ls
+
+    now = datetime(2026, 11, 1, 8, tzinfo=timezone.utc)
+    monkeypatch.setattr(hosting, "database_source", lambda source: ls.SOURCE)
+    monkeypatch.setattr(pg_snapshot.pathb, "load_order", lambda: [])  # no table: the file is the schema alone
+    monkeypatch.setattr(pg_snapshot.secrets, "token_hex", lambda count: "0" * (2 * count - 1) + "2")
+    stem = f"20261101T080000Z-{ls.IDENTITY[:12]}-{'0' * 15}2"
+    existing = tmp_path / f"sgaa-registros-{stem}.zip"
+    existing.write_bytes(b"preexisting registers")
+
+    class Connection:
+        autocommit = True
+
+        def execute(self, statement, *args):
+            pass
+
+        def close(self):
+            pass
+
+    with pytest.raises(pg_snapshot.SnapshotError) as caught:
+        pg_snapshot.create(tmp_path, now=now, connect=Connection)
+    assert caught.value.code == "SNAPSHOT_EXISTS"
+    assert existing.read_bytes() == b"preexisting registers"
+    assert sorted(p.name for p in tmp_path.iterdir()) == [existing.name]  # this run's own snapshot removed
+
+
+def test_rr3_n1_a_run_that_fails_after_reserving_its_files_removes_both_and_nothing_else(tmp_path, monkeypatch):
+    from app.backup import pg_snapshot
+    from tests import mp3_ledger_support as ls
+
+    monkeypatch.setattr(hosting, "database_source", lambda source: ls.SOURCE)
+    monkeypatch.setattr(pg_snapshot.pathb, "load_order", lambda: [])
+    other = tmp_path / "sgaa-registros-20261101T080000Z.zip"  # another file in the folder
+    other.write_bytes(b"kept")
+
+    def failing(path, *args):
+        path.write_bytes(b"partial")
+        raise OSError("disk full")
+
+    monkeypatch.setattr(pg_snapshot, "_write_registers", failing)
+
+    class Connection:
+        autocommit = True
+
+        def execute(self, statement, *args):
+            pass
+
+        def close(self):
+            pass
+
+    with pytest.raises(OSError):
+        pg_snapshot.create(tmp_path, now=datetime(2026, 11, 1, 8, tzinfo=timezone.utc), connect=Connection)
+    assert sorted(p.name for p in tmp_path.iterdir()) == [other.name] and other.read_bytes() == b"kept"

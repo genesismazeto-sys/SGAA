@@ -45,7 +45,10 @@ WHY THIS EXISTS
     ledger (``holding``) from its precheck through the provider call to the record, so no other act can
     interleave; a deployment is reserved first (a ``deployment_attempt``, which consumes its GF1 before
     anything is uploaded) and a promotion is written before the alias moves; an upload or a promotion
-    whose outcome is unknown stays unresolved until ``reconcile`` has observed the platform.
+    whose outcome is unknown stays unresolved until ``reconcile`` has observed the platform.  Not seeing
+    a provider act never proves it did not happen (rereview of 2fdeee6, M1/M2): a promotion is ABORTED
+    only once its deployment can never be served; an open upload closed without its deployment leaves
+    its code never authorized, so a late copy of it admits no one.
 
 WHAT IT STORES
     One append-only JSON-lines file, ``ledger.jsonl``, in a directory outside
@@ -96,8 +99,9 @@ COMMANDS
                    authorize its code under the same opening reference.  With ``--contract-ref`` (A19),
                    at C12: re-open the amended candidate's recorded open deployment under its GC2 grant
     reconcile      resolve an act whose outcome is unknown: for a PROD transaction read its marker in PROD; for
-                   an upload require that no unrecorded deployment exists; for a promotion observe the alias --
-                   then record COMMITTED or ABORTED (A19 R3 rereview R2; rereview of 1245bf2 M1/M2)
+                   an upload require that no unrecorded deployment exists; for a promotion observe the alias
+                   (ABORTED only once its deployment is removed or failed) -- then record COMMITTED or
+                   ABORTED (A19 R3 rereview R2; rereview of 1245bf2 M1/M2; rereview of 2fdeee6 M1/M2)
     attest-ponr    once, for a declared C13 recorded before restores left a commit marker: bind it forward
                    to the safety copy that restore left in PROD (A19 R3 rereview R1); nothing is rewritten
     status         current state, granted gates, head, chain verdict
@@ -611,6 +615,11 @@ def _summary(entries: list[dict]) -> dict:
             collected["supersessions"].append(entry)
         elif kind == "attestation":
             collected["attestations"].append(entry)
+    # An open upload whose answer was lost and that `reconcile` closed while the platform showed nothing may
+    # still appear: its code is never authorized, so it never admits anyone (rereview of 2fdeee6, M2).
+    unproven = {e["of"] for e in entries if e["type"] == "outcome" and e["resolved_by"] == "RECONCILED"}
+    collected["unproven_codes"] = {a["code_sha256"] for a in collected["attempts"]
+                                   if a["admission"] == "OPEN" and a["hash"] in unproven}
     return {"state": state, "granted": granted, "rolled_back": rolled_back, "evidence": carried,
             "entered": entered, "reference": reference, "backups": backups,
             "opening_reference": opening_reference, "any_reference": reference or opening_reference, **collected}
@@ -1849,6 +1858,8 @@ def _deployment_rules(summary: dict, *, commit, admission, opening_reference, fo
             raise Refused("OPEN_WITHOUT_THE_REFERENCE", "an open deployment carries the recorded opening reference")
         if _barrier_applied(summary) is not None:
             raise Refused("BARRIER_APPLIED", "`resume` lifts the barrier before production is opened again")
+        if code is not None and code in summary["unproven_codes"] and code != _authorized_code(summary):
+            raise Refused("CODE_OF_AN_UNPROVEN_UPLOAD", "that code is never authorized: deploy another commit")
         if code is not None and code == _authorized_code(summary):
             if after_ponr:
                 # It would admit users at its own address the moment it is up, before the ledger has recorded
@@ -2327,6 +2338,14 @@ def _require_every_deployment_recorded(summary: dict, observer: Observer) -> Non
             raise Refused("UNRECORDED_DEPLOYMENT", "a deployment the ledger never recorded may admit users")
 
 
+def _require_deployment_gone(observer: Observer, deployment_id: str) -> None:
+    """The platform no longer holds the deployment, or holds it failed or removed: no promotion can land."""
+    for deployment in observer.provider_deployments():
+        if deployment["id"] == deployment_id and deployment["state"] not in TERMINAL_DEPLOYMENT_STATES:
+            raise Refused("PROMOTION_PENDING", "the platform may still apply it: promote the deployment again "
+                          "(`vercel promote`) or remove it (`vercel remove`), then `reconcile`")
+
+
 def supersede(directory: Path, *, expect_head: str | None = None, observer: Observer | None = None) -> dict:
     """Revoke in PROD every authorization of the opening reference whose code is not the one the ledger
     currently authorizes (A19 R3 M2).  Narrowing only: it admits no one, so it needs no gate."""
@@ -2377,6 +2396,8 @@ def authorize_code(directory: Path, deployment_id: str, *, expect_head: str | No
             raise Refused("NOT_A_RECORDED_FORWARD_FIX")
         if deployment["code_sha256"] in {reference["code_sha256"], *(a["code_sha256"] for a in summary["authorizations"])}:
             raise Refused("CODE_ALREADY_AUTHORIZED")
+        if deployment["code_sha256"] in summary["unproven_codes"]:
+            raise Refused("CODE_OF_AN_UNPROVEN_UPLOAD", "an upload of that code may still appear unrecorded")
         if _needs_attestation(summary):
             raise Refused("PONR_NOT_ATTESTED", "`attest-ponr` binds the declared C13 to its restore first")
         identity = _production_database(summary, observer)
@@ -2418,6 +2439,8 @@ def _authorize_contract_code(directory: Path, deployment_id: str, contract_ref: 
             raise Refused("DEPLOYMENT_CODE_CHANGED", "only the amended candidate's code is re-opened")
         if deployment["code_sha256"] in {reference["code_sha256"], *(a["code_sha256"] for a in summary["authorizations"])}:
             raise Refused("CODE_ALREADY_AUTHORIZED")
+        if deployment["code_sha256"] in summary["unproven_codes"]:
+            raise Refused("CODE_OF_AN_UNPROVEN_UPLOAD", "an upload of that code may still appear unrecorded")
         identity = _production_database(summary, observer)
         if not observer.writable():  # a barrier `close` applied but could not record
             raise Refused("BARRIER_IN_FORCE", "`resume` lifts the barrier before production is opened again")
@@ -2452,6 +2475,10 @@ def reconcile(directory: Path, *, expect_head: str | None = None, observer: Obse
             committed = False
         elif pending["type"] == "promotion":
             committed = observer.alias_deployment() == pending["deployment_id"]
+            if not committed:
+                # An unchanged address proves nothing: the platform may still apply a promotion it accepted
+                # (rereview of 2fdeee6, M1).  ABORTED only once its deployment can never be served.
+                _require_deployment_gone(observer, pending["deployment_id"])
         else:
             _production_database(summary, observer)
             committed = observer.operation_committed(pending["hash"])

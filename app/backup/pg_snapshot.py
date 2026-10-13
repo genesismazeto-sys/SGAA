@@ -19,9 +19,13 @@ SAFETY
     Read-only on the database.  In the cloud folder it only ever deletes files whose name starts
     with ``SNAPSHOT_PREFIX`` (the legacy SQLite backups that may share the folder are never touched),
     keeping the newest ``keep`` of them.  Every name carries the installation (the first twelve hex
-    digits of the database's identity) and a random 64-bit generation token after its second: two backups in
-    the same second, or two installations sharing a folder, never name the same file (A19 R3 rereview
-    R8), and the upload refuses to replace an existing file.
+    digits of the database's identity) and a random 64-bit generation token after its second (A19 R3
+    rereview R8): two backups in the same second, or two installations sharing a folder, name the same
+    file only with a probability of about 2**-64 per pair -- improbable, not impossible.  Nothing relies
+    on it (rereview of 2fdeee6, N2): both files of a run are created exclusively here (a name already
+    present refuses the run and is never opened, replaced or removed), a OneDrive upload refuses to
+    replace a file of the same name, a Google Drive upload always creates a new file, and retention
+    and downloads act only on the file ids this database's own receipts name.
 """
 from __future__ import annotations
 
@@ -101,7 +105,7 @@ def create(directory, *, now: datetime | None = None, connect=None) -> dict:
     now = now or datetime.now(timezone.utc)
     source = (connect or _application_connection)()
     source.autocommit = True  # the snapshot is one explicit repeatable-read, read-only transaction
-    lite = path = None
+    lite = path = registers = None
     try:
         tables = pathb.load_order()
         source.execute("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY")
@@ -109,14 +113,10 @@ def create(directory, *, now: datetime | None = None, connect=None) -> dict:
             identity = hosting.source_identity_sha256(hosting.database_source(source))
             if identity is None:
                 raise SnapshotError("DATABASE_IDENTITY_UNPROVEN")
-            # the installation and a token unique to this generation: no other run ever writes this name
+            # the installation and a random token: another run names the same file only improbably (N2)
             stem = f"{now.strftime('%Y%m%dT%H%M%SZ')}-{identity[:12]}-{secrets.token_hex(8)}"
-            candidate = Path(directory) / f"{SNAPSHOT_PREFIX}{stem}{SNAPSHOT_SUFFIX}"
-            try:  # created exclusively: an existing file is never opened, overwritten or removed by this run
-                os.close(os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
-            except FileExistsError:
-                raise SnapshotError("SNAPSHOT_EXISTS") from None
-            path = candidate  # from here on the file is this run's own
+            path = _reserve(Path(directory) / f"{SNAPSHOT_PREFIX}{stem}{SNAPSHOT_SUFFIX}")
+            registers = _reserve(Path(directory) / f"{REGISTERS_PREFIX}{stem}.zip")
             lite = sqlite3.connect(str(path))
             lite.executescript(prod1_schema.PROD1_SCHEMA_SQL)
             lite.execute("PRAGMA foreign_keys = OFF")
@@ -158,22 +158,34 @@ def create(directory, *, now: datetime | None = None, connect=None) -> dict:
             raise SnapshotError("SNAPSHOT_INTEGRITY")
         if int(lite.execute("PRAGMA user_version").fetchone()[0]) != 16:
             raise SnapshotError("SNAPSHOT_VERSION")
+        lite.close()
+        lite = None
+        _write_registers(registers, copied, now, path.name)
     except BaseException:
         if lite is not None:
             lite.close()
-        if path is not None:
-            path.unlink(missing_ok=True)
+        for own in (path, registers):  # only the files this run created
+            if own is not None:
+                own.unlink(missing_ok=True)
         raise
     finally:
         source.close()
-    lite.close()
-    registers = _write_registers(Path(directory) / f"{REGISTERS_PREFIX}{stem}.zip", copied, now, path.name)
     return {
         "registers_path": str(registers), "registers_file_name": registers.name,
         "path": str(path), "file_name": path.name, "sha256": _sha256(path), "size": os.path.getsize(path),
         "generation_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "tables": len(copied),
         "rows": sum(len(rows) for rows in copied.values()), "source_identity_sha256": identity,
     }
+
+
+def _reserve(candidate: Path) -> Path:
+    """Create ``candidate`` exclusively: an existing file is never opened, overwritten or removed by this
+    run (rereview of 1245bf2 N2, rereview of 2fdeee6 N1); from here on the file is this run's own."""
+    try:
+        os.close(os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+    except FileExistsError:
+        raise SnapshotError("SNAPSHOT_EXISTS") from None
+    return candidate
 
 
 def _cell(value) -> str:
