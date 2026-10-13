@@ -254,11 +254,24 @@ worker and the web route, RBAC and CSRF inventories do not grow.
 | Request | Effect |
 |---|---|
 | `GET` or `POST /internal/scheduler/mirror` with `Authorization: Bearer <CRON_SECRET>` | one bounded mirror pass |
+| `GET` or `POST /internal/scheduler/backup` with `Authorization: Bearer <CRON_SECRET>` | one policy-driven backup pass (MP-3 A20): a verified database snapshot, the readable registers and, when the object cadence is due, a sealed object set of every canonical object, to every connected drive; retention prunes each kind to the policy |
 
-Answers are value-free JSON: `200` the pass ran (including "nothing due"), `503` the
-canonical store or Drive is not runnable (`result_code`), `500` an unexpected failure
-(a fixed code, never exception text), `401` missing or wrong credential, `405` other
-method, `404` any other path or a disabled front.
+Answers are value-free JSON: `200` the pass ran (including "nothing due"; the backup pass
+also answers `200` with `SKIPPED_BUSY` when another pass holds the database's backup lock),
+`503` the pass is not runnable (`result_code`: an unreadable or invalid policy, no connected
+drive, an object set that could not be built, a snapshot that could not be made or recorded),
+`500` an unexpected failure (a fixed code, never exception text), `401` missing or wrong
+credential, `405` other method, `404` any other path or a disabled front.
+
+The backup pass is cadence-agnostic: every wake reads the administrator's policy on the
+Banco de dados page (database cadence 1–24 h, object cadence 1–7 days) and the records the
+database itself holds, and no-ops unless the database cadence or the object cadence is due.
+The wake interval is therefore not contract: the descriptor's daily cron covers the 24 h
+default, and a sub-daily cadence needs a sub-daily waker (for example Supabase Cron with
+`pg_net`), every one of them authenticated by the same bearer. The manual "Gerar backup
+agora" shares the same lock, so a pass and a manual copy never overlap; a refused publication
+never undoes a completed generation, and retention deletes only files this database's own
+receipts name.
 
 - `CRON_SECRET` (at least 32 ASCII characters, surrounding whitespace ignored) enables
   the front; without it every request is a `404` (so a caller can tell "not configured"
@@ -276,8 +289,8 @@ method, `404` any other path or a disabled front.
   duplicate and overlapping invocations safe: a claimed object is owned by one pass, and
   a pass that loses its lease ends as `lost` and is adopted by the next one rather than
   uploading a second copy.
-- Only the mirror pass is scheduled. Convergence, requeue and object backup remain
-  operator decisions (`python -m app.storage.cli`).
+- Only the mirror pass and the backup pass are scheduled. Convergence, requeue and the
+  operator object set (section 10) remain operator decisions (`python -m app.storage.cli`).
 - Any caller works: Vercel Cron, `pg_cron` with `pg_net`, a CI job, `curl`. A database
   trigger never carries the bearer in its job text: the user stores it in Supabase Vault
   (dashboard, or typed into the SQL editor) and the job reads it from
@@ -329,8 +342,9 @@ an integrity check, not authenticity, so keep the set where it cannot be altered
   compare the set with the database: run `verify-backup --set <set> --database`
   first.
 - Reports carry counts, ids and fixed codes only: no key, URL, file name or byte.
-- Residual: scheduled object backup and restore from the Drive mirror are not
-  provided; the operator set is the only copy beyond the provider's own protection.
+- Residual: the operator's own object set is not scheduled here; the hosted scheduled pass
+  (section 9) takes its own sealed set to the connected drives, while the operator set on
+  encrypted storage remains the copy this CLI provides.
 
 ## 11. Platform exposure (managed PostgreSQL with an HTTP data API)
 

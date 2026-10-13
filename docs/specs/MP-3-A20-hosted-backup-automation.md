@@ -82,10 +82,11 @@ After confirmation and the gated deploy, without any operator workstation or man
   one posture read (identity-filtered, intact receipts only). Actions: objects due → fresh DB snapshot +
   sealed object set in one receipt; DB due only → snapshot; neither → 200 no-op. Invalid/unreadable
   policy → 503 `POLICY_INVALID`, nothing runs or is deleted.
-- S3 — object set: built by `object_backup.backup()` in scratch, archived as its own zip kind in the
-  snapshot folder naming pattern (installation identity + random token), uploaded with the snapshot,
-  recorded in the receipt's additive `object_files` map, downloadable from the same row, pruned per kind
-  to the policy keeping only receipt-named files.
+- S3 — object set: built by `object_backup.backup()` in scratch (owner of the builder:
+  `app.backup.object_sets`, a background module the scheduler service injects — amendment A1),
+  archived as its own zip kind in the snapshot folder naming pattern (installation identity + random
+  token), uploaded with the snapshot, recorded in the receipt's additive `object_files` map,
+  downloadable from the same row, pruned per kind to the policy keeping only receipt-named files.
 - Failure model: fixed codes only (`OK`, `NOT_DUE`, `POLICY_INVALID`, `NO_DRIVE`, `SKIPPED_BUSY`,
   `SET_REFUSED_*`, `SNAPSHOT_*`, `JOB_FAILED`); a refusal never reverts a completed generation; the page
   already renders LATE/next-due from the receipts.
@@ -172,10 +173,10 @@ cross-family R3 review from a packet the executor prepares; the deploy waits for
 
 | # | Goal | Paths | Exit evidence | Status |
 |---|---|---|---|---|
-| 1 | Owner extraction, behaviour-preserving | `app/backup/hosted_backup.py`, view delegation, tests | owner + behaviour tests green | PLANNED |
-| 2 | Endpoint, due-ness, lock, snapshot path | `app/storage/scheduler.py`, `hosted_backup.py`, `pg_posture.py`, tests | unit + real-PG + served lanes | PLANNED |
-| 3 | Sealed object set, archive, download, prune | `hosted_backup.py`, `pg_snapshot.py`, view download, tests | zip round-trip + restore lane | PLANNED |
-| 4 | Wake wiring, docs, full suite, review | `vercel.json`, runbook, PROJECT_STATE, review packet | full suite (baseline-clean) + review verdict | PLANNED |
+| 1 | Owner extraction, behaviour-preserving | `app/backup/hosted_backup.py`, view delegation, tests | owner + behaviour tests green | DONE |
+| 2 | Endpoint, due-ness, lock, snapshot path | `app/storage/scheduler.py`, `hosted_backup.py`, `pg_posture.py`, tests | unit + real-PG + served lanes | DONE |
+| 3 | Sealed object set, archive, download, prune | `hosted_backup.py`, `object_sets.py`, `pg_snapshot.py`, view download, tests | zip round-trip + restore lane | DONE |
+| 4 | Wake wiring, docs, full suite, review | `vercel.json`, runbook, HOSTED_RUNTIME, review packet | full suite (baseline-clean) + review verdict | IN PROGRESS |
 | 5 | GATED production deploy + observation | deployment + user enablement + page | first automatic generation observed; report | BLOCKED (gates) |
 
 ## 13. Acceptance criteria
@@ -209,7 +210,16 @@ cross-family R3 review from a packet the executor prepares; the deploy waits for
 
 ## 16. Amendments
 
-None.
+- A1 2026-10-13 — The object-set builder is its own background module.  Implementation found the
+  I3 guard (`tests/test_storage_mp1_web_isolation.py`) correctly forbids the web-runtime module
+  ``hosted_backup`` from naming ``app.storage.object_backup`` even in a function body.  The builder
+  therefore lives in ``app.backup.object_sets`` (a background capability, added to the guard's
+  background set), and the scheduler service injects it into
+  ``hosted_backup.run_backup_pass(build_objects=…)``; without the injection a due object set refuses
+  loudly (``SET_BUILDER_UNAVAILABLE``).  No contract change: the web function still never loads a
+  background tool, and the manual route never builds object sets.  A guard list was *extended* for a
+  genuinely background module (its designed mechanism), not weakened; the scanner's negative controls
+  are untouched.
 
 ## 17. Closure
 

@@ -483,6 +483,23 @@ schema v16 SQLite) to the connected cloud drives; to restore one into PostgreSQL
 target and run the Path-B tool on the downloaded file (`python -m app.pg_migrate_from_sqlite`, the file's
 SHA-256 as the expected digest).
 
+### R.2 The automatic layer (MP-3 A20)
+
+The administrator's policy also drives automatic execution, without an operator: the scheduler front
+(`app.storage.scheduler:application`, section 9 of `docs/HOSTED_RUNTIME.md`) answers
+`/internal/scheduler/backup` with the `CRON_SECRET` bearer, and one wake reads the policy and the
+database's own receipts and runs only what is due — a verified database snapshot, the readable
+registers and, when the object cadence is due, a sealed object set of every canonical object
+(`sgaa-pg-objetos-*.zip`, the same set format the CLI seals), all to every connected drive, with
+retention pruning each kind to `pg_retention_generations`. The wake interval is not the cadence: the
+committed descriptor adds a daily cron entry (the 24 h default; Hobby's floor), and a sub-daily
+cadence uses a sub-daily waker — Supabase Cron with `pg_net` is free and calls the same endpoint; the
+bearer is stored in Supabase Vault (the same pattern as the mirror trigger), so no job text holds a
+secret. The manual "Gerar backup agora" shares one advisory lock with the pass: while a pass runs, the
+button answers "Outro backup está em andamento". This layer records `sgaa_ops` receipts only; the
+operator's governed generations remain the ledger-counted backups, and actual restore drills
+(`ops_backup drill`) remain the only evidence that counts as a test restoration.
+
 The Banco de dados page shows the protection posture from records published into the
 database itself (`sgaa_ops.backup_records`, outside `public`; `docs/HOSTED_RUNTIME.md` §8).
 `ops_backup` publishes them: a governed run (`--ledger-dir`) publishes the cutover ledger's
