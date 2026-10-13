@@ -966,7 +966,7 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
         -1,
         1,
         -1,
-        8,
+        9,
     ], "the named catalog delta ledger must stay exactly these twenty-three terms"
     assert governance.PARENT_CATALOG_COUNT == 548
     # UT-MX3 scans the existing StudentMatrixError owner. Seven distinct
@@ -976,7 +976,7 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
     governance.assert_catalog_matches_canonical_baseline(
         catalog, context="FC-07 ARQUIVOS ledger"
     )
-    assert governance.CANONICAL_CATALOG_COUNT == 588
+    assert governance.CANONICAL_CATALOG_COUNT == 589
     # The residual is anchored on the ledger through UT-MX3, so every term
     # appended after it comes back off the live key set before comparing.
     assert (
