@@ -180,7 +180,7 @@ cross-family R3 review from a packet the executor prepares; the deploy waits for
 | 1 | Owner extraction, behaviour-preserving | `app/backup/hosted_backup.py`, view delegation, tests | owner + behaviour tests green | DONE |
 | 2 | Endpoint, due-ness, lock, snapshot path | `app/storage/scheduler.py`, `hosted_backup.py`, `pg_posture.py`, tests | unit + real-PG + served lanes | DONE |
 | 3 | Sealed object set, archive, download, prune | `hosted_backup.py`, `object_sets.py`, `pg_snapshot.py`, view download, tests | zip round-trip + restore lane | DONE |
-| 4 | Wake wiring, docs, full suite, review | `vercel.json`, runbook, HOSTED_RUNTIME, review packet | full suite (baseline-clean) + review verdict | IN PROGRESS |
+| 4 | Wake wiring, docs, full suite, review | `vercel.json`, runbook, HOSTED_RUNTIME, review packet | full suite (baseline-clean) + review verdict | DONE |
 | 5 | GATED production deploy + observation | deployment + user enablement + page | first automatic generation observed; report | BLOCKED (gates) |
 
 ## 13. Acceptance criteria
@@ -227,4 +227,12 @@ cross-family R3 review from a packet the executor prepares; the deploy waits for
 
 ## 17. Closure
 
-Pending: filled in the last slice (acceptance results, slice commits, residuals to `PROJECT_STATE.md`).
+T5 completed on `0d0efc0` (local PostgreSQL 17 lanes on): **6224 passed / 3 failed / 159 skipped /
+12 errors** in 67 minutes.  Classification: the three failures are two pre-existing local-cluster
+failures (reproduced identically on the entry baseline `8aa45a0`: the `pg_restore` message
+classification and the non-pt-BR cluster collation) and the recorded MX3 549-vs-548 debt; the 12
+errors were the missing `sgaa_qual` admin database of the disposable cluster — the E-PG2 lane passes
+12/12 once the prerequisite exists; no candidate-caused failure.  The recorded debt that did not
+manifest this run (xlwt collection errors, `TestSentinelSurvival`, the backup-package test, the
+non-hermetic CSRF node) is not claimed green beyond this run's result.  Remaining: the gated
+production slice (S5) and the `PROJECT_STATE.md` reconciliation at close.
