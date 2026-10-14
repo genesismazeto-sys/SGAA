@@ -33,7 +33,6 @@ import time
 from app import cloud_connections as _cloud_connections
 from app import cloud_drives as _cd
 from app.backup import pg_posture
-from app.backup import pg_snapshot
 from app.backup.orchestrator import _save_drive_config
 from app.db import ensure_cloud_backup_schema, get_db_connection
 
@@ -148,6 +147,9 @@ def _deliver(*, prune: bool, with_objects: bool, store=None, build_objects=None)
     """
     conn = get_db_connection()
     raw = getattr(conn, "raw_connection", None)
+    # lazy, like the view's original body: the SQLite runtime must not load the PG schema chain
+    from app.backup import pg_snapshot
+
     result = {
         "targets": [], "sent": None, "failed": [], "registers_failed": [], "objects_failed": [],
         "manifest": None, "set_error": None, "object_set_name": None, "object_set_digest": None,
@@ -293,6 +295,8 @@ def prune_owned(conn, raw, sent, folders, keep, *, registers_skip):
     only in the drive the upload landed in (``folders[provider][2]``) and only items owned in THAT drive;
     an unknown drive deletes nothing (rereview R4).  The sealed object-set archives (A20) are a third
     kind, pruned the same way and only when their ids are in the receipts."""
+    from app.backup import pg_snapshot
+
     try:
         owned = pg_posture.owned_files(raw)
     except Exception as exc:
