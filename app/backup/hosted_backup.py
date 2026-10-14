@@ -140,24 +140,34 @@ def cloud_drive_folder_setting(conn, provider: str) -> dict[str, str]:
 def backup_lock(conn):
     """Take the database's backup lock; returns the holder token, or ``None`` when another run
     holds an unexpired lease.  Non-PostgreSQL backends take no lock (the SQLite path has its own
-    cycle lock) and return ``LOCK_HOLDER_LOCAL``."""
+    cycle lock) and return ``LOCK_HOLDER_LOCAL``.
+
+    The acquire is committed on its own before it returns: on the request paths the connection may
+    already be inside an ambient transaction (the auth hooks read the database first), and a lock
+    taken there would live in a savepoint -- invisible to every other backend while the protected
+    operation runs (M2, genuine transaction boundaries).
+    """
     raw = getattr(conn, "raw_connection", None)
     if raw is None:
         return LOCK_HOLDER_LOCAL
     holder = secrets.token_hex(16)
+    raw.commit()  # end any ambient transaction: the lease must be visible to every other backend
+    pg_posture.run_ddl(raw, LOCK_DDL)
     with raw.transaction():
-        for statement in LOCK_DDL:
-            raw.execute(statement)
         row = raw.execute(LOCK_ACQUIRE_SQL, (holder, LOCK_LEASE_SECONDS)).fetchone()
     return str(row[0]) if row else None
 
 
 def backup_unlock(conn, holder) -> None:
-    """Release the lock this run holds; a lease stolen meanwhile is never released by mistake."""
+    """Release the lock this run holds; a lease stolen meanwhile is never released by mistake.
+
+    The release is committed on its own, so a finished run never leaves a persistent false-busy row.
+    """
     raw = getattr(conn, "raw_connection", None)
     if raw is None or holder in (None, LOCK_HOLDER_LOCAL):
         return
     try:
+        raw.commit()  # the release must be visible immediately, not inside an ambient transaction
         with raw.transaction():
             raw.execute(LOCK_RELEASE_SQL, (holder,))
     except Exception:  # a connection already gone leaves the lease to expire; nothing else is lost
@@ -169,8 +179,7 @@ def backup_unlock(conn, holder) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _deliver(*, prune: bool, with_objects: bool, store=None, build_objects=None,
-             require_complete: bool = False) -> dict:
+def _deliver(*, prune: bool, with_objects: bool, store=None, build_objects=None) -> dict:
     """One delivery attempt; see ``send_snapshot`` for the manual contract.
 
     Returns a value-free dict: ``targets`` (connected providers), ``sent`` (``None`` when the
@@ -181,10 +190,11 @@ def _deliver(*, prune: bool, with_objects: bool, store=None, build_objects=None,
     object-set receipt fields.  ``build_objects`` is the background builder (``app.backup.object_sets``);
     without it a due object set refuses loudly instead of shipping nothing silently.
 
-    ``require_complete`` is the scheduled contract (M1): with it, no receipt is published unless
-    every connected drive received the snapshot, the registers and (when due) the sealed set — the
-    protection clock never advances on a partial delivery.  The manual route keeps its A19
-    semantics (``require_complete=False``: publish what landed, name what did not).
+    The receipt is ALWAYS recorded when at least one drive received the snapshot, carrying the
+    truth: its ``complete`` marker says whether every connected drive received the snapshot, the
+    registers and (when due) the sealed set (M1).  A partial receipt owns its files (retention
+    rotates them, so a failing drive cannot grow the healthy one without bound) but never advances
+    the protection clock, the due dates or the page's status -- those read only complete receipts.
     """
     conn = get_db_connection()
     raw = getattr(conn, "raw_connection", None)
@@ -232,10 +242,10 @@ def _deliver(*, prune: bool, with_objects: bool, store=None, build_objects=None,
         for provider in targets:
             prefix = "gdrive" if provider == "google" else "onedrive"
             label = _label(provider)
-            chosen = cloud_drive_folder_setting(conn, provider)
-            folder_id = str(chosen.get("folder_id") or "").strip() or None
-            drive_id = str(chosen.get("drive_id") or "").strip() or None
             try:
+                chosen = cloud_drive_folder_setting(conn, provider)
+                folder_id = str(chosen.get("folder_id") or "").strip() or None
+                drive_id = str(chosen.get("drive_id") or "").strip() or None
                 upload = _cloud_connections.upload_backup_zip(
                     conn, provider, zip_path=snapshot["path"], file_name=snapshot["file_name"],
                     folder_name=PG_SNAPSHOT_DEFAULT_FOLDER, folder_id=folder_id, drive_id=drive_id, replace=False,
@@ -285,19 +295,18 @@ def _deliver(*, prune: bool, with_objects: bool, store=None, build_objects=None,
             })
             conn.commit()
     result.update(sent=sent, failed=failed, registers_failed=registers_failed)
-    # M1: the scheduled run advances the protection clock only when EVERY connected drive received
-    # every required artifact of this wake (snapshot, registers, and the sealed set when due).
+    # M1: completeness covers every connected drive and every artifact of this wake; the receipt
+    # records it, and the read side (page, due-ness) counts only complete receipts.
     requires_objects = built["archive"] is not None
     complete = bool(targets) and len(sent) == len(targets) and all(
         provider in uploaded and provider in exported and (not requires_objects or provider in object_files)
         for provider in targets)
     result["delivery_complete"] = complete
-    if require_complete:
-        claimed_objects = requires_objects and complete
-    else:  # the manual contract: a set is claimed when at least one drive received its archive
-        claimed_objects = built["report"] is not None and bool(object_files)
+    # a set is claimed (recorded) when it was built and at least one drive received its archive;
+    # a partial receipt owns those files for retention but never advances the clocks
+    claimed_objects = built["report"] is not None and bool(object_files)
     published = False
-    if sent and (not require_complete or complete) and raw is not None:
+    if sent and raw is not None:
         receipt = pg_posture.run_record(
             generation_at=snapshot["generation_at"], manifest_sha256=snapshot["sha256"],
             dump_sha256=snapshot["sha256"], source_identity_sha256=snapshot["source_identity_sha256"],
@@ -307,7 +316,7 @@ def _deliver(*, prune: bool, with_objects: bool, store=None, build_objects=None,
             run_seconds=int(time.monotonic() - started), at=snapshot["generation_at"],
             kind=pg_posture.SNAPSHOT_KIND, provenance=pg_posture.HOSTED_PROVENANCE, destinations=tuple(sent),
             files=uploaded, exports=exported, drives=drives,
-            object_files=object_files if object_files else None,
+            object_files=object_files if object_files else None, complete=complete,
         )
         try:
             pg_posture.publish(raw, [receipt])
@@ -344,11 +353,14 @@ def prune_owned(conn, raw, sent, folders, keep, *, registers_skip):
     database's receipts name -- never a same-named file of another installation (A19 R3 M4).  On OneDrive
     only in the drive the upload landed in (``folders[provider][2]``) and only items owned in THAT drive;
     an unknown drive deletes nothing (rereview R4).  The sealed object-set archives (A20) are a third
-    kind, pruned the same way and only when their ids are in the receipts."""
+    kind.  Complete generations and partial runs rotate separately (M1): a failing drive can never
+    push the newest complete generation out of its own retention window, and a long failure cannot
+    grow the healthy drive without bound (at most ``keep`` of each class per kind)."""
     from app.backup import pg_snapshot
 
     try:
         owned = pg_posture.owned_files(raw)
+        owned_complete = pg_posture.owned_files(raw, complete=True)
     except Exception as exc:
         logger.warning("event=pg_snapshot_retention_skipped error=%s", type(exc).__name__)
         return  # receipts that cannot be read prove nothing: delete nothing
@@ -356,6 +368,8 @@ def prune_owned(conn, raw, sent, folders, keep, *, registers_skip):
         label = _label(provider)
         landed, folder_id, drive_id = folders[provider]
         mine = pg_posture.owned_in(owned, provider, drive_id)
+        complete_ids = pg_posture.owned_in(owned_complete, provider, drive_id)
+        partial_ids = mine - complete_ids
         if provider == "onedrive" and not drive_id:
             logger.warning("event=pg_snapshot_retention_skipped provider=onedrive error=DRIVE_UNKNOWN")
             continue
@@ -365,20 +379,26 @@ def prune_owned(conn, raw, sent, folders, keep, *, registers_skip):
         # the sealed object-set archives (A20): a third kind; the ownership filter below keeps the
         # deletion contract -- ids not named by this database's receipts are never candidates
         kinds.append((OBJECTS_ARCHIVE_PREFIX, OBJECTS_ARCHIVE_NAME))
+
+        def _rotate(candidates, delete_one, pattern):
+            pg_snapshot.prune([f for f in candidates if f.get("id") in complete_ids], keep, delete_one,
+                              pattern=pattern)
+            pg_snapshot.prune([f for f in candidates if f.get("id") in partial_ids], keep, delete_one,
+                              pattern=pattern)
+
         try:
             token, _account = _cloud_connections.get_authenticated_access_token(conn, provider)
             if provider == "google":
                 for prefix_name, pattern in kinds:
                     listed = _cd.google_list_folder_files(token, landed, prefix_name) if landed else []
-                    pg_snapshot.prune([f for f in listed if f.get("id") in mine], keep,
-                                      lambda file_id: _cd.google_delete_file(token, file_id), pattern=pattern)
+                    _rotate(listed, lambda file_id: _cd.google_delete_file(token, file_id), pattern)
             else:
                 listed = _cd.onedrive_list_folder_children(token, folder_id=folder_id, drive_id=drive_id,
                                                            folder_path=PG_SNAPSHOT_DEFAULT_FOLDER)
                 for _prefix_name, pattern in kinds:
-                    pg_snapshot.prune([f for f in listed if f.get("id") in mine], keep,
-                                      lambda item_id: _cd.onedrive_delete_item(token, item_id, drive_id=drive_id),
-                                      pattern=pattern)
+                    _rotate(listed,
+                            lambda item_id: _cd.onedrive_delete_item(token, item_id, drive_id=drive_id),
+                            pattern)
         except Exception as exc:
             logger.warning("event=pg_snapshot_retention_failed provider=%s error=%s", provider, type(exc).__name__)
 
@@ -393,11 +413,11 @@ def _due_grace_seconds(hours: int) -> int:
 
     The free platform fires a cron inside its hour, so a wake can arrive up to about an hour
     earlier than the previous run; without a window a 24 h policy with a daily wake skips a whole
-    day and reports a ~47 h gap.  The window is min(25% of the cadence, 90 min), floored at a
-    minute: it covers the jitter at 24 h (threshold 22.5 h) and never double-runs a sub-daily
-    cadence (at 1 h the threshold is 45 min).
+    day and reports a ~47 h gap.  The window is min(10% of the cadence, 90 min), floored at a
+    minute: it covers the jitter at 24 h (threshold 22.5 h) and keeps sub-daily runs on cadence
+    (at 1 h the threshold is 54 min, so a 15-minute waker runs at ~60 min, never at 45).
     """
-    return max(60, min(hours * 900, DUE_GRACE_MAX_SECONDS))
+    return max(60, min(hours * 360, DUE_GRACE_MAX_SECONDS))
 
 
 def run_backup_pass(*, store=None, build_objects=None) -> dict:
@@ -446,8 +466,7 @@ def run_backup_pass(*, store=None, build_objects=None) -> dict:
             object_hours * 3600 - _due_grace_seconds(object_hours))
         if not due_database and not due_objects:
             return {"result_code": RESULT_NOT_DUE, "database_due": False, "objects_due": False}
-        result = _deliver(prune=True, with_objects=due_objects, store=store, build_objects=build_objects,
-                          require_complete=True)
+        result = _deliver(prune=True, with_objects=due_objects, store=store, build_objects=build_objects)
         action = "SNAPSHOT+OBJECTS" if due_objects else "SNAPSHOT"
         if result["set_error"] is not None:
             return {"result_code": result["set_error"], "database_due": due_database,
@@ -458,8 +477,10 @@ def run_backup_pass(*, store=None, build_objects=None) -> dict:
             return {"result_code": RESULT_NO_DRIVE, "action": "NONE",
                     "database_due": due_database, "objects_due": due_objects}
         if not result["delivery_complete"]:
-            # M1: some connected drive is missing a required artifact: no receipt was published,
-            # the clock did not advance and the same work stays due for the next wake
+            # M1: some connected drive is missing a required artifact.  The receipt was recorded with
+            # its completeness marker (it owns its files), but the protection clock, the due dates and
+            # the page's status read only complete receipts -- so nothing looks protected and the same
+            # work stays due for the next wake.
             return {"result_code": RESULT_DELIVERY_INCOMPLETE, "action": "NONE",
                     "database_due": due_database, "objects_due": due_objects,
                     "sent": list(result["sent"]), "failed": list(result["failed"]),

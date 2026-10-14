@@ -177,10 +177,9 @@ def restore(snapshot, *, before, connect=None) -> dict:
     report = SimpleNamespace(self_references_restored={})
     committing, outcome = False, "COMMITTED"
     try:
-        # the marker's table first, in its own short transaction: the restore's own transaction only inserts
-        with conn.transaction():
-            for statement in MARKER_DDL:
-                conn.execute(statement)
+        # the marker's table first, in its own short transaction (idempotent; a concurrent first use
+        # may race the catalog, which the DDL helper retries): the restore's own transaction only inserts
+        pg_posture.run_ddl(conn, MARKER_DDL)
         with conn.transaction():
             # bounded: a request the platform stops never leaves the registers locked for long (the
             # idle bound covers the safety copy's upload, inside the function's own time limit)

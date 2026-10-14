@@ -104,8 +104,9 @@ def test_the_recent_list_is_newest_first_bounded_and_value_free():
     recent = _summary(_rows(*entries))["recent"]
     assert [item["generation_at"] for item in recent] == sorted((NOW - timedelta(hours=h) for h in (1, 3, 5, 9, 30)),
                                                                 reverse=True)
-    assert set(recent[0]) == {"generation_at", "baseline", "snapshot", "manifest", "files", "exports", "object_files",
-                              "drives", "destinations", "objects", "off_platform", "governed", "manifest_short"}
+    assert set(recent[0]) == {"generation_at", "baseline", "snapshot", "complete", "manifest", "files", "exports",
+                              "object_files", "drives", "destinations", "objects", "off_platform", "governed",
+                              "manifest_short"}
     assert len(recent[0]["manifest_short"]) == 12
 
 
@@ -984,7 +985,13 @@ def _fake_view(monkeypatch, tmp_path, *, owned=frozenset(), listed=(), upload_dr
     monkeypatch.setattr(pg_snapshot, "create", create)
     monkeypatch.setattr(view.pg_posture, "read_policy", lambda raw, strict=False: {"pg_retention_generations": 2})
     monkeypatch.setattr(view.pg_posture, "publish", lambda raw, entries, **_k: {"published": 1, "already": 0})
-    monkeypatch.setattr(view.pg_posture, "owned_files", lambda raw: set(owned))
+
+    def owned_files(raw, complete=None):  # A20: retention reads the completeness classes separately
+        if complete is None:
+            return set(owned)
+        return set(owned) if complete else set()
+
+    monkeypatch.setattr(view.pg_posture, "owned_files", owned_files)
     monkeypatch.setattr(view._cloud_connections, "upload_backup_zip", upload)
     monkeypatch.setattr(view._cloud_connections, "get_authenticated_access_token", lambda conn, provider: ("tok", {}))
 

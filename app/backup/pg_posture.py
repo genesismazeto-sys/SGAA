@@ -261,11 +261,13 @@ def run_record(*, generation_at: str, manifest_sha256: str, dump_sha256: str, so
                run_seconds: int, at: str, kind: str = "GENERATION", provenance: str = RUN_PROVENANCE,
                off_platform: str = "VERIFIED", destinations: tuple[str, ...] = (),
                files: dict | None = None, exports: dict | None = None, drives: dict | None = None,
-               object_files: dict | None = None) -> dict:
+               object_files: dict | None = None, complete: bool = True) -> dict:
     """The self-hashed receipt of a run outside the ledger (same shape as the ledger's ``backup`` entry,
     no chain): an ``ops_backup`` run (``OPERATOR_RUN``), "Gerar backup agora" or the scheduled pass
     (``SNAPSHOT``, ``HOSTED_RUN``, the cloud drives that received it).  ``object_files`` names the
-    drives that received the sealed object set (A20)."""
+    drives that received the sealed object set (A20).  ``complete`` records whether every connected
+    drive received every required artifact of the run; only complete receipts advance the protection
+    clock the page and the schedule read (a missing field on a legacy entry means complete)."""
     body = {
         "type": BACKUP_TYPE, "kind": kind, "at": at, "generation_at": generation_at,
         "manifest_sha256": manifest_sha256, "dump_sha256": dump_sha256,
@@ -273,6 +275,7 @@ def run_record(*, generation_at: str, manifest_sha256: str, dump_sha256: str, so
         "object_set_name": object_set_name or "NONE", "object_set_digest": object_set_digest or "NONE",
         "object_manifest_sha256": object_manifest_sha256 or "NONE",
         "off_platform": off_platform, "provenance": provenance, "run_seconds": int(run_seconds),
+        "complete": bool(complete),
     }
     if destinations:
         body["destinations"] = sorted(destinations)
@@ -310,6 +313,22 @@ def _intact(entry) -> bool:
         return False
 
 
+def run_ddl(conn, statements) -> None:
+    """Run control-schema DDL idempotently, retrying once when a concurrent first use races the
+    catalog (two processes may run ``CREATE SCHEMA/TABLE IF NOT EXISTS`` at the same moment, and one
+    can lose the catalog race even with ``IF NOT EXISTS``).  Each attempt is its own transaction, so
+    the winner's objects are committed before the retry."""
+    for attempt in (1, 2):
+        try:
+            with conn.transaction():
+                for statement in statements:
+                    conn.execute(statement)
+            return
+        except Exception:
+            if attempt == 2:
+                raise
+
+
 def publish(conn, entries, *, annotations: dict | None = None) -> dict:
     """Publish intact ``backup``/``restore`` entries verbatim, once each, in one transaction.
 
@@ -324,9 +343,8 @@ def publish(conn, entries, *, annotations: dict | None = None) -> dict:
             raise PostureError("RECORD_NOT_INTACT")
         rows.append(entry)
     annotations = annotations or {}
+    run_ddl(conn, DDL)  # idempotent, committed on its own (a concurrent first use may race the catalog)
     with conn.transaction():
-        for statement in DDL:
-            conn.execute(statement)
         present = {row[0] for row in conn.execute(PUBLISHED_HASHES_SQL).fetchall()}
         published = 0
         for entry in rows:
@@ -450,12 +468,16 @@ def summarize(stored, *, identity, policy: dict | None = None, ceiling_hours: in
             validations.append((_parse(entry["at"]), entry))
     generations.sort(key=lambda item: item[0], reverse=True)
     validations.sort(key=lambda item: item[0], reverse=True)
-    with_objects = [g for g in generations if g[1].get("object_set_name") not in (None, "NONE")]
+    # The protection clock counts only COMPLETE wakes (M1): a partial delivery is recorded, shown
+    # and owned (retention rotates its files), but it never makes the database or the object layer
+    # look protected, and it never satisfies the scheduled cadence.
+    complete_generations = [g for g in generations if g[1].get("complete", True)]
+    with_objects = [g for g in complete_generations if g[1].get("object_set_name") not in (None, "NONE")]
     by_manifest = {g[1]["manifest_sha256"]: g[0] for g in generations}
-    latest = generations[0][0] if generations else None
+    latest = complete_generations[0][0] if complete_generations else None
     latest_objects = with_objects[0][0] if with_objects else None
-    # Only the newest generation's own observation: an older run's counts are never shown as current.
-    retention = _retention(generations[0][2]) if generations else None
+    # Only the newest complete generation's own observation: an older run's counts are never shown as current.
+    retention = _retention(complete_generations[0][2]) if complete_generations else None
     validation = None
     if validations:
         moment, entry = validations[0]
@@ -488,6 +510,7 @@ def summarize(stored, *, identity, policy: dict | None = None, ceiling_hours: in
         "recent": [
             {"generation_at": moment, "baseline": entry.get("kind") == "BASELINE",
              "snapshot": entry.get("kind") == SNAPSHOT_KIND,
+             "complete": bool(entry.get("complete", True)),
              "manifest": str(entry.get("manifest_sha256") or ""),
              "files": _files(entry),
              "exports": _files(entry, "exports"),
@@ -505,13 +528,16 @@ def summarize(stored, *, identity, policy: dict | None = None, ceiling_hours: in
     }
 
 
-def owned_files(raw) -> set:
+def owned_files(raw, *, complete: bool | None = None) -> set:
     """Every cloud file this database's own "Gerar backup agora" receipts name, as
     ``(provider, drive_id, file_id)`` (``drive_id`` is ``""`` when the receipt names none).
 
     All receipts, not the page's window: retention deletes only what this installation provably wrote,
     never a file of the same name another installation (or a person) put in a shared folder
-    (A19 R3 M4).  Raises when the receipts cannot be read: the caller then deletes nothing.
+    (A19 R3 M4).  ``complete`` filters by the receipt's own completeness marker (``None``: every
+    receipt; ``True``/``False``: only complete / only partial receipts) so retention can rotate the
+    complete generations and the partial runs separately (A20 M1).  Raises when the receipts cannot
+    be read: the caller then deletes nothing.
     """
     from psycopg.rows import tuple_row
 
@@ -528,6 +554,8 @@ def owned_files(raw) -> set:
             continue
         if not _intact(entry) or entry.get("source_identity_sha256") != identity \
                 or entry.get("kind") != SNAPSHOT_KIND:
+            continue
+        if complete is not None and bool(entry.get("complete", True)) != complete:
             continue
         drives = _files(entry, "drives")
         for key in ("files", "exports", "object_files"):
@@ -550,6 +578,6 @@ __all__ = [
     "CeilingUnverifiable", "PolicyError", "PostureError", "default_policy", "opening_ceiling", "owned_files",
     "owned_in",
     "policy_from_rows", "publish", "read",
-    "read_policy",
+    "read_policy", "run_ddl",
     "run_record", "save_policy", "summarize", "validate_policy",
 ]

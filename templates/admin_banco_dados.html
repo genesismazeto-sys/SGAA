@@ -1734,7 +1734,7 @@
                   </span>
                 </td>
                 <td>{{ item.generation_label }}</td>
-                <td>{{ 'Linha de base' if item.baseline else ('Backup agora' if item.snapshot else 'Geração') }}</td>
+                <td>{{ 'Linha de base' if item.baseline else ('Backup agora' if item.snapshot else 'Geração') }}{% if not item.complete %} <span class="badge status-pill status-negative" title="Entrega incompleta: alguma conta conectada não recebeu todos os arquivos desta geração">parcial</span>{% endif %}</td>
                 <td>{{ 'Incluídos' if item.objects else 'Só o banco' }}</td>
                 <td>{% if item.snapshot %}{{ item.destinations|map('replace', 'google', 'Google Drive')|map('replace', 'onedrive', 'OneDrive')|join(', ') or '—' }}{% else %}{{ 'Verificada' if item.off_platform else '—' }}{% endif %}</td>
                 <td><code>{{ item.manifest_short }}</code></td>

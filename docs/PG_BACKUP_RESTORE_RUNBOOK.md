@@ -492,19 +492,24 @@ an unreadable or partial stored policy refuses the wake) and the database's own 
 only what is due — a verified database snapshot, the readable registers and, when the object cadence
 is due, a sealed object set of every canonical object (`sgaa-pg-objetos-*.zip`, the same set format
 the CLI seals), all to every connected drive, with retention pruning each kind to
-`pg_retention_generations`. A generation is recorded only when **every** connected drive received
-every artifact of the wake; a partial delivery records nothing and stays due for the next wake (the
-page then shows the delay rather than an overstated protection). The due test carries a jitter window
-of min(25% of the cadence, 90 minutes), so the platform's up-to-an-hour cron precision cannot skip a
-whole day at the 24 h default; the committed descriptor adds a daily cron entry, and a sub-daily
-cadence uses a sub-daily waker — Supabase Cron with `pg_net` is free and calls the same endpoint; the
-bearer is stored in Supabase Vault (the same pattern as the mirror trigger), so no job text holds a
-secret. The pass, the manual "Gerar backup agora" and the restore share one lock row with a lease
-(`sgaa_ops.backup_lock`, pooler-safe; an expired lease is stolen, so a killed run never leaves a
-false-busy state): while a pass runs, the button and the restore answer "Outro backup está em
-andamento". This layer records `sgaa_ops` receipts only; the operator's governed generations remain
-the ledger-counted backups, and actual restore drills (`ops_backup drill`) remain the only evidence
-that counts as a test restoration.
+`pg_retention_generations`. Every wake is recorded with its completeness: only a wake that reached
+**every** connected drive with the snapshot, the registers and (when due) the sealed set advances the
+protection clock and the page's status; a partial delivery is recorded as incomplete (it owns the
+files that did land, so retention bounds them and rotates complete generations and partial runs
+separately), answers `DELIVERY_INCOMPLETE` and stays due for the next wake — the page shows the delay
+rather than an overstated protection. The due test carries a jitter window of min(10% of the cadence,
+90 minutes), so the platform's up-to-an-hour cron precision cannot skip a whole day at the 24 h
+default while a 1 h cadence still runs at ~54–60 min; the committed descriptor adds a daily cron
+entry, and a sub-daily cadence uses a sub-daily waker — Supabase Cron with `pg_net` is free and calls
+the same endpoint; the bearer is stored in Supabase Vault (the same pattern as the mirror trigger),
+so no job text holds a secret. The pass, the manual "Gerar backup agora" and the restore share one
+lock row with a lease (`sgaa_ops.backup_lock`), taken and released in transactions committed on their
+own (valid through the transaction pooler and past the request's ambient transaction; the control DDL
+retries once against concurrent-first-use races; an expired lease is stolen, so a killed run never
+leaves a false-busy state): while a pass runs, the button and the restore answer "Outro backup está
+em andamento". This layer records `sgaa_ops` receipts only; the operator's governed generations
+remain the ledger-counted backups, and actual restore drills (`ops_backup drill`) remain the only
+evidence that counts as a test restoration.
 
 The Banco de dados page shows the protection posture from records published into the
 database itself (`sgaa_ops.backup_records`, outside `public`; `docs/HOSTED_RUNTIME.md` §8).

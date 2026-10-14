@@ -78,9 +78,8 @@ def env(monkeypatch):
 
     monkeypatch.setattr(pg_posture, "read_policy", read_policy)
 
-    def deliver(*, prune, with_objects, store=None, build_objects=None, require_complete=False):
-        state.deliveries.append({"prune": prune, "with_objects": with_objects,
-                                 "require_complete": require_complete})
+    def deliver(*, prune, with_objects, store=None, build_objects=None):
+        state.deliveries.append({"prune": prune, "with_objects": with_objects})
         if state.raises is not None:
             raise state.raises
         return state.deliver_result
@@ -190,7 +189,7 @@ def test_a_first_run_backs_up_database_and_objects(env):
     env.deliver_result = _delivered()
     report = hosted_backup.run_backup_pass()
     assert report["result_code"] == hosted_backup.RESULT_OK and report["action"] == "SNAPSHOT+OBJECTS"
-    assert env.deliveries == [{"prune": True, "with_objects": True, "require_complete": True}]
+    assert env.deliveries == [{"prune": True, "with_objects": True}]
 
 
 def test_a_database_only_cadence_never_takes_the_object_set(env):
@@ -198,7 +197,7 @@ def test_a_database_only_cadence_never_takes_the_object_set(env):
     env.deliver_result = _delivered()
     report = hosted_backup.run_backup_pass()
     assert report["result_code"] == hosted_backup.RESULT_OK and report["action"] == "SNAPSHOT"
-    assert env.deliveries == [{"prune": True, "with_objects": False, "require_complete": True}]
+    assert env.deliveries == [{"prune": True, "with_objects": False}]
 
 
 def test_the_object_cadence_alone_still_ships_a_fresh_database_copy(env):
@@ -206,7 +205,7 @@ def test_the_object_cadence_alone_still_ships_a_fresh_database_copy(env):
     env.deliver_result = _delivered()
     report = hosted_backup.run_backup_pass()
     assert report["result_code"] == hosted_backup.RESULT_OK and report["action"] == "SNAPSHOT+OBJECTS"
-    assert env.deliveries == [{"prune": True, "with_objects": True, "require_complete": True}]
+    assert env.deliveries == [{"prune": True, "with_objects": True}]
 
 
 def test_the_due_window_absorbs_platform_jitter_without_skipping_a_day(env):
@@ -217,7 +216,7 @@ def test_the_due_window_absorbs_platform_jitter_without_skipping_a_day(env):
     env.posture = _posture(latest_hours=22, latest_objects_hours=22)  # outside it: no double run
     assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_NOT_DUE
     assert hosted_backup._due_grace_seconds(24) == 5400
-    assert hosted_backup._due_grace_seconds(1) == 900
+    assert hosted_backup._due_grace_seconds(1) == 360
     assert hosted_backup._due_grace_seconds(168) == 5400
 
 
@@ -232,11 +231,11 @@ def test_a_47_hour_gap_cannot_happen_under_a_24_hour_policy(env):
 
 
 def test_a_one_hour_policy_runs_near_hourly_and_never_every_wake(env):
-    """M4: the 15-minute window at a 1 h cadence keeps sub-daily runs on cadence, not per wake."""
+    """M4: the 6-minute window at a 1 h cadence keeps sub-daily runs on cadence, not per wake."""
     env.deliver_result = _delivered()
-    env.posture = _posture(cadence=1, latest_hours=0.67, latest_objects_hours=1)  # 40 min: not due
+    env.posture = _posture(cadence=1, latest_hours=0.8, latest_objects_hours=1)  # 48 min: not due
     assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_NOT_DUE
-    env.posture = _posture(cadence=1, latest_hours=0.8, latest_objects_hours=1)  # 48 min: due
+    env.posture = _posture(cadence=1, latest_hours=0.92, latest_objects_hours=1)  # 55 min: due
     assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK
 
 
@@ -435,26 +434,45 @@ def test_a_set_that_cannot_reach_a_drive_is_never_claimed_as_object_protection(m
     assert result["manifest"] == "e" * 64  # the database copy is still recorded (its own layer)
 
 
-def test_a_scheduled_run_claims_nothing_until_every_drive_has_every_artifact(monkeypatch, tmp_path):
-    """M1: one connected drive missing the snapshot -> no receipt, no advanced clock."""
-    calls = _deliver_env(monkeypatch, tmp_path, providers=("google", "onedrive"), fail=("onedrive",))
-    result = hosted_backup._deliver(prune=False, with_objects=False, require_complete=True)
-    assert result["delivery_complete"] is False and result["manifest"] is None
-    assert result["sent"] == ["google"] and result["failed"] == ["OneDrive"]
-    assert calls["published"] == []
-
-
-def test_the_manual_contract_still_publishes_what_landed(monkeypatch, tmp_path):
-    """A19 preserved: the manual button publishes the partial delivery and names the missing copy."""
+def test_a_partial_delivery_is_recorded_incomplete_and_owns_its_files(monkeypatch, tmp_path):
+    """M1: one connected drive missing the snapshot -> the receipt is recorded with complete=False
+    (so retention owns the files it delivered) and never counts as protection."""
     calls = _deliver_env(monkeypatch, tmp_path, providers=("google", "onedrive"), fail=("onedrive",))
     result = hosted_backup._deliver(prune=False, with_objects=False)
     assert result["delivery_complete"] is False
+    assert result["sent"] == ["google"] and result["failed"] == ["OneDrive"]
     [receipt] = calls["published"]
-    assert receipt["destinations"] == ["google"] and result["manifest"] == "e" * 64
+    assert receipt["complete"] is False and receipt["destinations"] == ["google"]
+    assert result["manifest"] == "e" * 64  # recorded (owns its files) but marked incomplete
 
 
-def test_the_pass_refuses_a_partial_delivery_through_the_real_deliver(monkeypatch, tmp_path):
-    """M1: the object archive reaching no drive refuses the pass; nothing is recorded."""
+def test_only_complete_receipts_advance_the_clocks():
+    """M1 read side: the page and the schedule count complete receipts only."""
+    from app import hosting as _hosting
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    complete_at = now - datetime.timedelta(hours=50)
+
+    def receipt(hours_ago, complete):
+        moment = now - datetime.timedelta(hours=hours_ago)
+        at = moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+        body = {"type": "backup", "kind": "SNAPSHOT", "at": at, "generation_at": at,
+                "manifest_sha256": "%064x" % (int(hours_ago) + 1), "dump_sha256": "d" * 64,
+                "source_identity_sha256": "a" * 64, "object_set_name": "NONE", "object_set_digest": "NONE",
+                "object_manifest_sha256": "NONE", "off_platform": "VERIFIED", "provenance": "HOSTED_RUN",
+                "run_seconds": 1, "complete": complete}
+        return dict(body, hash=_hosting.ledger_entry_hash(body))
+
+    rows = [(json.dumps(receipt(50, True), sort_keys=True), None),
+            (json.dumps(receipt(1, False), sort_keys=True), None)]
+    posture = pg_posture.summarize(rows, identity="a" * 64, now=now)
+    assert abs((posture["latest_generation_at"] - complete_at).total_seconds()) < 5
+    assert posture["database_status"] == "LATE"  # 50 h > 36 h: the fresh partial did not refresh it
+    assert posture["recent"][0]["complete"] is False and posture["recent"][1]["complete"] is True
+
+
+def test_a_partial_delivery_retries_until_complete(monkeypatch, tmp_path):
+    """M1: the pass refuses the incomplete wake (503 code) while the receipt records the truth."""
     calls = _deliver_env(monkeypatch, tmp_path, upload_objects_ok=False)
     monkeypatch.setattr(hosted_backup, "backup_lock", lambda conn: "H")
     monkeypatch.setattr(hosted_backup, "backup_unlock", lambda conn, holder: None)
@@ -462,8 +480,19 @@ def test_the_pass_refuses_a_partial_delivery_through_the_real_deliver(monkeypatc
                         lambda raw, now=None: _posture(latest_hours=None, latest_objects_hours=None))
     report = hosted_backup.run_backup_pass(build_objects=_builder(tmp_path))
     assert report["result_code"] == hosted_backup.RESULT_DELIVERY_INCOMPLETE
-    assert report["action"] == "NONE" and report["objects_failed"] == ["Google Drive"]
-    assert calls["published"] == []  # the protection clock did not advance
+    assert report["objects_failed"] == ["Google Drive"]
+    [receipt] = calls["published"]
+    assert receipt["complete"] is False and receipt["object_set_name"] == "NONE"  # set not claimed
+
+
+def test_a_folder_setting_failure_is_a_partial_delivery_not_a_crash(monkeypatch, tmp_path):
+    calls = _deliver_env(monkeypatch, tmp_path, providers=("google", "onedrive"))
+    monkeypatch.setattr(hosted_backup, "cloud_drive_folder_setting",
+                        lambda conn, provider: (_ for _ in ()).throw(RuntimeError("db read failed"))
+                        if provider == "onedrive" else {"folder_id": "F", "drive_id": ""})
+    result = hosted_backup._deliver(prune=False, with_objects=False)
+    assert result["delivery_complete"] is False and result["failed"] == ["OneDrive"]
+    assert calls["published"] and calls["published"][0]["complete"] is False
 
 
 def test_a_refused_object_set_stops_the_pass_before_any_upload_or_receipt(monkeypatch, tmp_path):
@@ -487,15 +516,42 @@ def test_no_connected_drive_is_no_drive_not_a_failed_snapshot(monkeypatch, tmp_p
 # ---------------------------------------------------------------------------
 
 
-def _prune_fakes(monkeypatch, *, owned, listed, deleted):
+def _prune_fakes(monkeypatch, *, owned, listed, deleted, complete=None):
     from app import cloud_drives
 
-    monkeypatch.setattr(hosted_backup.pg_posture, "owned_files", lambda raw: set(owned))
+    complete_set = set(owned if complete is None else complete)
+
+    def owned_files(raw, complete=None):
+        if complete is None:
+            return set(owned)
+        return set(complete_set) if complete else set(owned) - complete_set
+
+    monkeypatch.setattr(hosted_backup.pg_posture, "owned_files", owned_files)
     monkeypatch.setattr(hosted_backup._cloud_connections, "get_authenticated_access_token",
                         lambda conn, provider: ("tok", "x"))
     monkeypatch.setattr(cloud_drives, "google_list_folder_files", lambda token, folder, prefix: [
         f for f in listed if str(f["name"]).startswith(prefix)])
     monkeypatch.setattr(cloud_drives, "google_delete_file", lambda token, file_id: deleted.append(file_id))
+
+
+def test_complete_generations_and_partial_runs_rotate_separately(monkeypatch):
+    """M1 retention: a partial pressure never deletes a complete generation; each class keeps N."""
+    listed = [
+        {"id": "c1", "name": "sgaa-pg-snapshot-20261001T000000Z.db"},
+        {"id": "c2", "name": "sgaa-pg-snapshot-20261002T000000Z.db"},
+        {"id": "c3", "name": "sgaa-pg-snapshot-20261003T000000Z.db"},
+        {"id": "p1", "name": "sgaa-pg-snapshot-20261004T000000Z.db"},
+        {"id": "p2", "name": "sgaa-pg-snapshot-20261005T000000Z.db"},
+        {"id": "p3", "name": "sgaa-pg-snapshot-20261006T000000Z.db"},
+    ]
+    deleted = []
+    _prune_fakes(monkeypatch,
+                 owned={("google", "", name) for name in ("c1", "c2", "c3", "p1", "p2", "p3")},
+                 listed=listed, deleted=deleted,
+                 complete={("google", "", name) for name in ("c1", "c2", "c3")})
+    hosted_backup.prune_owned(_Conn(), object(), ["google"], {"google": ("F", None, "")}, 2,
+                              registers_skip=[])
+    assert sorted(deleted) == ["c1", "p1"]
 
 
 def test_owned_object_archives_are_pruned_by_the_policy_to_the_newest_keep(monkeypatch):
@@ -885,6 +941,52 @@ def test_retention_prunes_each_kind_to_the_policy_and_keeps_the_newest(productio
 
 
 @needs_pg
+def test_the_lock_is_committed_and_visible_to_other_backends_immediately(production):
+    """M2/F2: even when the request connection is inside an ambient transaction, the lease is
+    committed on its own -- another backend sees it while the protected run is in flight, and it
+    disappears the moment the run releases it."""
+    env = production
+    worker = adapter(env.url)                 # a request-style connection with an ambient transaction
+    observer = raw_connection(env.url, autocommit=True)
+    try:
+        worker.execute("SELECT 1")            # the auth hooks read first: an ambient transaction is open
+        holder = hosted_backup.backup_lock(worker)
+        assert holder and holder != hosted_backup.LOCK_HOLDER_LOCAL
+        seen = observer.execute("SELECT holder FROM sgaa_ops.backup_lock WHERE lock_key = 1").fetchone()
+        assert seen and seen[0] == holder     # visible to another backend WHILE the run is in flight
+        hosted_backup.backup_unlock(worker, holder)
+        assert observer.execute("SELECT count(*) FROM sgaa_ops.backup_lock").fetchone()[0] == 0
+    finally:
+        worker.close()
+        observer.close()
+
+
+def test_run_ddl_retries_once_when_a_concurrent_first_use_races_the_catalog():
+    """F3: two processes creating the control schema at once: one loses the catalog race even with
+    IF NOT EXISTS; the helper retries once and the second attempt finds the objects committed."""
+    attempts = []
+
+    class Racey:
+        def transaction(self):
+            import contextlib
+
+            return contextlib.nullcontext()
+
+        def execute(self, sql):
+            attempts.append(sql)
+            if len(attempts) == 1:
+                raise RuntimeError("tuple concurrently updated")
+
+    pg_posture.run_ddl(Racey(), ("CREATE SCHEMA IF NOT EXISTS sgaa_ops",))
+    assert len(attempts) == 2
+
+
+def test_the_lock_lease_outlives_the_platform_function_limit():
+    """The scheduler function is killed at 300 s; the lease must not expire under a live run."""
+    assert hosted_backup.LOCK_LEASE_SECONDS >= 2 * 300
+
+
+@needs_pg
 def test_the_lock_row_is_shared_with_the_manual_route_and_never_sticks(production):
     """M2: a held, unexpired lease refuses the pass (SKIPPED_BUSY) and the manual button (busy
     message); an expired lease is stolen, and a released run leaves no false-busy row."""
@@ -954,14 +1056,40 @@ def test_a_partial_delivery_never_advances_the_protection_clock_and_retries(prod
         report = hosted_backup.run_backup_pass(store=env.store, build_objects=object_sets.build_objects_archive)
     assert report["result_code"] == hosted_backup.RESULT_DELIVERY_INCOMPLETE
     assert report["failed"] == ["OneDrive"]
-    assert _posture_of(env)["state"] == "EMPTY"  # no receipt: the clock did not advance
-    assert env.drive.remote["google"]  # the copy that landed stays (inert until claimed)
+    posture = _posture_of(env)
+    assert posture["state"] == "RECORDED" and posture["latest_generation_at"] is None  # clock untouched
+    assert posture["recent"][0]["complete"] is False
+    assert env.drive.remote["google"]  # the copy that landed stays (owned by the partial receipt)
     env.drive.fail_for = set()
     with env.app.app_context():
         again = hosted_backup.run_backup_pass(store=env.store, build_objects=object_sets.build_objects_archive)
     assert again["result_code"] == hosted_backup.RESULT_OK and again["action"] == "SNAPSHOT+OBJECTS"
     assert set(again["sent"]) == {"google", "onedrive"}
-    assert _posture_of(env)["state"] == "RECORDED"
+    assert _posture_of(env)["latest_generation_at"] is not None
+
+
+@needs_pg
+def test_a_manual_partial_never_satisfies_the_scheduled_cadence(production, monkeypatch):
+    """M1/F1 mixed history: a partial manual run records its truth but does not advance the
+    protection clock, so the scheduled wake still runs and completes the delivery."""
+    env = production
+    _set_policy(env, database_cadence_hours=24, object_cadence_days=7, retention_generations=2,
+                restore_test_days=30)
+    monkeypatch.setattr(hosted_backup, "active_cloud_account",
+                        lambda c, provider: {"account_email": "x@example.invalid"}
+                        if provider in ("google", "onedrive") else None)
+    env.drive.fail_for = {"onedrive"}
+    with env.app.app_context():
+        targets, sent, failed, registers_failed, manifest = hosted_backup.send_snapshot()  # manual path
+    assert targets == ["google", "onedrive"] and sent == ["google"] and failed == ["OneDrive"]
+    assert manifest  # recorded with the truth
+    posture = _posture_of(env)
+    assert posture["latest_generation_at"] is None and posture["recent"][0]["complete"] is False
+    env.drive.fail_for = set()
+    with env.app.app_context():
+        report = hosted_backup.run_backup_pass(store=env.store, build_objects=object_sets.build_objects_archive)
+    assert report["result_code"] == hosted_backup.RESULT_OK
+    assert _posture_of(env)["latest_generation_at"] is not None
 
 
 @needs_pg
