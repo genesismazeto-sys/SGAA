@@ -487,18 +487,24 @@ SHA-256 as the expected digest).
 
 The administrator's policy also drives automatic execution, without an operator: the scheduler front
 (`app.storage.scheduler:application`, section 9 of `docs/HOSTED_RUNTIME.md`) answers
-`/internal/scheduler/backup` with the `CRON_SECRET` bearer, and one wake reads the policy and the
-database's own receipts and runs only what is due — a verified database snapshot, the readable
-registers and, when the object cadence is due, a sealed object set of every canonical object
-(`sgaa-pg-objetos-*.zip`, the same set format the CLI seals), all to every connected drive, with
-retention pruning each kind to `pg_retention_generations`. The wake interval is not the cadence: the
-committed descriptor adds a daily cron entry (the 24 h default; Hobby's floor), and a sub-daily
+`/internal/scheduler/backup` with the `CRON_SECRET` bearer, and one wake reads the policy (strictly:
+an unreadable or partial stored policy refuses the wake) and the database's own receipts and runs
+only what is due — a verified database snapshot, the readable registers and, when the object cadence
+is due, a sealed object set of every canonical object (`sgaa-pg-objetos-*.zip`, the same set format
+the CLI seals), all to every connected drive, with retention pruning each kind to
+`pg_retention_generations`. A generation is recorded only when **every** connected drive received
+every artifact of the wake; a partial delivery records nothing and stays due for the next wake (the
+page then shows the delay rather than an overstated protection). The due test carries a jitter window
+of min(25% of the cadence, 90 minutes), so the platform's up-to-an-hour cron precision cannot skip a
+whole day at the 24 h default; the committed descriptor adds a daily cron entry, and a sub-daily
 cadence uses a sub-daily waker — Supabase Cron with `pg_net` is free and calls the same endpoint; the
 bearer is stored in Supabase Vault (the same pattern as the mirror trigger), so no job text holds a
-secret. The manual "Gerar backup agora" shares one advisory lock with the pass: while a pass runs, the
-button answers "Outro backup está em andamento". This layer records `sgaa_ops` receipts only; the
-operator's governed generations remain the ledger-counted backups, and actual restore drills
-(`ops_backup drill`) remain the only evidence that counts as a test restoration.
+secret. The pass, the manual "Gerar backup agora" and the restore share one lock row with a lease
+(`sgaa_ops.backup_lock`, pooler-safe; an expired lease is stolen, so a killed run never leaves a
+false-busy state): while a pass runs, the button and the restore answer "Outro backup está em
+andamento". This layer records `sgaa_ops` receipts only; the operator's governed generations remain
+the ledger-counted backups, and actual restore drills (`ops_backup drill`) remain the only evidence
+that counts as a test restoration.
 
 The Banco de dados page shows the protection posture from records published into the
 database itself (`sgaa_ops.backup_records`, outside `public`; `docs/HOSTED_RUNTIME.md` §8).

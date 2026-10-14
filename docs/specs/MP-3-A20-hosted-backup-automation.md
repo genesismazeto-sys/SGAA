@@ -65,8 +65,8 @@ After confirmation and the gated deploy, without any operator workstation or man
 | # | Requirement | Mechanism | Evidence lane (later slices) | Residual / boundary |
 |---|---|---|---|---|
 | 1 | Complete, restorable DB and object backups, independent off-platform copies | Snapshot carries every `MIGRATE_EXACT` table (registers, images, `storage_objects` rows), proven table-by-table at creation; the sealed object set carries every object's bytes (dedup by SHA-256); both go to every connected drive (user-owned accounts, independent of Vercel/Supabase); restore = hosted "Recuperar" or Path-B for the DB, unzip → `verify-backup` → `restore-objects` for the bytes | real-PG lanes: snapshot → Path-B fingerprint equality; set zip round-trip → verify → restore into scratch; served lane shows the generation | Target-side classes (settings, OAuth, schema metadata, ephemeral) are kept/recreated by the installation by policy, not carried in the snapshot; provider accounts are user-managed |
-| 2 | Configured cadences incl. sub-daily on free plans | The endpoint is cadence-agnostic: every wake reads the policy and no-ops unless due (DB vs `pg_database_cadence_hours`; objects vs `pg_object_cadence_days`); wakes come from the descriptor cron (daily floor, zero cost) plus Supabase Cron + pg_net (free; bearer in Vault; user-enabled) for sub-daily | due/no-op/allow sequences with a simulated clock; the trigger firing proven on the platform lane before it is relied upon | Exact wake interval is deliberately not contract (any wake ≤ cadence suffices) |
-| 3 | Hosting limits, concurrency, idempotency, failure recovery | Runs inside the existing scheduler function (`maxDuration` 300, scratch `/tmp`); object set pre-checks (object count, manifest size, free space) refuse loudly; `pg_try_advisory_lock` held for the pass (shared with the manual route); receipts insert `ON CONFLICT DO NOTHING`; uploads never replace; unique identity+token names; no receipt until snapshot and set verify; a killed run retries next wake; orphaned drive files stay inert (never claimed or pruned) | overflow refusal; duplicate-wake no-duplicate lane; busy-lock lane; killed-run recovery lane | Object sets beyond the function envelope fail visibly; batching deferred (§15) |
+| 2 | Configured cadences incl. sub-daily on free plans | The endpoint is cadence-agnostic: every wake reads the policy strictly and no-ops unless due within a jitter window of min(25% of the cadence, 90 min) — so the platform's up-to-an-hour cron precision cannot skip a day at 24 h, and sub-daily cadences still never run on every wake; wakes come from the descriptor cron (daily floor, zero cost) plus Supabase Cron + pg_net (free; bearer in Vault; user-enabled) for sub-daily | due/no-op/allow sequences with a simulated clock, the 47 h-gap demonstration, the 1 h-cadence boundaries; the trigger firing proven on the platform lane before it is relied upon | Exact wake interval is deliberately not contract (any wake ≤ cadence suffices) |
+| 3 | Hosting limits, concurrency, idempotency, failure recovery | Runs inside the existing scheduler function (`maxDuration` 300, scratch `/tmp`); object set pre-checks (object count, manifest size, free space) refuse loudly; a lock ROW with a lease in `sgaa_ops.backup_lock` (M2) — valid through the transaction pooler, stolen when expired, never leaving a false-busy state — shared by the pass, the manual button and the restore; receipts insert `ON CONFLICT DO NOTHING`; uploads never replace; unique identity+token names; no receipt until snapshot and set verify and every connected drive received every artifact (M1); a killed run retries next wake; orphaned drive files stay inert (never claimed or pruned) | overflow refusal; duplicate-wake no-duplicate lane; busy-lock lane; lease-steal and holder-safe release lanes; partial-delivery refusal and retry lane; killed-run recovery lane | Object sets beyond the function envelope fail visibly; batching deferred (§15) |
 | 4 | Security and credential boundaries | New path on the existing bearer-authenticated scheduler front: no session, no CSRF, fail-closed 404/401/405; no secret read or written; value-free bodies and logs; backups contain personal data and travel only to the user's drives over the existing TLS clients; P6/§12 custody untouched | extended auth-negative and leak-audit lanes; guard test: no new secret, no web route/RBAC/CSRF inventory change | none |
 | 5 | C13–C14 governed obligations and ledger invariants | The hosted layer writes only `sgaa_ops` receipts (as the manual button does) and never `sgaa_cutover` or a business table; it claims no ledger provenance and no C14 cadence satisfaction — through C14 the operator governed cadence remains the obligation; after C14 (where the ledger records no generation) it is the product's primary protection | guard lane: no cutover/business writes; ledger lanes unaffected; C14 gate tests unchanged | After C14 the operator pipeline remains the recovery asset of record (D6) |
 | 6 | Zero recurring cost, independence from operator workstations | Only already-deployed services and free-plan features (Vercel Hobby + Supabase Free + the user's drives); no Windows scheduling; no paid plan or third-party service; fully hosted | descriptor diff + hosting checks; no operator step in the automatic path | The user's one-time enablement of the Supabase Cron trigger (a PROD change, gated) |
@@ -79,21 +79,25 @@ After confirmation and the gated deploy, without any operator workstation or man
   the set contract.
 - S2 — scheduler job: `hosted_backup.run_backup_pass()`; the scheduler front gains
   `GET|POST /internal/scheduler/backup` (thin dispatch, same auth posture as the mirror). Due-ness from
-  one posture read (identity-filtered, intact receipts only). Actions: objects due → fresh DB snapshot +
-  sealed object set in one receipt; DB due only → snapshot; neither → 200 no-op. Invalid/unreadable
-  policy → 503 `POLICY_INVALID`, nothing runs or is deleted.
+  one posture read (identity-filtered, intact receipts only) against a strictly read policy (M3), with a
+  jitter window of min(25% of the cadence, 90 min) so the platform's up-to-an-hour cron precision can
+  never skip a whole day at a 24 h policy (M4). Actions: objects due → fresh DB snapshot + sealed
+  object set in one receipt; DB due only → snapshot; neither → 200 no-op. Unreadable/invalid policy →
+  503 (`POLICY_UNREADABLE` / `POLICY_INVALID`), nothing runs or is deleted.
 - S3 — object set: built by `object_backup.backup()` in scratch (owner of the builder:
   `app.backup.object_sets`, a background module the scheduler service injects — amendment A1),
   archived as its own zip kind in the snapshot folder naming pattern (installation identity + random
   token), uploaded with the snapshot, recorded in the receipt's additive `object_files` map,
   downloadable from the same row, pruned per kind to the policy keeping only receipt-named files.
-- Failure model: fixed codes only (`OK`, `NOT_DUE`, `POLICY_INVALID`, `NO_DRIVE`, `SKIPPED_BUSY`,
-  `SET_*`, `OBJECTS_NOT_DELIVERED`, `SNAPSHOT_*`, `JOB_FAILED`); a refusal never reverts a completed
-  generation; the page already renders LATE/next-due from the receipts.  A due object set that cannot
-  be built stops the pass before any upload or receipt; a set that is built but reaches no drive is
-  never claimed as protection (the database copy is recorded as its own layer and the object layer
-  stays due — `OBJECTS_NOT_DELIVERED`).  A workspace beyond the function envelope therefore needs the
-  deferred batching (§15), never partial claims.
+- Failure model: fixed codes only (`OK`, `NOT_DUE`, `POLICY_INVALID`, `POLICY_UNREADABLE`, `NO_DRIVE`,
+  `SKIPPED_BUSY`, `SET_*`, `DELIVERY_INCOMPLETE`, `SNAPSHOT_*`, `JOB_FAILED`); a refusal never reverts a
+  completed generation; the page already renders LATE/next-due from the receipts.  A due object set
+  that cannot be built stops the pass before any upload or receipt (M1): the scheduled contract
+  publishes nothing until EVERY connected drive received every required artifact of the wake —
+  snapshot, registers and, when due, the sealed set (`DELIVERY_INCOMPLETE`); the protection clock
+  therefore never advances on a partial delivery and the same work stays due for the next wake.  A
+  workspace beyond the function envelope therefore needs the deferred batching (§15), never partial
+  claims.
 
 ## 4. Decisions
 
@@ -101,8 +105,12 @@ After confirmation and the gated deploy, without any operator workstation or man
   P6-incompatible; a new hosted service — unnecessary; paid schedulers).
 - D2 — when objects are due, one combined receipt (fresh snapshot + set): one coherent recovery point,
   no new receipt kind, no read-side status change (rejected: object-only receipts).
-- D3 — `pg_try_advisory_lock` shared by the scheduled and manual paths (rejected: a lease table —
-  schema; no lock — duplicate runs and prune races).
+- D3 — a lock ROW with a lease in `sgaa_ops.backup_lock` shared by the scheduled pass, the manual
+  button and the restore (M2): the production runtime uses the transaction pooler, where a
+  session-level advisory lock is not valid (a later statement may run on another backend); the row is
+  taken and released atomically in short transactions and an expired lease is stolen, so a killed run
+  can never leave a persistent false-busy state (rejected: `pg_try_advisory_lock` — pooler-unsafe;
+  no lock — duplicate runs and prune races).
 - D4 — wake ladder: descriptor cron floor + Supabase Cron/pg_net sub-daily; the endpoint is
   cadence-agnostic (rejected: sub-daily Vercel cron — impossible on Hobby; third-party cron — new infra
   and bearer custody).
@@ -118,10 +126,11 @@ Open decisions: none.
 
 - The pass never deletes a file not named by an intact receipt of THIS database; never keeps fewer than
   `max(policy, 1)`; never touches operator roots, the ledger or the baseline.
-- No receipt is published for a run whose snapshot or set did not verify; a refusal never undoes a
+- No receipt is published for a run whose snapshot or set did not verify, and none for a scheduled
+  run until every connected drive received every required artifact (M1); a refusal never undoes a
   completed generation.
 - Manual snapshot, download and restore routes, and every operator tool, keep their behaviour; the only
-  addition on the manual path is the shared busy lock (a clear message, nothing lost).
+  addition on the manual paths is the shared busy lock (a clear message, nothing lost).
 - No new secret anywhere; no schema change; no web route, RBAC or CSRF inventory change.
 
 ## 6. Scope
@@ -224,6 +233,24 @@ cross-family R3 review from a packet the executor prepares; the deploy waits for
   background tool, and the manual route never builds object sets.  A guard list was *extended* for a
   genuinely background module (its designed mechanism), not weakened; the scanner's negative controls
   are untouched.
+- A2 2026-10-14 — The independent R3 review of `e4d3cd4` returned FAIL with four material findings;
+  this amendment is their remediation, accepted as contract: **M1** the scheduled contract is
+  all-or-nothing per wake — no receipt (and therefore no advanced protection clock, no "current"
+  status) until every connected drive received the snapshot, the registers and, when due, the sealed
+  set; a partial delivery answers `DELIVERY_INCOMPLETE`, leaves the work due and retries next wake,
+  while the manual route keeps its A19 partial semantics.  **M2** mutual exclusion is a lock row with
+  a lease in `sgaa_ops.backup_lock` (taken/released atomically in short transactions, expired leases
+  stolen, holder-checked release), valid through the transaction pooler; the pass, the manual button
+  and the restore share it, and a killed run can never leave a persistent false-busy state.  **M3**
+  the scheduled decision reads the administrator's policy strictly: an unreadable policy answers
+  `POLICY_UNREADABLE` and a partial or invalid one `POLICY_INVALID`; the defaults are used only when
+  the policy is provably unset (empty table).  **M4** the due test carries a jitter window of
+  min(25% of the cadence, 90 min), so the platform's up-to-an-hour cron precision can never skip a
+  whole day at a 24 h policy (the reported ~47 h gap) while sub-daily cadences still never run on
+  every wake.  Focused evidence replaces a new full suite (TEP; the previous T5 baseline is
+  qualified): the A20 suite (58 nodes incl. the M1 partial-delivery/retry lane, the M2 lock/lease
+  lanes, the M3 partial-policy lane and the M4 window/47 h-gap lanes on real PostgreSQL) plus the
+  368-node focused regression set are green on the remediated candidate.
 
 ## 17. Closure
 

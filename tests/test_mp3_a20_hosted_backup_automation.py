@@ -53,21 +53,34 @@ def front(monkeypatch):
 
 @pytest.fixture
 def env(monkeypatch):
-    """The pass with every boundary scripted; ``_deliver`` and the posture read are fakes the test sets."""
+    """The pass with every boundary scripted; ``_deliver`` and the posture reads are fakes the test sets."""
     state = SimpleNamespace(deliveries=[], deliver_result=None, posture=None, raises=None,
-                            unlocks=[], locks=[True], deliver_kwargs=None)
+                            unlocks=[], locks=[True], deliver_kwargs=None, policy_error=None)
     monkeypatch.setattr(hosted_backup, "get_db_connection", lambda: _Conn())
 
     def lock(_conn):
         taken = state.locks.pop(0) if state.locks else True
-        return taken
+        return "HOLDER" if taken else None
 
     monkeypatch.setattr(hosted_backup, "backup_lock", lock)
-    monkeypatch.setattr(hosted_backup, "backup_unlock", lambda _conn: state.unlocks.append(1))
+    monkeypatch.setattr(hosted_backup, "backup_unlock", lambda _conn, _holder: state.unlocks.append(1))
     monkeypatch.setattr(pg_posture, "read", lambda raw, now=None: state.posture)
 
-    def deliver(*, prune, with_objects, store=None, build_objects=None):
-        state.deliveries.append({"prune": prune, "with_objects": with_objects})
+    def read_policy(raw, strict=False):
+        # M3: the pass reads the policy strictly; the fake reproduces the same contract
+        if state.policy_error == "invalid":
+            raise pg_posture.PolicyError("POLICY_VALUE_INVALID")
+        if state.policy_error == "unreadable":
+            raise RuntimeError("policy unreadable")
+        base = dict((state.posture or {}).get("policy") or pg_posture.default_policy())
+        base.pop("invalid", None)
+        return base
+
+    monkeypatch.setattr(pg_posture, "read_policy", read_policy)
+
+    def deliver(*, prune, with_objects, store=None, build_objects=None, require_complete=False):
+        state.deliveries.append({"prune": prune, "with_objects": with_objects,
+                                 "require_complete": require_complete})
         if state.raises is not None:
             raise state.raises
         return state.deliver_result
@@ -91,11 +104,13 @@ def _posture(*, cadence=24, object_days=7, latest_hours=None, latest_objects_hou
     }
 
 
-def _delivered(*, sent=("google",), manifest="a" * 64, set_error=None, objects_failed=()):
+def _delivered(*, sent=("google",), manifest="a" * 64, set_error=None, objects_failed=(),
+               delivery_complete=True):
     return {"targets": list(sent), "sent": list(sent) if manifest is not None else None, "failed": [],
             "registers_failed": [], "objects_failed": list(objects_failed), "manifest": manifest,
-            "set_error": set_error, "object_set_name": None, "object_set_digest": None,
-            "object_manifest_sha256": None, "object_files": {"google": "objects-1"}}
+            "delivery_complete": delivery_complete, "set_error": set_error, "object_set_name": None,
+            "object_set_digest": None, "object_manifest_sha256": None,
+            "object_files": {"google": "objects-1"}}
 
 
 # ---------------------------------------------------------------------------
@@ -175,7 +190,7 @@ def test_a_first_run_backs_up_database_and_objects(env):
     env.deliver_result = _delivered()
     report = hosted_backup.run_backup_pass()
     assert report["result_code"] == hosted_backup.RESULT_OK and report["action"] == "SNAPSHOT+OBJECTS"
-    assert env.deliveries == [{"prune": True, "with_objects": True}]
+    assert env.deliveries == [{"prune": True, "with_objects": True, "require_complete": True}]
 
 
 def test_a_database_only_cadence_never_takes_the_object_set(env):
@@ -183,7 +198,7 @@ def test_a_database_only_cadence_never_takes_the_object_set(env):
     env.deliver_result = _delivered()
     report = hosted_backup.run_backup_pass()
     assert report["result_code"] == hosted_backup.RESULT_OK and report["action"] == "SNAPSHOT"
-    assert env.deliveries == [{"prune": True, "with_objects": False}]
+    assert env.deliveries == [{"prune": True, "with_objects": False, "require_complete": True}]
 
 
 def test_the_object_cadence_alone_still_ships_a_fresh_database_copy(env):
@@ -191,13 +206,55 @@ def test_the_object_cadence_alone_still_ships_a_fresh_database_copy(env):
     env.deliver_result = _delivered()
     report = hosted_backup.run_backup_pass()
     assert report["result_code"] == hosted_backup.RESULT_OK and report["action"] == "SNAPSHOT+OBJECTS"
-    assert env.deliveries == [{"prune": True, "with_objects": True}]
+    assert env.deliveries == [{"prune": True, "with_objects": True, "require_complete": True}]
+
+
+def test_the_due_window_absorbs_platform_jitter_without_skipping_a_day(env):
+    """M4: a 24 h policy with a daily wake that fires up to an hour early still runs the next day."""
+    env.deliver_result = _delivered()
+    env.posture = _posture(latest_hours=23, latest_objects_hours=23)  # inside the window (22.5 h)
+    assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK
+    env.posture = _posture(latest_hours=22, latest_objects_hours=22)  # outside it: no double run
+    assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_NOT_DUE
+    assert hosted_backup._due_grace_seconds(24) == 5400
+    assert hosted_backup._due_grace_seconds(1) == 900
+    assert hosted_backup._due_grace_seconds(168) == 5400
+
+
+def test_a_47_hour_gap_cannot_happen_under_a_24_hour_policy(env):
+    """M4: wakes firing an hour early on consecutive days keep running (~23 h gaps, never ~47 h)."""
+    env.deliver_result = _delivered()
+    env.posture = _posture(latest_hours=None, latest_objects_hours=None)
+    assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK
+    for hours in (23, 46):  # each wake arrives 1 h before the nominal cadence
+        env.posture = _posture(latest_hours=hours, latest_objects_hours=hours)
+        assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK
+
+
+def test_a_one_hour_policy_runs_near_hourly_and_never_every_wake(env):
+    """M4: the 15-minute window at a 1 h cadence keeps sub-daily runs on cadence, not per wake."""
+    env.deliver_result = _delivered()
+    env.posture = _posture(cadence=1, latest_hours=0.67, latest_objects_hours=1)  # 40 min: not due
+    assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_NOT_DUE
+    env.posture = _posture(cadence=1, latest_hours=0.8, latest_objects_hours=1)  # 48 min: due
+    assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK
 
 
 def test_an_invalid_policy_refuses_and_delivers_nothing(env):
-    env.posture = _posture(latest_hours=None, invalid=["pg_retention_generations"])
+    """M3: the strict read refuses a partial or invalid stored policy; nothing runs."""
+    env.policy_error = "invalid"
+    env.posture = _posture(latest_hours=None)
     report = hosted_backup.run_backup_pass()
     assert report["result_code"] == hosted_backup.RESULT_POLICY_INVALID
+    assert env.deliveries == []
+
+
+def test_an_unreadable_policy_is_never_replaced_with_defaults(env):
+    """M3: a policy that cannot be read refuses the run instead of silently using the defaults."""
+    env.policy_error = "unreadable"
+    env.posture = _posture(latest_hours=None)
+    report = hosted_backup.run_backup_pass()
+    assert report["result_code"] == hosted_backup.RESULT_POLICY_UNREADABLE
     assert env.deliveries == []
 
 
@@ -227,8 +284,8 @@ def test_a_busy_lock_reports_skipped_busy_without_touching_the_database(env):
     (dict(_delivered(), manifest=None), hosted_backup.RESULT_SNAPSHOT_NOT_RECORDED),
     (dict(_delivered(), sent=[]), hosted_backup.RESULT_NO_DRIVE),
     (dict(_delivered(), sent=None), hosted_backup.RESULT_SNAPSHOT_FAILED),
-    (dict(_delivered(), object_files={}, objects_failed=["OneDrive"]),
-     hosted_backup.RESULT_OBJECTS_NOT_DELIVERED),
+    (dict(_delivered(), delivery_complete=False, failed=["OneDrive"]),
+     hosted_backup.RESULT_DELIVERY_INCOMPLETE),
 ])
 def test_partial_delivery_failures_map_to_their_codes(env, result, code):
     env.posture = _posture(latest_hours=None, latest_objects_hours=None)
@@ -311,7 +368,7 @@ def test_an_unreachable_store_is_a_fixed_code_not_an_exception(monkeypatch, tmp_
 # ---------------------------------------------------------------------------
 
 
-def _deliver_env(monkeypatch, tmp_path, *, upload_objects_ok=True):
+def _deliver_env(monkeypatch, tmp_path, *, upload_objects_ok=True, providers=("google",), fail=()):
     """The real ``_deliver`` with every boundary scripted (no database, no provider)."""
     from pathlib import Path
 
@@ -320,12 +377,13 @@ def _deliver_env(monkeypatch, tmp_path, *, upload_objects_ok=True):
 
     calls = {"uploads": [], "published": [], "deleted": []}
     monkeypatch.setattr(hosted_backup, "get_db_connection", lambda: _Conn())
-    monkeypatch.setattr(hosted_backup, "active_cloud_account", lambda conn, provider: provider == "google")
+    monkeypatch.setattr(hosted_backup, "active_cloud_account", lambda conn, provider: provider in providers)
     monkeypatch.setattr(hosted_backup, "cloud_drive_folder_setting",
                         lambda conn, provider: {"folder_id": "F", "drive_id": ""})
     monkeypatch.setattr(hosted_backup, "_save_drive_config", lambda conn, updates: None)
     monkeypatch.setattr(hosted_backup.pg_posture, "read_policy",
-                        lambda raw, strict=False: {"pg_retention_generations": 2})
+                        lambda raw, strict=False: {"pg_database_cadence_hours": 24, "pg_object_cadence_days": 7,
+                                                   "pg_retention_generations": 2, "pg_restore_test_days": 30})
     monkeypatch.setattr(hosted_backup.pg_posture, "publish",
                         lambda raw, entries, **k: calls["published"].extend(entries) or {"published": 1})
 
@@ -343,8 +401,8 @@ def _deliver_env(monkeypatch, tmp_path, *, upload_objects_ok=True):
 
     def upload(conn, provider, *, zip_path, file_name, folder_name, folder_id=None, drive_id=None, replace=True):
         assert replace is False
-        calls["uploads"].append(file_name)
-        if file_name.startswith(hosted_backup.OBJECTS_ARCHIVE_PREFIX) and not upload_objects_ok:
+        calls["uploads"].append((provider, file_name))
+        if provider in fail or (file_name.startswith(hosted_backup.OBJECTS_ARCHIVE_PREFIX) and not upload_objects_ok):
             raise RuntimeError("upload refused")
         return {"file_id": f"{provider}-{len(calls['uploads'])}", "folder_id": folder_id or "default"}
 
@@ -377,15 +435,35 @@ def test_a_set_that_cannot_reach_a_drive_is_never_claimed_as_object_protection(m
     assert result["manifest"] == "e" * 64  # the database copy is still recorded (its own layer)
 
 
-def test_the_pass_reports_objects_not_delivered_through_the_real_deliver(monkeypatch, tmp_path):
-    _deliver_env(monkeypatch, tmp_path, upload_objects_ok=False)
-    monkeypatch.setattr(hosted_backup, "backup_lock", lambda conn: True)
-    monkeypatch.setattr(hosted_backup, "backup_unlock", lambda conn: None)
+def test_a_scheduled_run_claims_nothing_until_every_drive_has_every_artifact(monkeypatch, tmp_path):
+    """M1: one connected drive missing the snapshot -> no receipt, no advanced clock."""
+    calls = _deliver_env(monkeypatch, tmp_path, providers=("google", "onedrive"), fail=("onedrive",))
+    result = hosted_backup._deliver(prune=False, with_objects=False, require_complete=True)
+    assert result["delivery_complete"] is False and result["manifest"] is None
+    assert result["sent"] == ["google"] and result["failed"] == ["OneDrive"]
+    assert calls["published"] == []
+
+
+def test_the_manual_contract_still_publishes_what_landed(monkeypatch, tmp_path):
+    """A19 preserved: the manual button publishes the partial delivery and names the missing copy."""
+    calls = _deliver_env(monkeypatch, tmp_path, providers=("google", "onedrive"), fail=("onedrive",))
+    result = hosted_backup._deliver(prune=False, with_objects=False)
+    assert result["delivery_complete"] is False
+    [receipt] = calls["published"]
+    assert receipt["destinations"] == ["google"] and result["manifest"] == "e" * 64
+
+
+def test_the_pass_refuses_a_partial_delivery_through_the_real_deliver(monkeypatch, tmp_path):
+    """M1: the object archive reaching no drive refuses the pass; nothing is recorded."""
+    calls = _deliver_env(monkeypatch, tmp_path, upload_objects_ok=False)
+    monkeypatch.setattr(hosted_backup, "backup_lock", lambda conn: "H")
+    monkeypatch.setattr(hosted_backup, "backup_unlock", lambda conn, holder: None)
     monkeypatch.setattr(hosted_backup.pg_posture, "read",
                         lambda raw, now=None: _posture(latest_hours=None, latest_objects_hours=None))
     report = hosted_backup.run_backup_pass(build_objects=_builder(tmp_path))
-    assert report["result_code"] == hosted_backup.RESULT_OBJECTS_NOT_DELIVERED
-    assert report["action"] == "SNAPSHOT" and report["objects_failed"] == ["Google Drive"]
+    assert report["result_code"] == hosted_backup.RESULT_DELIVERY_INCOMPLETE
+    assert report["action"] == "NONE" and report["objects_failed"] == ["Google Drive"]
+    assert calls["published"] == []  # the protection clock did not advance
 
 
 def test_a_refused_object_set_stops_the_pass_before_any_upload_or_receipt(monkeypatch, tmp_path):
@@ -546,10 +624,13 @@ class _FakeDrive:
     def __init__(self):
         self.remote = {"google": [], "onedrive": []}
         self.deleted = []
+        self.fail_for = set()  # providers whose next upload raises (M1 partial-delivery lanes)
 
     def upload(self, conn, provider, *, zip_path, file_name, folder_name, folder_id=None, drive_id=None, replace=True):
         assert replace is False  # never replaces an existing file (A19 R8 / A20)
         assert os.path.exists(zip_path)
+        if provider in self.fail_for:
+            raise RuntimeError("upload refused")
         file_id = f"{provider}-{len(self.remote[provider]) + 1}"
         self.remote[provider].append({"id": file_id, "name": file_name})
         return {"file_id": file_id, "folder_id": folder_id or "default-folder",
@@ -600,6 +681,10 @@ def production(tmp_path, pg_registry, monkeypatch):
         drive.remote["google"] = [f for f in drive.remote["google"] if f["id"] != file_id]
 
     monkeypatch.setattr(cloud_drives, "google_delete_file", _delete)
+    monkeypatch.setattr(cloud_drives, "onedrive_list_folder_children",
+                        lambda token, folder_id, drive_id, folder_path: [])
+    monkeypatch.setattr(cloud_drives, "onedrive_delete_item",
+                        lambda token, item_id, drive_id=None: drive.deleted.append(item_id))
     monkeypatch.setattr(scheduler, "_app", None)
     monkeypatch.setattr(scheduler, "_build_app", lambda: main.app)
     try:
@@ -800,16 +885,18 @@ def test_retention_prunes_each_kind_to_the_policy_and_keeps_the_newest(productio
 
 
 @needs_pg
-def test_the_scheduled_front_and_the_manual_route_share_one_lock(production):
-    """A20 D3: a held advisory lock turns the manual route into the busy message and the pass into
-    SKIPPED_BUSY; releasing it lets both run again."""
+def test_the_lock_row_is_shared_with_the_manual_route_and_never_sticks(production):
+    """M2: a held, unexpired lease refuses the pass (SKIPPED_BUSY) and the manual button (busy
+    message); an expired lease is stolen, and a released run leaves no false-busy row."""
     env = production
     _set_policy(env, database_cadence_hours=24, object_cadence_days=7, retention_generations=2,
                 restore_test_days=30)
-    holder = raw_connection(env.url)
+    holder = raw_connection(env.url, autocommit=True)
     try:
-        held = holder.execute("SELECT pg_try_advisory_lock(%s)", (hosted_backup.BACKUP_LOCK_KEY,)).fetchone()[0]
-        assert held
+        for statement in hosted_backup.LOCK_DDL:
+            holder.execute(statement)
+        holder.execute("INSERT INTO sgaa_ops.backup_lock (lock_key, holder, expires_at)"
+                       " VALUES (1, 'held', now() + interval '5 minutes')")
         with env.app.app_context():
             assert hosted_backup.run_backup_pass(store=env.store, build_objects=object_sets.build_objects_archive)["result_code"] == hosted_backup.RESULT_SKIPPED_BUSY
         client = env.app.test_client()
@@ -819,11 +906,84 @@ def test_the_scheduled_front_and_the_manual_route_share_one_lock(production):
         with client.session_transaction() as session:
             flashes = list(session.pop("_flashes", []))
         assert any("Outro backup está em andamento" in message for _category, message in flashes)
-        holder.execute("SELECT pg_advisory_unlock(%s)", (hosted_backup.BACKUP_LOCK_KEY,))
+        # an expired lease is stolen: a killed run can never leave a persistent false-busy state
+        holder.execute("UPDATE sgaa_ops.backup_lock SET expires_at = now() - interval '1 second'")
         with env.app.app_context():
             assert hosted_backup.run_backup_pass(store=env.store, build_objects=object_sets.build_objects_archive)["result_code"] == hosted_backup.RESULT_OK
+        assert holder.execute("SELECT count(*) FROM sgaa_ops.backup_lock").fetchone()[0] == 0
     finally:
         holder.close()
+
+
+@needs_pg
+def test_the_lock_lease_steal_and_release_are_holder_safe(production):
+    """M2: a steal never releases the thief; a stale release deletes nothing."""
+    env = production
+    first_conn, second_conn = adapter(env.url), adapter(env.url)
+    try:
+        first = hosted_backup.backup_lock(first_conn)
+        assert first and first != hosted_backup.LOCK_HOLDER_LOCAL
+        assert hosted_backup.backup_lock(second_conn) is None  # a fresh lease refuses
+        second_conn.raw_connection.execute(
+            "UPDATE sgaa_ops.backup_lock SET expires_at = now() - interval '1 second'")
+        second_conn.raw_connection.commit()
+        second = hosted_backup.backup_lock(second_conn)
+        assert second and second != first  # the expired lease is stolen
+        hosted_backup.backup_unlock(first_conn, first)  # the stale holder releases nothing
+        row = second_conn.execute("SELECT holder FROM sgaa_ops.backup_lock WHERE lock_key = 1").fetchone()
+        assert row and row[0] == second
+        hosted_backup.backup_unlock(second_conn, second)
+        assert second_conn.execute("SELECT count(*) FROM sgaa_ops.backup_lock").fetchone()[0] == 0
+    finally:
+        first_conn.close()
+        second_conn.close()
+
+
+@needs_pg
+def test_a_partial_delivery_never_advances_the_protection_clock_and_retries(production, monkeypatch):
+    """M1: with one connected drive failing, nothing is recorded (the page stays without a
+    generation); once the drive recovers, the next wake completes and records."""
+    env = production
+    _set_policy(env, database_cadence_hours=24, object_cadence_days=7, retention_generations=2,
+                restore_test_days=30)
+    monkeypatch.setattr(hosted_backup, "active_cloud_account",
+                        lambda c, provider: {"account_email": "x@example.invalid"}
+                        if provider in ("google", "onedrive") else None)
+    env.drive.fail_for = {"onedrive"}
+    with env.app.app_context():
+        report = hosted_backup.run_backup_pass(store=env.store, build_objects=object_sets.build_objects_archive)
+    assert report["result_code"] == hosted_backup.RESULT_DELIVERY_INCOMPLETE
+    assert report["failed"] == ["OneDrive"]
+    assert _posture_of(env)["state"] == "EMPTY"  # no receipt: the clock did not advance
+    assert env.drive.remote["google"]  # the copy that landed stays (inert until claimed)
+    env.drive.fail_for = set()
+    with env.app.app_context():
+        again = hosted_backup.run_backup_pass(store=env.store, build_objects=object_sets.build_objects_archive)
+    assert again["result_code"] == hosted_backup.RESULT_OK and again["action"] == "SNAPSHOT+OBJECTS"
+    assert set(again["sent"]) == {"google", "onedrive"}
+    assert _posture_of(env)["state"] == "RECORDED"
+
+
+@needs_pg
+def test_an_unverifiable_policy_refuses_the_scheduled_run(production):
+    """M3: a partial stored policy refuses the wake; nothing is uploaded and nothing recorded."""
+    env = production
+    _set_policy(env, database_cadence_hours=24, object_cadence_days=7, retention_generations=2,
+                restore_test_days=30)
+    conn = adapter(env.url)
+    try:
+        conn.execute("DELETE FROM configuracoes_backup WHERE chave = 'pg_object_cadence_days'")
+        conn.commit()
+    finally:
+        conn.close()
+    with env.app.app_context():
+        report = hosted_backup.run_backup_pass(store=env.store, build_objects=object_sets.build_objects_archive)
+    assert report["result_code"] == hosted_backup.RESULT_POLICY_INVALID
+    assert env.drive.remote["google"] == [] and _posture_of(env)["state"] == "EMPTY"
+    _set_policy(env, object_cadence_days=7)
+    with env.app.app_context():
+        assert hosted_backup.run_backup_pass(
+            store=env.store, build_objects=object_sets.build_objects_archive)["result_code"] == hosted_backup.RESULT_OK
 
 
 @needs_pg

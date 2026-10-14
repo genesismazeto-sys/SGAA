@@ -266,12 +266,22 @@ credential, `405` other method, `404` any other path or a disabled front.
 The backup pass is cadence-agnostic: every wake reads the administrator's policy on the
 Banco de dados page (database cadence 1–24 h, object cadence 1–7 days) and the records the
 database itself holds, and no-ops unless the database cadence or the object cadence is due.
+The policy is read strictly: an unreadable or partial stored policy refuses the pass
+(`POLICY_UNREADABLE` / `POLICY_INVALID`) instead of silently running on defaults; the
+defaults apply only while the policy was never saved (an empty settings table). The due test
+carries a jitter window of min(25% of the cadence, 90 minutes) — the platform fires a cron
+inside its hour, and without the window a daily wake could skip a whole day at a 24 h policy.
 The wake interval is therefore not contract: the descriptor's daily cron covers the 24 h
 default, and a sub-daily cadence needs a sub-daily waker (for example Supabase Cron with
-`pg_net`), every one of them authenticated by the same bearer. The manual "Gerar backup
-agora" shares the same lock, so a pass and a manual copy never overlap; a refused publication
-never undoes a completed generation, and retention deletes only files this database's own
-receipts name.
+`pg_net`), every one of them authenticated by the same bearer. A scheduled wake records a
+generation only when **every** connected drive received the snapshot, the registers and, when
+due, the sealed object set; a partial delivery answers `DELIVERY_INCOMPLETE`, records nothing
+and stays due for the next wake, so the page's status never overstates the protection. One lock
+ROW with a lease (`sgaa_ops.backup_lock`) is shared by the pass, the manual "Gerar backup
+agora" and the restore — taken and released atomically in short transactions, so it is valid
+through the transaction pooler, and an expired lease is stolen, so a killed run never leaves a
+false-busy state. A refused publication never undoes a completed generation, and retention
+deletes only files this database's own receipts name.
 
 - `CRON_SECRET` (at least 32 ASCII characters, surrounding whitespace ignored) enables
   the front; without it every request is a `404` (so a caller can tell "not configured"

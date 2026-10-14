@@ -27,6 +27,7 @@ import datetime
 import logging
 import os
 import re
+import secrets
 import tempfile
 import time
 
@@ -43,19 +44,44 @@ PG_SNAPSHOT_DEFAULT_FOLDER = "SGAA - Backups"
 #: The sealed object set archive: exactly the names the background builder writes (``object_sets``).
 OBJECTS_ARCHIVE_PREFIX = "sgaa-pg-objetos-"
 OBJECTS_ARCHIVE_NAME = re.compile(r"sgaa-pg-objetos-\d{8}T\d{6}Z-[0-9a-f]{12}-[0-9a-f]{16}\.zip")
-#: One advisory lock per database: the scheduled pass and the manual route never run together.
-BACKUP_LOCK_KEY = 723_904_117_455
+#: One lock row per database, with a lease (M2): the production runtime uses the transaction
+#: pooler, which keeps no session state -- a session-level advisory lock is not valid there (a
+#: later statement may run on another backend).  The row is taken and released atomically in short
+#: transactions; an expired lease is stolen by the next attempt, so a killed run can never leave a
+#: persistent false-busy state.
+LOCK_LEASE_SECONDS = 10 * 60
+LOCK_HOLDER_LOCAL = "LOCAL"  # a non-PostgreSQL backend takes no lock (SQLite has its own cycle lock)
+LOCK_DDL = (
+    *pg_posture.SCHEMA_DDL,
+    "CREATE TABLE IF NOT EXISTS sgaa_ops.backup_lock ("
+    " lock_key smallint PRIMARY KEY, holder text NOT NULL,"
+    " acquired_at timestamptz NOT NULL DEFAULT now(), expires_at timestamptz NOT NULL)",
+    "REVOKE ALL ON sgaa_ops.backup_lock FROM PUBLIC",
+)
+LOCK_ACQUIRE_SQL = (
+    "INSERT INTO sgaa_ops.backup_lock (lock_key, holder, expires_at)"
+    " VALUES (1, %s, now() + make_interval(secs => %s))"
+    " ON CONFLICT (lock_key) DO UPDATE SET holder = excluded.holder, acquired_at = now(),"
+    " expires_at = excluded.expires_at"
+    " WHERE sgaa_ops.backup_lock.expires_at <= now()"
+    " RETURNING holder"
+)
+LOCK_RELEASE_SQL = "DELETE FROM sgaa_ops.backup_lock WHERE lock_key = 1 AND holder = %s"
+
+#: M4: the due window never exceeds 90 minutes (see ``_due_grace_seconds``).
+DUE_GRACE_MAX_SECONDS = 90 * 60
 
 RESULT_OK = "OK"
 RESULT_NOT_DUE = "NOT_DUE"
 RESULT_NOT_POSTGRES = "NOT_POSTGRES"
 RESULT_SKIPPED_BUSY = "SKIPPED_BUSY"
 RESULT_POLICY_INVALID = "POLICY_INVALID"
+RESULT_POLICY_UNREADABLE = "POLICY_UNREADABLE"
 RESULT_DATABASE_UNREADABLE = "DATABASE_UNREADABLE"
 RESULT_NO_DRIVE = "NO_DRIVE"
 RESULT_SNAPSHOT_FAILED = "SNAPSHOT_FAILED"
 RESULT_SNAPSHOT_NOT_RECORDED = "SNAPSHOT_NOT_RECORDED"
-RESULT_OBJECTS_NOT_DELIVERED = "OBJECTS_NOT_DELIVERED"
+RESULT_DELIVERY_INCOMPLETE = "DELIVERY_INCOMPLETE"
 RESULT_UPLOAD_FAILED = "UPLOAD_FAILED"
 
 _PROVIDERS = ("google", "onedrive")
@@ -107,26 +133,34 @@ def cloud_drive_folder_setting(conn, provider: str) -> dict[str, str]:
 
 
 # ---------------------------------------------------------------------------
-# the advisory lock (scheduled pass and manual route share it)
+# the backup lock (scheduled pass, manual button and restore share it)
 # ---------------------------------------------------------------------------
 
 
-def backup_lock(conn) -> bool:
-    """Take the database's backup lock; ``True`` when taken (always on a non-PostgreSQL backend)."""
+def backup_lock(conn):
+    """Take the database's backup lock; returns the holder token, or ``None`` when another run
+    holds an unexpired lease.  Non-PostgreSQL backends take no lock (the SQLite path has its own
+    cycle lock) and return ``LOCK_HOLDER_LOCAL``."""
     raw = getattr(conn, "raw_connection", None)
     if raw is None:
-        return True
-    row = raw.execute("SELECT pg_try_advisory_lock(%s)", (BACKUP_LOCK_KEY,)).fetchone()
-    return bool(row and row[0])
+        return LOCK_HOLDER_LOCAL
+    holder = secrets.token_hex(16)
+    with raw.transaction():
+        for statement in LOCK_DDL:
+            raw.execute(statement)
+        row = raw.execute(LOCK_ACQUIRE_SQL, (holder, LOCK_LEASE_SECONDS)).fetchone()
+    return str(row[0]) if row else None
 
 
-def backup_unlock(conn) -> None:
+def backup_unlock(conn, holder) -> None:
+    """Release the lock this run holds; a lease stolen meanwhile is never released by mistake."""
     raw = getattr(conn, "raw_connection", None)
-    if raw is None:
+    if raw is None or holder in (None, LOCK_HOLDER_LOCAL):
         return
     try:
-        raw.execute("SELECT pg_advisory_unlock(%s)", (BACKUP_LOCK_KEY,))
-    except Exception:  # a connection already gone releases the lock with its session
+        with raw.transaction():
+            raw.execute(LOCK_RELEASE_SQL, (holder,))
+    except Exception:  # a connection already gone leaves the lease to expire; nothing else is lost
         pass
 
 
@@ -135,15 +169,22 @@ def backup_unlock(conn) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _deliver(*, prune: bool, with_objects: bool, store=None, build_objects=None) -> dict:
+def _deliver(*, prune: bool, with_objects: bool, store=None, build_objects=None,
+             require_complete: bool = False) -> dict:
     """One delivery attempt; see ``send_snapshot`` for the manual contract.
 
     Returns a value-free dict: ``targets`` (connected providers), ``sent`` (``None`` when the
     snapshot could not be made), ``failed`` / ``registers_failed`` / ``objects_failed`` labels,
+    ``delivery_complete`` (every connected drive received every required artifact of this wake),
     ``manifest`` (the snapshot's SHA-256 once it reached a drive AND its receipt was recorded),
     ``set_error`` (a fixed code when the object set was due but could not be built), and the
     object-set receipt fields.  ``build_objects`` is the background builder (``app.backup.object_sets``);
     without it a due object set refuses loudly instead of shipping nothing silently.
+
+    ``require_complete`` is the scheduled contract (M1): with it, no receipt is published unless
+    every connected drive received the snapshot, the registers and (when due) the sealed set — the
+    protection clock never advances on a partial delivery.  The manual route keeps its A19
+    semantics (``require_complete=False``: publish what landed, name what did not).
     """
     conn = get_db_connection()
     raw = getattr(conn, "raw_connection", None)
@@ -152,8 +193,9 @@ def _deliver(*, prune: bool, with_objects: bool, store=None, build_objects=None)
 
     result = {
         "targets": [], "sent": None, "failed": [], "registers_failed": [], "objects_failed": [],
-        "manifest": None, "set_error": None, "object_set_name": None, "object_set_digest": None,
-        "object_manifest_sha256": None, "object_files": {},
+        "delivery_complete": False, "manifest": None, "set_error": None,
+        "object_set_name": None, "object_set_digest": None, "object_manifest_sha256": None,
+        "object_files": {},
     }
     try:
         keep = pg_posture.read_policy(raw, strict=True)["pg_retention_generations"] if raw is not None else None
@@ -243,11 +285,19 @@ def _deliver(*, prune: bool, with_objects: bool, store=None, build_objects=None)
             })
             conn.commit()
     result.update(sent=sent, failed=failed, registers_failed=registers_failed)
-    # A set is only claimed when at least one drive actually received its archive (M1): an upload
-    # failure leaves the object layer unclaimed and due, so the next wake retries it (never silent).
-    claimed_objects = built["report"] is not None and bool(object_files)
+    # M1: the scheduled run advances the protection clock only when EVERY connected drive received
+    # every required artifact of this wake (snapshot, registers, and the sealed set when due).
+    requires_objects = built["archive"] is not None
+    complete = bool(targets) and len(sent) == len(targets) and all(
+        provider in uploaded and provider in exported and (not requires_objects or provider in object_files)
+        for provider in targets)
+    result["delivery_complete"] = complete
+    if require_complete:
+        claimed_objects = requires_objects and complete
+    else:  # the manual contract: a set is claimed when at least one drive received its archive
+        claimed_objects = built["report"] is not None and bool(object_files)
     published = False
-    if sent and raw is not None:
+    if sent and (not require_complete or complete) and raw is not None:
         receipt = pg_posture.run_record(
             generation_at=snapshot["generation_at"], manifest_sha256=snapshot["sha256"],
             dump_sha256=snapshot["sha256"], source_identity_sha256=snapshot["source_identity_sha256"],
@@ -338,38 +388,66 @@ def prune_owned(conn, raw, sent, folders, keep, *, registers_skip):
 # ---------------------------------------------------------------------------
 
 
+def _due_grace_seconds(hours: int) -> int:
+    """The due window that absorbs the platform's scheduling jitter (M4).
+
+    The free platform fires a cron inside its hour, so a wake can arrive up to about an hour
+    earlier than the previous run; without a window a 24 h policy with a daily wake skips a whole
+    day and reports a ~47 h gap.  The window is min(25% of the cadence, 90 min), floored at a
+    minute: it covers the jitter at 24 h (threshold 22.5 h) and never double-runs a sub-daily
+    cadence (at 1 h the threshold is 45 min).
+    """
+    return max(60, min(hours * 900, DUE_GRACE_MAX_SECONDS))
+
+
 def run_backup_pass(*, store=None, build_objects=None) -> dict:
     """One wake of the scheduled backup: decide, then run only what the policy has due.
 
-    The wake interval is not contract; every wake reads the administrator's policy and the receipts
-    and no-ops unless due.  ``build_objects`` is the background object-set builder the scheduler
-    service injects (``app.backup.object_sets``).  Returns a value-free dict with ``result_code``
-    (``OK``, ``NOT_DUE``, ``SKIPPED_BUSY``, ``POLICY_INVALID``, ``DATABASE_UNREADABLE``, ``NO_DRIVE``,
-    ``SNAPSHOT_*``, ``SET_*``, ``UPLOAD_FAILED``) and what ran.
+    The wake interval is not contract; every wake reads the administrator's policy strictly (M3:
+    an unreadable or unverifiable policy refuses the run, never a substituted default) and the
+    receipts, and no-ops unless due within the platform's jitter window (M4).  A receipt is only
+    published when every connected drive received every required artifact (M1).  ``build_objects``
+    is the background object-set builder the scheduler service injects (``app.backup.object_sets``).
+    Returns a value-free dict with ``result_code`` (``OK``, ``NOT_DUE``, ``SKIPPED_BUSY``,
+    ``POLICY_INVALID``, ``POLICY_UNREADABLE``, ``DATABASE_UNREADABLE``, ``NO_DRIVE``,
+    ``DELIVERY_INCOMPLETE``, ``SNAPSHOT_*``, ``SET_*``) and what ran.
     """
     conn = get_db_connection()
     raw = getattr(conn, "raw_connection", None)
     if raw is None:
         return {"result_code": RESULT_NOT_POSTGRES}
-    if not backup_lock(conn):
+    holder = backup_lock(conn)
+    if holder is None:
         return {"result_code": RESULT_SKIPPED_BUSY}
     try:
         posture = pg_posture.read(raw)
         if posture.get("state") == "UNREADABLE":
             return {"result_code": RESULT_DATABASE_UNREADABLE}
-        policy = posture["policy"]
-        if policy.get("invalid"):
-            return {"result_code": RESULT_POLICY_INVALID, "invalid": list(policy["invalid"])}
+        try:
+            # M3: the decision reads the policy strictly -- a missing, partial or invalid stored
+            # policy raises here instead of silently becoming the defaults.  An empty table is a
+            # provably unset policy and its documented defaults are the policy.
+            policy = pg_posture.read_policy(raw, strict=True)
+        except pg_posture.PolicyError:
+            return {"result_code": RESULT_POLICY_INVALID}
+        except Exception:
+            return {"result_code": RESULT_POLICY_UNREADABLE}
         now = datetime.datetime.now(datetime.timezone.utc)
-        cadence_hours = int(posture["cadence_hours"])
+        cadence_hours = int(policy["pg_database_cadence_hours"])
+        ceiling = posture.get("ceiling_hours")
+        if ceiling is not None and ceiling < cadence_hours:
+            cadence_hours = ceiling
         object_hours = int(policy["pg_object_cadence_days"]) * 24
         latest = posture["latest_generation_at"]
         latest_objects = posture["latest_object_set_at"]
-        due_database = latest is None or (now - latest) >= datetime.timedelta(hours=cadence_hours)
-        due_objects = latest_objects is None or (now - latest_objects) >= datetime.timedelta(hours=object_hours)
+        due_database = latest is None or (now - latest).total_seconds() >= (
+            cadence_hours * 3600 - _due_grace_seconds(cadence_hours))
+        due_objects = latest_objects is None or (now - latest_objects).total_seconds() >= (
+            object_hours * 3600 - _due_grace_seconds(object_hours))
         if not due_database and not due_objects:
             return {"result_code": RESULT_NOT_DUE, "database_due": False, "objects_due": False}
-        result = _deliver(prune=True, with_objects=due_objects, store=store, build_objects=build_objects)
+        result = _deliver(prune=True, with_objects=due_objects, store=store, build_objects=build_objects,
+                          require_complete=True)
         action = "SNAPSHOT+OBJECTS" if due_objects else "SNAPSHOT"
         if result["set_error"] is not None:
             return {"result_code": result["set_error"], "database_due": due_database,
@@ -379,6 +457,14 @@ def run_backup_pass(*, store=None, build_objects=None) -> dict:
         if not result["sent"]:
             return {"result_code": RESULT_NO_DRIVE, "action": "NONE",
                     "database_due": due_database, "objects_due": due_objects}
+        if not result["delivery_complete"]:
+            # M1: some connected drive is missing a required artifact: no receipt was published,
+            # the clock did not advance and the same work stays due for the next wake
+            return {"result_code": RESULT_DELIVERY_INCOMPLETE, "action": "NONE",
+                    "database_due": due_database, "objects_due": due_objects,
+                    "sent": list(result["sent"]), "failed": list(result["failed"]),
+                    "registers_failed": list(result["registers_failed"]),
+                    "objects_failed": list(result["objects_failed"])}
         report = {
             "result_code": RESULT_OK, "database_due": due_database, "objects_due": due_objects,
             "action": action, "sent": list(result["sent"]), "failed": list(result["failed"]),
@@ -387,22 +473,16 @@ def run_backup_pass(*, store=None, build_objects=None) -> dict:
         if result["manifest"] is None:
             return {"result_code": RESULT_SNAPSHOT_NOT_RECORDED, "action": action,
                     "sent": report["sent"], "failed": report["failed"]}
-        if due_objects and not result["object_files"]:
-            # the sealed set reached no drive: the database copy stays recorded (its own layer),
-            # the object layer is NOT claimed and stays due for the next wake
-            return {"result_code": RESULT_OBJECTS_NOT_DELIVERED, "action": "SNAPSHOT",
-                    "database_due": due_database, "objects_due": due_objects,
-                    "sent": report["sent"], "failed": report["failed"],
-                    "objects_failed": report["objects_failed"]}
         return report
     finally:
-        backup_unlock(conn)
+        backup_unlock(conn, holder)
 
 
 __all__ = [
-    "BACKUP_LOCK_KEY", "OBJECTS_ARCHIVE_NAME", "OBJECTS_ARCHIVE_PREFIX", "PG_SNAPSHOT_DEFAULT_FOLDER",
-    "RESULT_DATABASE_UNREADABLE", "RESULT_NOT_DUE", "RESULT_NOT_POSTGRES", "RESULT_NO_DRIVE", "RESULT_OBJECTS_NOT_DELIVERED",
-    "RESULT_OK", "RESULT_POLICY_INVALID", "RESULT_SKIPPED_BUSY", "RESULT_SNAPSHOT_FAILED", "RESULT_SNAPSHOT_NOT_RECORDED",
-    "RESULT_UPLOAD_FAILED", "active_cloud_account", "backup_lock", "backup_unlock", "cloud_drive_folder_setting",
-    "prune_owned", "run_backup_pass", "send_snapshot",
+    "DUE_GRACE_MAX_SECONDS", "LOCK_HOLDER_LOCAL", "LOCK_LEASE_SECONDS", "OBJECTS_ARCHIVE_NAME",
+    "OBJECTS_ARCHIVE_PREFIX", "PG_SNAPSHOT_DEFAULT_FOLDER", "RESULT_DATABASE_UNREADABLE",
+    "RESULT_DELIVERY_INCOMPLETE", "RESULT_NOT_DUE", "RESULT_NOT_POSTGRES", "RESULT_NO_DRIVE", "RESULT_OK",
+    "RESULT_POLICY_INVALID", "RESULT_POLICY_UNREADABLE", "RESULT_SKIPPED_BUSY", "RESULT_SNAPSHOT_FAILED",
+    "RESULT_SNAPSHOT_NOT_RECORDED", "RESULT_UPLOAD_FAILED", "active_cloud_account", "backup_lock",
+    "backup_unlock", "cloud_drive_folder_setting", "prune_owned", "run_backup_pass", "send_snapshot",
 ]

@@ -1824,15 +1824,16 @@ def admin_banco_dados_drive_settings():
 def _postgres_backup_now():
     """MP-3 A19: "Gerar backup agora" under PostgreSQL; the outcome flashed as the SQLite route did."""
     conn = get_db_connection()
-    if not _hosted_backup.backup_lock(conn):
-        # A20: the scheduled pass and the manual backup button never run together (one advisory
-        # lock per database; the restore's safety copy runs inside the restore's own lock window)
+    holder = _hosted_backup.backup_lock(conn)
+    if holder is None:
+        # A20 M2: the scheduled pass, the manual button and the restore share one lock row with a
+        # lease (pooler-safe; a killed run can never leave a persistent false-busy state)
         flash("Outro backup está em andamento. Aguarde a conclusão e tente novamente.", "warning")
         return redirect(url_for("admin_banco_dados"))
     try:
         targets, sent, failed, registers_failed, _manifest = _send_postgres_snapshot()
     finally:
-        _hosted_backup.backup_unlock(conn)
+        _hosted_backup.backup_unlock(conn, holder)
     if not targets:
         flash("Nenhuma conta em nuvem está conectada para receber o backup do banco.", "warning")
         return redirect(url_for("admin_banco_dados"))
@@ -1901,16 +1902,24 @@ def _postgres_restore(path, *, uploaded: bool, expected_sha256: str | None = Non
         return manifest
 
     conn.commit()  # the request holds no lock the restore's write lock waits for
+    holder = _hosted_backup.backup_lock(conn)
+    if holder is None:
+        # A20 M2: a restore is a protected operation too; its safety copy must never overlap a pass
+        flash("Outro backup está em andamento. Aguarde a conclusão e tente novamente.", "warning")
+        return redirect(url_for("admin_banco_dados"))
     try:
-        result = pg_restore.restore(snapshot, before=safety_copy)
-    except pg_restore.RestoreError as exc:
-        if exc.code == pg_restore.OUTCOME_UNCERTAIN:  # not a refusal: the restore may have been applied
-            logger.warning("event=pg_restore_uncertain operation=%s", exc.operation_id)
-            flash("Não foi possível confirmar se a recuperação do banco foi aplicada: a resposta do banco se "
-                  "perdeu. Não repita a recuperação antes de conferir os dados atuais.", "warning")
-            return redirect(url_for("admin_banco_dados"))
-        logger.warning("event=pg_restore_refused code=%s", exc.code)
-        return refuse(exc)
+        try:
+            result = pg_restore.restore(snapshot, before=safety_copy)
+        except pg_restore.RestoreError as exc:
+            if exc.code == pg_restore.OUTCOME_UNCERTAIN:  # not a refusal: the restore may have been applied
+                logger.warning("event=pg_restore_uncertain operation=%s", exc.operation_id)
+                flash("Não foi possível confirmar se a recuperação do banco foi aplicada: a resposta do banco se "
+                      "perdeu. Não repita a recuperação antes de conferir os dados atuais.", "warning")
+                return redirect(url_for("admin_banco_dados"))
+            logger.warning("event=pg_restore_refused code=%s", exc.code)
+            return refuse(exc)
+    finally:
+        _hosted_backup.backup_unlock(conn, holder)
     logger.info("event=pg_restore_done tables=%s rows=%s outcome=%s marker=%s by=%s", result["tables"],
                 result["rows"], result["outcome"], result["marker_sha256"], session.get("user_id"))
     labels = " e ".join("Google Drive" if provider == "google" else "OneDrive" for provider in sent)
