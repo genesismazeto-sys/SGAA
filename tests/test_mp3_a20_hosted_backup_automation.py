@@ -251,6 +251,39 @@ def test_a_one_hour_policy_runs_on_cadence_with_a_sub_daily_waker(env):
     assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK
 
 
+def test_a_dense_waker_never_lets_a_gap_exceed_the_cadence(env):
+    """M4/RPO (A5): over a week of adversarial wakes -- the daily cron at 04:00/04:59 alternating
+    plus 6-hourly trigger wakes -- every gap between consecutive generations stays at or under the
+    24 h cadence.  The ladder of D4 is what bounds the RPO; a lone daily cron cannot (its spacing,
+    up to cadence + the platform's in-hour precision, is the bound -- see the real-PG lanes)."""
+    env.deliver_result = _delivered()
+    base = datetime.datetime(2026, 10, 1, tzinfo=datetime.timezone.utc)
+    wakes = []
+    for day in range(6):
+        wakes.append(base + datetime.timedelta(days=day, hours=4, minutes=59 if day % 2 else 0))
+        for hour in (6, 12, 18):
+            wakes.append(base + datetime.timedelta(days=day, hours=hour))
+        if day < 5:
+            wakes.append(base + datetime.timedelta(days=day + 1, hours=0))
+    wakes = sorted(set(wakes))
+    last_generation = None
+    previous_wake = None
+    gaps = []
+    for wake in wakes:
+        env.wake_interval = (int((wake - previous_wake).total_seconds()) if previous_wake
+                             else hosted_backup.DEFAULT_WAKE_SECONDS)
+        age = None if last_generation is None else (wake - last_generation).total_seconds() / 3600.0
+        object_age = None if last_generation is None else (wake - wakes[0]).total_seconds() / 3600.0
+        env.posture = _posture(latest_hours=age, latest_objects_hours=object_age)
+        if hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK:
+            if last_generation is not None:
+                gaps.append(wake - last_generation)
+            last_generation = wake
+        previous_wake = wake
+    assert gaps and all(gap <= datetime.timedelta(hours=24) for gap in gaps)
+    assert max(gaps) >= datetime.timedelta(hours=20)  # runs near the deadline, not on every wake
+
+
 def test_an_invalid_policy_refuses_and_delivers_nothing(env):
     """M3: the strict read refuses a partial or invalid stored policy; nothing runs."""
     env.policy_error = "invalid"
@@ -1217,6 +1250,61 @@ def test_the_wake_interval_is_learned_on_real_postgresql(production):
                         lambda: hosted_backup.run_backup_pass(store=env.store,
                                                               build_objects=object_sets.build_objects_archive))
     assert duplicate["result_code"] == hosted_backup.RESULT_NOT_DUE and schedule() == 23 * 3600
+
+
+@needs_pg
+def test_the_daily_cron_alone_bounds_the_gap_by_its_own_spacing(production):
+    """M4/RPO (A5): the platform fires the daily cron inside its hour, so consecutive wakes can be
+    24 h 59 min apart (04:00 then 04:59).  The deadline rule runs at every such wake -- no skip --
+    but no decision rule can compress a waker's spacing: with the daily cron alone the bound is the
+    spacing itself (up to cadence + the platform's in-hour precision).  The wake ladder (D4) is the
+    coverage; the ladder lane shows every gap at or under the cadence."""
+    env = production
+    _set_policy(env, database_cadence_hours=24, object_cadence_days=7, retention_generations=2,
+                restore_test_days=30)
+    generations = []
+    for day, hour, minute in ((1, 4, 0), (2, 4, 59), (3, 4, 0), (4, 4, 59)):
+        report = _run_at(env, day, hour, minute,
+                         lambda: hosted_backup.run_backup_pass(
+                             store=env.store, build_objects=object_sets.build_objects_archive))
+        assert report["result_code"] == hosted_backup.RESULT_OK  # every wake runs: never a skip
+        generations.append(_posture_of(env)["latest_generation_at"])
+    assert [g.strftime("%Y-%m-%dT%H:%M:%SZ") for g in generations] == [
+        "2026-10-01T04:00:00Z", "2026-10-02T04:59:00Z", "2026-10-03T04:00:00Z", "2026-10-04T04:59:00Z"]
+    gaps = [later - earlier for earlier, later in zip(generations, generations[1:])]
+    assert gaps == [datetime.timedelta(hours=24, minutes=59), datetime.timedelta(hours=23, minutes=1),
+                    datetime.timedelta(hours=24, minutes=59)]
+    assert max(gaps) > datetime.timedelta(hours=24)  # the concrete limitation: the waker is the bound
+
+
+@needs_pg
+def test_the_wake_ladder_bounds_every_gap_under_the_cadence(production):
+    """M4/RPO (A5): the ladder of D4 -- the daily cron with its worst-case 04:00/04:59 jitter plus
+    the free Supabase Cron/pg_net trigger at 6 h -- keeps every gap between consecutive generations
+    at or under the 24 h cadence: the trigger's dense wakes let the deadline rule run before the
+    deadline, which the lone daily cron cannot do."""
+    env = production
+    _set_policy(env, database_cadence_hours=24, object_cadence_days=7, retention_generations=2,
+                restore_test_days=30)
+    base = datetime.datetime(2026, 10, 1, tzinfo=datetime.timezone.utc)
+    wakes = []
+    for day in range(3):
+        wakes.append(base + datetime.timedelta(days=day, hours=4, minutes=59 if day % 2 else 0))
+        for hour in (6, 12, 18):
+            wakes.append(base + datetime.timedelta(days=day, hours=hour))
+        wakes.append(base + datetime.timedelta(days=day + 1, hours=0))
+    wakes = sorted(set(wakes))
+    generations = []
+    for wake in wakes:
+        report = _run_at(env, wake.day, wake.hour, wake.minute,
+                         lambda: hosted_backup.run_backup_pass(
+                             store=env.store, build_objects=object_sets.build_objects_archive))
+        if report["result_code"] == hosted_backup.RESULT_OK:
+            generations.append(_posture_of(env)["latest_generation_at"])
+    assert len(generations) == 4 and len(generations) < len(wakes)  # not on every wake
+    gaps = [later - earlier for earlier, later in zip(generations, generations[1:])]
+    assert all(gap <= datetime.timedelta(hours=24) for gap in gaps)
+    assert max(gaps) >= datetime.timedelta(hours=20)  # runs near the deadline
 
 
 @needs_pg

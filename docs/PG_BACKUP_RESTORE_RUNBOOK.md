@@ -505,9 +505,14 @@ stored interval), and the pass runs when the deadline would otherwise fall befor
 generation at 07:00 against a 04:47 cron runs at that same wake, consecutive daily wakes keep
 running, a 1 h cadence with a 15- or 30-minute waker runs at ~60 min (never past the cadence, never
 per wake), and the platform's up-to-an-hour cron precision can never skip a whole day at the 24 h
-default; the committed descriptor adds a daily cron
-entry, and a sub-daily cadence uses a sub-daily waker — Supabase Cron with `pg_net` is free and calls
-the same endpoint; the bearer is stored in Supabase Vault (the same pattern as the mirror trigger),
+default. The gap's bound depends on the waker's density: a waker at least as dense as the cadence
+keeps the gap within the cadence plus the 1-minute guard plus twice the waker's timing deviation,
+but the daily cron alone cannot compress its own spacing — two consecutive wakes can be 24 h 59 min
+apart (04:00 then 04:59) and both run, so the daily-cron-alone gap is the spacing itself. The
+committed descriptor adds the daily cron entry (the zero-cost floor), and the wake ladder's
+sub-daily waker — Supabase Cron with `pg_net`, free, calling
+the same endpoint — is what holds every cadence within the bound; the bearer is stored in Supabase
+Vault (the same pattern as the mirror trigger),
 so no job text holds a secret. The pass, the manual "Gerar backup agora" and the restore share one
 lock row with a lease (`sgaa_ops.backup_lock`), taken and released in transactions committed on their
 own (valid through the transaction pooler and past the request's ambient transaction; the control DDL

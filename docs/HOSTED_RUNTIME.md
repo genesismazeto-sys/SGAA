@@ -274,13 +274,17 @@ documented daily floor when unknown; clamped to 1 minute–7 days; a sub-minute 
 duplicate delivery and keeps the stored interval), then runs when the deadline would otherwise
 fall before that next wake (`age ≥ cadence − interval + 1 min`; the same minute guards a
 duplicated wake). A generation whose phase sits later than the wake — a manual backup at 07:00
-against a 04:47 cron — therefore runs at that very wake instead of skipping to the next day,
-so the gap between consecutive generations never exceeds the cadence; consecutive daily wakes
-keep running, and a 1 h cadence with a 15- or 30-minute waker runs at ~60 min, never past the
-cadence and never on every wake. The wake interval is therefore not contract: the descriptor's
-daily cron covers the 24 h default, and a sub-daily
-cadence needs a sub-daily waker (for example Supabase Cron with `pg_net`), every one of them
-authenticated by the same bearer. Every wake is recorded with its completeness: only a wake
+against a 04:47 cron — therefore runs at that very wake instead of skipping to the next day;
+consecutive daily wakes keep running, and a 1 h cadence with a 15- or 30-minute waker runs at
+~60 min, never past the cadence and never on every wake. The protection gap's bound depends on
+the waker's density: with a waker at least as dense as the cadence the gap stays within the
+cadence plus the 1-minute guard plus twice the waker's timing deviation (≈ cadence + 1 min for
+the minute-granularity trigger), but a lone daily cron cannot compress its own spacing — under
+Hobby's in-hour precision two consecutive wakes can be 24 h 59 min apart (04:00 then 04:59) and
+both run, so the daily-cron-alone gap is the spacing itself. The wake ladder covers the bound:
+the descriptor's daily cron is the zero-cost floor, and the free Supabase Cron with `pg_net` —
+the trigger the phase design already names, its bearer held in Supabase Vault — supplies the
+sub-daily wakes; every wake uses the same bearer. Every wake is recorded with its completeness: only a wake
 that reached **every** connected drive with the snapshot, the registers and (when due) the
 sealed object set advances the protection clock and the page's status; a partial delivery is
 recorded as incomplete (it owns the files that did land, so retention bounds them), answers
