@@ -497,9 +497,15 @@ the CLI seals), all to every connected drive, with retention pruning each kind t
 protection clock and the page's status; a partial delivery is recorded as incomplete (it owns the
 files that did land, so retention bounds them and rotates complete generations and partial runs
 separately), answers `DELIVERY_INCOMPLETE` and stays due for the next wake — the page shows the delay
-rather than an overstated protection. The due test carries a jitter window of min(10% of the cadence,
-90 minutes), so the platform's up-to-an-hour cron precision cannot skip a whole day at the 24 h
-default while a 1 h cadence still runs at ~54–60 min; the committed descriptor adds a daily cron
+rather than an overstated protection. The pass runs on the deadline rule: each wake is recorded and
+learns the interval to the next expected wake from the time elapsed since the last one (the daily
+floor when unknown; clamped to 1 minute–7 days; a sub-minute elapsed is a duplicate and keeps the
+stored interval), and the pass runs when the deadline would otherwise fall before that next wake
+(`age ≥ cadence − interval + 1 min`, the same minute guarding a duplicated wake) — so a manual
+generation at 07:00 against a 04:47 cron runs at that same wake, consecutive daily wakes keep
+running, a 1 h cadence with a 15- or 30-minute waker runs at ~60 min (never past the cadence, never
+per wake), and the platform's up-to-an-hour cron precision can never skip a whole day at the 24 h
+default; the committed descriptor adds a daily cron
 entry, and a sub-daily cadence uses a sub-daily waker — Supabase Cron with `pg_net` is free and calls
 the same endpoint; the bearer is stored in Supabase Vault (the same pattern as the mirror trigger),
 so no job text holds a secret. The pass, the manual "Gerar backup agora" and the restore share one

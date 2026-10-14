@@ -265,14 +265,20 @@ credential, `405` other method, `404` any other path or a disabled front.
 
 The backup pass is cadence-agnostic: every wake reads the administrator's policy on the
 Banco de dados page (database cadence 1–24 h, object cadence 1–7 days) and the records the
-database itself holds, and no-ops unless the database cadence or the object cadence is due.
-The policy is read strictly: an unreadable or partial stored policy refuses the pass
-(`POLICY_UNREADABLE` / `POLICY_INVALID`) instead of silently running on defaults; the
-defaults apply only while the policy was never saved (an empty settings table). The due test
-carries a jitter window of min(10% of the cadence, 90 minutes) — the platform fires a cron
-inside its hour, and without the window a daily wake could skip a whole day at a 24 h policy,
-while the tighter window keeps a 1 h cadence running at ~54–60 min. The wake interval is
-therefore not contract: the descriptor's daily cron covers the 24 h default, and a sub-daily
+database itself holds. The policy is read strictly: an unreadable or partial stored policy
+refuses the pass (`POLICY_UNREADABLE` / `POLICY_INVALID`) instead of silently running on
+defaults; the defaults apply only while the policy was never saved (an empty settings table).
+The pass runs on the deadline rule: it records the wake and learns the
+interval to the next expected wake from the time elapsed since the last one (the platform's
+documented daily floor when unknown; clamped to 1 minute–7 days; a sub-minute elapsed is a
+duplicate delivery and keeps the stored interval), then runs when the deadline would otherwise
+fall before that next wake (`age ≥ cadence − interval + 1 min`; the same minute guards a
+duplicated wake). A generation whose phase sits later than the wake — a manual backup at 07:00
+against a 04:47 cron — therefore runs at that very wake instead of skipping to the next day,
+so the gap between consecutive generations never exceeds the cadence; consecutive daily wakes
+keep running, and a 1 h cadence with a 15- or 30-minute waker runs at ~60 min, never past the
+cadence and never on every wake. The wake interval is therefore not contract: the descriptor's
+daily cron covers the 24 h default, and a sub-daily
 cadence needs a sub-daily waker (for example Supabase Cron with `pg_net`), every one of them
 authenticated by the same bearer. Every wake is recorded with its completeness: only a wake
 that reached **every** connected drive with the snapshot, the registers and (when due) the

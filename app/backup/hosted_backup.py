@@ -68,8 +68,30 @@ LOCK_ACQUIRE_SQL = (
 )
 LOCK_RELEASE_SQL = "DELETE FROM sgaa_ops.backup_lock WHERE lock_key = 1 AND holder = %s"
 
-#: M4: the due window never exceeds 90 minutes (see ``_due_grace_seconds``).
-DUE_GRACE_MAX_SECONDS = 90 * 60
+#: M4 (deadline scheduling): the pass runs when the deadline would otherwise fall before the NEXT
+#: expected wake.  The interval is the just-elapsed time between wakes (a static window cannot serve
+#: both a daily cron and a sub-daily trigger: a generation whose phase sits later than the wake -- a
+#: manual backup at 07:00 vs a 04:47 cron -- made the next wake skip and pushed the following one
+#: ~46 h out).  Unknown: the platform's documented daily floor.
+DEFAULT_WAKE_SECONDS = 24 * 60 * 60
+#: Under a minute the elapsed time is a duplicate delivery, not an interval; the same minute guards
+#: the decision so a duplicated wake never re-runs a fresh generation.
+WAKE_MIN_SECONDS = 60
+WAKE_MAX_SECONDS = 7 * 24 * 60 * 60
+SCHEDULE_DDL = (
+    *pg_posture.SCHEMA_DDL,
+    "CREATE TABLE IF NOT EXISTS sgaa_ops.backup_schedule ("
+    " schedule_key smallint PRIMARY KEY, last_wake_at timestamptz NOT NULL,"
+    " last_interval_seconds integer NOT NULL)",
+    "REVOKE ALL ON sgaa_ops.backup_schedule FROM PUBLIC",
+)
+SCHEDULE_SELECT_SQL = (
+    "SELECT last_wake_at, last_interval_seconds FROM sgaa_ops.backup_schedule WHERE schedule_key = 1"
+)
+SCHEDULE_INSERT_SQL = "INSERT INTO sgaa_ops.backup_schedule (schedule_key, last_wake_at, last_interval_seconds)" \
+                      " VALUES (1, %s, %s)"
+SCHEDULE_UPDATE_SQL = "UPDATE sgaa_ops.backup_schedule SET last_wake_at = %s, last_interval_seconds = %s" \
+                      " WHERE schedule_key = 1"
 
 RESULT_OK = "OK"
 RESULT_NOT_DUE = "NOT_DUE"
@@ -408,16 +430,27 @@ def prune_owned(conn, raw, sent, folders, keep, *, registers_skip):
 # ---------------------------------------------------------------------------
 
 
-def _due_grace_seconds(hours: int) -> int:
-    """The due window that absorbs the platform's scheduling jitter (M4).
+def note_wake(raw, now) -> int:
+    """Record this wake and return the interval to the next expected one (M4 deadline scheduling).
 
-    The free platform fires a cron inside its hour, so a wake can arrive up to about an hour
-    earlier than the previous run; without a window a 24 h policy with a daily wake skips a whole
-    day and reports a ~47 h gap.  The window is min(10% of the cadence, 90 min), floored at a
-    minute: it covers the jitter at 24 h (threshold 22.5 h) and keeps sub-daily runs on cadence
-    (at 1 h the threshold is 54 min, so a 15-minute waker runs at ~60 min, never at 45).
+    One transaction: the first wake stores the platform's documented daily floor; later wakes learn
+    the just-elapsed time between wakes (clamped to [1 min, 7 days]) — a duplicate delivery (under a
+    minute) keeps the stored regular interval.  Runs under the backup lock, so the row has a single
+    writer.
     """
-    return max(60, min(hours * 360, DUE_GRACE_MAX_SECONDS))
+    pg_posture.run_ddl(raw, SCHEDULE_DDL)
+    with raw.transaction():
+        row = raw.execute(SCHEDULE_SELECT_SQL).fetchone()
+        if row is None:
+            interval = DEFAULT_WAKE_SECONDS
+            raw.execute(SCHEDULE_INSERT_SQL, (now, interval))
+            return interval
+        last, stored = row[0], int(row[1])
+        elapsed = (now - last).total_seconds()
+        interval = min(max(int(elapsed), WAKE_MIN_SECONDS), WAKE_MAX_SECONDS) \
+            if elapsed >= WAKE_MIN_SECONDS else stored
+        raw.execute(SCHEDULE_UPDATE_SQL, (now, interval))
+        return interval
 
 
 def run_backup_pass(*, store=None, build_objects=None) -> dict:
@@ -425,7 +458,9 @@ def run_backup_pass(*, store=None, build_objects=None) -> dict:
 
     The wake interval is not contract; every wake reads the administrator's policy strictly (M3:
     an unreadable or unverifiable policy refuses the run, never a substituted default) and the
-    receipts, and no-ops unless due within the platform's jitter window (M4).  A receipt is only
+    receipts, records itself and runs on the deadline rule (M4/A4: run when the deadline would
+    otherwise fall before the next expected wake, the interval learned from the just-elapsed time
+    between wakes).  A receipt is only
     published when every connected drive received every required artifact (M1).  ``build_objects``
     is the background object-set builder the scheduler service injects (``app.backup.object_sets``).
     Returns a value-free dict with ``result_code`` (``OK``, ``NOT_DUE``, ``SKIPPED_BUSY``,
@@ -440,6 +475,14 @@ def run_backup_pass(*, store=None, build_objects=None) -> dict:
     if holder is None:
         return {"result_code": RESULT_SKIPPED_BUSY}
     try:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        try:
+            # M4: record this wake and learn the interval to the next one; the deadline rule needs
+            # it to decide.  A failure here refuses the pass (nothing runs on a schedule it cannot
+            # reason about).
+            interval_seconds = note_wake(raw, now)
+        except Exception:
+            return {"result_code": RESULT_DATABASE_UNREADABLE}
         posture = pg_posture.read(raw)
         if posture.get("state") == "UNREADABLE":
             return {"result_code": RESULT_DATABASE_UNREADABLE}
@@ -452,7 +495,6 @@ def run_backup_pass(*, store=None, build_objects=None) -> dict:
             return {"result_code": RESULT_POLICY_INVALID}
         except Exception:
             return {"result_code": RESULT_POLICY_UNREADABLE}
-        now = datetime.datetime.now(datetime.timezone.utc)
         cadence_hours = int(policy["pg_database_cadence_hours"])
         ceiling = posture.get("ceiling_hours")
         if ceiling is not None and ceiling < cadence_hours:
@@ -460,12 +502,18 @@ def run_backup_pass(*, store=None, build_objects=None) -> dict:
         object_hours = int(policy["pg_object_cadence_days"]) * 24
         latest = posture["latest_generation_at"]
         latest_objects = posture["latest_object_set_at"]
+        # M4: run when the deadline would otherwise fall before the next expected wake (the interval
+        # just learned), with a one-minute guard so a duplicate delivery of the same wake never
+        # re-runs.  A generation whose phase sits later than the wake -- a manual at 07:00 vs a
+        # 04:47 cron -- therefore runs at that very wake instead of skipping to the next day, and the
+        # gap between consecutive generations never exceeds the cadence.
         due_database = latest is None or (now - latest).total_seconds() >= (
-            cadence_hours * 3600 - _due_grace_seconds(cadence_hours))
+            cadence_hours * 3600 - interval_seconds + WAKE_MIN_SECONDS)
         due_objects = latest_objects is None or (now - latest_objects).total_seconds() >= (
-            object_hours * 3600 - _due_grace_seconds(object_hours))
+            object_hours * 3600 - interval_seconds + WAKE_MIN_SECONDS)
         if not due_database and not due_objects:
-            return {"result_code": RESULT_NOT_DUE, "database_due": False, "objects_due": False}
+            return {"result_code": RESULT_NOT_DUE, "database_due": False, "objects_due": False,
+                    "interval_seconds": interval_seconds}
         result = _deliver(prune=True, with_objects=due_objects, store=store, build_objects=build_objects)
         action = "SNAPSHOT+OBJECTS" if due_objects else "SNAPSHOT"
         if result["set_error"] is not None:
@@ -500,10 +548,12 @@ def run_backup_pass(*, store=None, build_objects=None) -> dict:
 
 
 __all__ = [
-    "DUE_GRACE_MAX_SECONDS", "LOCK_HOLDER_LOCAL", "LOCK_LEASE_SECONDS", "OBJECTS_ARCHIVE_NAME",
+    "DEFAULT_WAKE_SECONDS", "LOCK_HOLDER_LOCAL", "LOCK_LEASE_SECONDS", "OBJECTS_ARCHIVE_NAME",
     "OBJECTS_ARCHIVE_PREFIX", "PG_SNAPSHOT_DEFAULT_FOLDER", "RESULT_DATABASE_UNREADABLE",
     "RESULT_DELIVERY_INCOMPLETE", "RESULT_NOT_DUE", "RESULT_NOT_POSTGRES", "RESULT_NO_DRIVE", "RESULT_OK",
     "RESULT_POLICY_INVALID", "RESULT_POLICY_UNREADABLE", "RESULT_SKIPPED_BUSY", "RESULT_SNAPSHOT_FAILED",
-    "RESULT_SNAPSHOT_NOT_RECORDED", "RESULT_UPLOAD_FAILED", "active_cloud_account", "backup_lock",
-    "backup_unlock", "cloud_drive_folder_setting", "prune_owned", "run_backup_pass", "send_snapshot",
+    "RESULT_SNAPSHOT_NOT_RECORDED", "RESULT_UPLOAD_FAILED", "SCHEDULE_DDL", "SCHEDULE_INSERT_SQL",
+    "SCHEDULE_SELECT_SQL", "SCHEDULE_UPDATE_SQL", "WAKE_MAX_SECONDS", "WAKE_MIN_SECONDS",
+    "active_cloud_account", "backup_lock", "backup_unlock", "cloud_drive_folder_setting", "note_wake",
+    "prune_owned", "run_backup_pass", "send_snapshot",
 ]

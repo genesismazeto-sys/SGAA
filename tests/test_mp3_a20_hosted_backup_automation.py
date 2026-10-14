@@ -15,6 +15,7 @@ import datetime
 import hashlib
 import json
 import os
+import unittest.mock
 import zipfile
 from types import SimpleNamespace
 
@@ -53,9 +54,10 @@ def front(monkeypatch):
 
 @pytest.fixture
 def env(monkeypatch):
-    """The pass with every boundary scripted; ``_deliver`` and the posture reads are fakes the test sets."""
+    """The pass with every boundary scripted; ``_deliver``, the posture reads and the wake clock are fakes."""
     state = SimpleNamespace(deliveries=[], deliver_result=None, posture=None, raises=None,
-                            unlocks=[], locks=[True], deliver_kwargs=None, policy_error=None)
+                            unlocks=[], locks=[True], deliver_kwargs=None, policy_error=None,
+                            wake_interval=86400)
     monkeypatch.setattr(hosted_backup, "get_db_connection", lambda: _Conn())
 
     def lock(_conn):
@@ -65,6 +67,7 @@ def env(monkeypatch):
     monkeypatch.setattr(hosted_backup, "backup_lock", lock)
     monkeypatch.setattr(hosted_backup, "backup_unlock", lambda _conn, _holder: state.unlocks.append(1))
     monkeypatch.setattr(pg_posture, "read", lambda raw, now=None: state.posture)
+    monkeypatch.setattr(hosted_backup, "note_wake", lambda raw, now: state.wake_interval)
 
     def read_policy(raw, strict=False):
         # M3: the pass reads the policy strictly; the fake reproduces the same contract
@@ -178,6 +181,7 @@ def test_an_unexpected_failure_is_a_500_with_a_fixed_code(front, monkeypatch, ca
 
 
 def test_nothing_due_is_a_no_op_that_never_delivers(env):
+    env.wake_interval = 900  # a 15-minute waker under a 24 h policy: threshold 23 h 45 min
     env.posture = _posture(latest_hours=1, latest_objects_hours=2)
     report = hosted_backup.run_backup_pass()
     assert report["result_code"] == hosted_backup.RESULT_NOT_DUE
@@ -208,34 +212,42 @@ def test_the_object_cadence_alone_still_ships_a_fresh_database_copy(env):
     assert env.deliveries == [{"prune": True, "with_objects": True}]
 
 
-def test_the_due_window_absorbs_platform_jitter_without_skipping_a_day(env):
-    """M4: a 24 h policy with a daily wake that fires up to an hour early still runs the next day."""
+def test_a_wake_runs_when_the_deadline_falls_before_the_next_expected_wake(env):
+    """M4: the decision uses the learned wake interval, not a static window."""
     env.deliver_result = _delivered()
-    env.posture = _posture(latest_hours=23, latest_objects_hours=23)  # inside the window (22.5 h)
-    assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK
-    env.posture = _posture(latest_hours=22, latest_objects_hours=22)  # outside it: no double run
+    env.wake_interval = 6 * 3600  # a 6-hourly waker under a 24 h policy: threshold 18 h
+    env.posture = _posture(latest_hours=17, latest_objects_hours=17)
     assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_NOT_DUE
-    assert hosted_backup._due_grace_seconds(24) == 5400
-    assert hosted_backup._due_grace_seconds(1) == 360
-    assert hosted_backup._due_grace_seconds(168) == 5400
+    env.posture = _posture(latest_hours=19, latest_objects_hours=19)
+    assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK
+    # a daily waker: the deadline (24 h) always falls before the next daily wake, so every wake runs
+    env.wake_interval = 86400
+    env.posture = _posture(latest_hours=1, latest_objects_hours=1)
+    assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK
 
 
 def test_a_47_hour_gap_cannot_happen_under_a_24_hour_policy(env):
-    """M4: wakes firing an hour early on consecutive days keep running (~23 h gaps, never ~47 h)."""
+    """M4: consecutive daily wakes keep running (~23 h gaps, never ~47 h), and a generation whose
+    phase sits later than the wake -- a manual at 07:00 vs a 04:47 cron -- runs at that same wake."""
     env.deliver_result = _delivered()
     env.posture = _posture(latest_hours=None, latest_objects_hours=None)
     assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK
     for hours in (23, 46):  # each wake arrives 1 h before the nominal cadence
         env.posture = _posture(latest_hours=hours, latest_objects_hours=hours)
         assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK
+    # the reviewer's sequence: a manual generation 21 h 47 min before the daily wake
+    env.posture = _posture(latest_hours=21.78, latest_objects_hours=21.78)
+    assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK
 
 
-def test_a_one_hour_policy_runs_near_hourly_and_never_every_wake(env):
-    """M4: the 6-minute window at a 1 h cadence keeps sub-daily runs on cadence, not per wake."""
+def test_a_one_hour_policy_runs_on_cadence_with_a_sub_daily_waker(env):
+    """M4: with a 15-minute waker at a 1 h policy the threshold is 45 min: the run happens at the
+    first wake that would otherwise miss the deadline (~45-60 min), never later."""
     env.deliver_result = _delivered()
-    env.posture = _posture(cadence=1, latest_hours=0.8, latest_objects_hours=1)  # 48 min: not due
+    env.wake_interval = 900
+    env.posture = _posture(cadence=1, latest_hours=0.67, latest_objects_hours=1)  # 40 min: not due
     assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_NOT_DUE
-    env.posture = _posture(cadence=1, latest_hours=0.92, latest_objects_hours=1)  # 55 min: due
+    env.posture = _posture(cadence=1, latest_hours=0.84, latest_objects_hours=1)  # ~50 min: due
     assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK
 
 
@@ -476,6 +488,7 @@ def test_a_partial_delivery_retries_until_complete(monkeypatch, tmp_path):
     calls = _deliver_env(monkeypatch, tmp_path, upload_objects_ok=False)
     monkeypatch.setattr(hosted_backup, "backup_lock", lambda conn: "H")
     monkeypatch.setattr(hosted_backup, "backup_unlock", lambda conn, holder: None)
+    monkeypatch.setattr(hosted_backup, "note_wake", lambda raw, now: hosted_backup.DEFAULT_WAKE_SECONDS)
     monkeypatch.setattr(hosted_backup.pg_posture, "read",
                         lambda raw, now=None: _posture(latest_hours=None, latest_objects_hours=None))
     report = hosted_backup.run_backup_pass(build_objects=_builder(tmp_path))
@@ -986,6 +999,43 @@ def test_the_lock_lease_outlives_the_platform_function_limit():
     assert hosted_backup.LOCK_LEASE_SECONDS >= 2 * 300
 
 
+class _ScheduleRaw:
+    """The minimum psycopg surface ``note_wake`` reads and writes (no server)."""
+
+    def __init__(self):
+        self.row = None
+
+    def transaction(self):
+        import contextlib
+
+        return contextlib.nullcontext()
+
+    def execute(self, sql, params=None):
+        if sql == hosted_backup.SCHEDULE_SELECT_SQL:
+            self._pending = "select"
+        elif sql == hosted_backup.SCHEDULE_INSERT_SQL:
+            self.row = (params[0], params[1])
+        elif sql == hosted_backup.SCHEDULE_UPDATE_SQL:
+            self.row = (params[0], params[1])
+        return self
+
+    def fetchone(self):
+        return self.row if getattr(self, "_pending", None) == "select" else None
+
+
+def test_note_wake_learns_the_interval_and_clamps_it():
+    """M4: the first wake stores the daily floor; later wakes learn the elapsed time (clamped);
+    an elapsed time under a minute is a duplicate delivery and keeps the stored interval."""
+    raw = _ScheduleRaw()
+    t0 = datetime.datetime(2026, 10, 1, 6, 0, tzinfo=datetime.timezone.utc)
+    assert hosted_backup.note_wake(raw, t0) == hosted_backup.DEFAULT_WAKE_SECONDS
+    assert hosted_backup.DEFAULT_WAKE_SECONDS == 86400
+    assert hosted_backup.note_wake(raw, t0 + datetime.timedelta(hours=23)) == 23 * 3600
+    assert hosted_backup.note_wake(raw, t0 + datetime.timedelta(hours=23, seconds=30)) == 23 * 3600
+    assert hosted_backup.note_wake(raw, t0 + datetime.timedelta(days=20)) == hosted_backup.WAKE_MAX_SECONDS
+    assert (hosted_backup.WAKE_MIN_SECONDS, hosted_backup.WAKE_MAX_SECONDS) == (60, 7 * 24 * 3600)
+
+
 @needs_pg
 def test_the_lock_row_is_shared_with_the_manual_route_and_never_sticks(production):
     """M2: a held, unexpired lease refuses the pass (SKIPPED_BUSY) and the manual button (busy
@@ -1090,6 +1140,83 @@ def test_a_manual_partial_never_satisfies_the_scheduled_cadence(production, monk
         report = hosted_backup.run_backup_pass(store=env.store, build_objects=object_sets.build_objects_archive)
     assert report["result_code"] == hosted_backup.RESULT_OK
     assert _posture_of(env)["latest_generation_at"] is not None
+
+
+def _clock_at(day, hour, minute):
+    """A fixed UTC clock for the wake/snapshot shims (October 2026)."""
+    real = hosted_backup.datetime
+
+    class _Now(real.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return real.datetime(2026, 10, day, hour, minute, 0, tzinfo=real.timezone.utc)
+
+    shim = type("_Shim", (), {"timedelta": real.timedelta, "timezone": real.timezone, "datetime": _Now})
+    return shim, _Now
+
+
+def _run_at(env, day, hour, minute, call):
+    from app.backup import pg_snapshot
+
+    shim, now_cls = _clock_at(day, hour, minute)
+    with unittest.mock.patch.object(hosted_backup, "datetime", shim), \
+            unittest.mock.patch.object(pg_snapshot, "datetime", now_cls):
+        with env.app.app_context():
+            return call()
+
+
+@needs_pg
+def test_the_reviewer_sequence_a_manual_at_0700_then_the_0447_wake_runs(production):
+    """M4 discriminating lane: Day1 06:00 scheduled, Day1 07:00 complete manual, Day2 04:47 wake.
+    At 692cedd this wake was NOT_DUE and the next ran Day3 04:47 -- a 45 h 47 min gap.  With the
+    deadline rule (the deadline falls before the next expected wake) it runs at Day2 04:47."""
+    env = production
+    _set_policy(env, database_cadence_hours=24, object_cadence_days=7, retention_generations=2,
+                restore_test_days=30)
+    first = _run_at(env, 1, 6, 0,
+                    lambda: hosted_backup.run_backup_pass(store=env.store,
+                                                          build_objects=object_sets.build_objects_archive))
+    assert first["result_code"] == hosted_backup.RESULT_OK
+    manual = _run_at(env, 1, 7, 0, lambda: hosted_backup.send_snapshot())
+    assert manual[1] == ["google"]  # the complete manual generation
+    posture = _posture_of(env)
+    assert posture["latest_generation_at"].strftime("%Y-%m-%dT%H:%M:%SZ") == "2026-10-01T07:00:00Z"
+    day2 = _run_at(env, 2, 4, 47,
+                   lambda: hosted_backup.run_backup_pass(store=env.store,
+                                                         build_objects=object_sets.build_objects_archive))
+    assert day2["result_code"] == hosted_backup.RESULT_OK  # THE discriminator (was NOT_DUE)
+    posture = _posture_of(env)
+    assert posture["latest_generation_at"].strftime("%Y-%m-%dT%H:%M:%SZ") == "2026-10-02T04:47:00Z"
+
+
+@needs_pg
+def test_the_wake_interval_is_learned_on_real_postgresql(production):
+    """M4: the schedule row stores the daily floor, learns the observed interval, and keeps it on a
+    duplicate delivery."""
+    env = production
+    _set_policy(env, database_cadence_hours=24, object_cadence_days=7, retention_generations=2,
+                restore_test_days=30)
+
+    def schedule():
+        conn = raw_connection(env.url, autocommit=True)
+        try:
+            return conn.execute("SELECT last_interval_seconds FROM sgaa_ops.backup_schedule"
+                                " WHERE schedule_key = 1").fetchone()[0]
+        finally:
+            conn.close()
+
+    first = _run_at(env, 1, 6, 0,
+                    lambda: hosted_backup.run_backup_pass(store=env.store,
+                                                          build_objects=object_sets.build_objects_archive))
+    assert first["result_code"] == hosted_backup.RESULT_OK and schedule() == hosted_backup.DEFAULT_WAKE_SECONDS
+    second = _run_at(env, 2, 5, 0,
+                     lambda: hosted_backup.run_backup_pass(store=env.store,
+                                                           build_objects=object_sets.build_objects_archive))
+    assert second["result_code"] == hosted_backup.RESULT_OK and schedule() == 23 * 3600
+    duplicate = _run_at(env, 2, 5, 0,  # 30 s later: a duplicate delivery, not an interval
+                        lambda: hosted_backup.run_backup_pass(store=env.store,
+                                                              build_objects=object_sets.build_objects_archive))
+    assert duplicate["result_code"] == hosted_backup.RESULT_NOT_DUE and schedule() == 23 * 3600
 
 
 @needs_pg
