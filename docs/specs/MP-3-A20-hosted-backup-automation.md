@@ -1,6 +1,7 @@
 # SPEC MP-3 A20 — Automated hosted backup execution
 
-Status: FROZEN 2026-10-13 — **submitted for confirmation; substantive implementation waits for it.**
+Status: FROZEN 2026-10-13; implementation deployed to PROD 2026-10-15.
+S5 operational observation recorded below; phase closure awaits independently scheduled due-wake evidence. The prior submission line was historical and is superseded by this status.
 Charter (user decision, 2026-10-13, verbatim): "Database and storage backups must execute
 automatically according to the frequencies configured in the SGAA administration interface, without
 recurring manual intervention." Follow-up decisions of the same day: the cloud-native scheduler is the
@@ -212,7 +213,7 @@ cross-family R3 review from a packet the executor prepares; the deploy waits for
 | 2 | Endpoint, due-ness, lock, snapshot path | `app/storage/scheduler.py`, `hosted_backup.py`, `pg_posture.py`, tests | unit + real-PG + served lanes | DONE |
 | 3 | Sealed object set, archive, download, prune | `hosted_backup.py`, `object_sets.py`, `pg_snapshot.py`, view download, tests | zip round-trip + restore lane | DONE |
 | 4 | Wake wiring, docs, full suite, review | `vercel.json`, runbook, HOSTED_RUNTIME, review packet | full suite (baseline-clean) + review verdict | DONE |
-| 5 | GATED production deploy + observation | deployment + user enablement + page | first automatic generation observed; report | BLOCKED (gates) |
+| 5 | GATED production deploy + observation | deployment + user enablement + page | first due hosted generation delivered; separately verify unattended due cron and close report | IN PROD — TRIGGERED PASS; unattended due pending |
 
 ## 13. Acceptance criteria
 
@@ -448,3 +449,38 @@ errors were the missing `sgaa_qual` admin database of the disposable cluster —
 manifest this run (xlwt collection errors, `TestSentinelSurvival`, the backup-package test, the
 non-hermetic CSRF node) is not claimed green beyond this run's result.  Remaining: the gated
 production slice (S5) and the `PROJECT_STATE.md` reconciliation at close.
+
+## 16. Production S5 observation (2026-10-15; after acceptance and GF1)
+
+The frozen design and prior R3 findings remain historical; this section records the
+operational evidence rather than rewriting the original assumptions in §2.
+
+- Exact published code: `ffa274951fa0c248f895ed7ad9b0470188f0c5de`
+  (non-empty `CRON_SECRET`; Bearer authentication retained); Vercel deployment:
+  `dpl_Att7FUkPuzyj63yk12kE3Zp79L3E` at `https://sgaa.vercel.app`.
+  Served smoke 11/11 PASS. Post-PONR governed forward fix; C13 remains open to C14.
+- Supabase PROD `uckadhcwfknklmdktuyi`: `pg_cron` and `pg_net` enabled;
+  `sgaa-backup` active with schedule `*/15 * * * *`; authorization uses
+  existing `sgaa_scheduler_bearer` in Vault. Scheduled 22:00 UTC wake returned
+  HTTP 200, `NOT_DUE`, no authentication failure.
+- A20 due path: a **one-time operator-initiated pg_net trigger**, after temporarily
+  setting the database policy to 1 h, returned HTTP 200, `result_code=OK`,
+  `action=SNAPSHOT`, and `sent=[google,onedrive]` with no failed uploads or CSV exports.
+  PROD `sgaa_ops.backup_records` holds a `HOSTED_RUN`, `kind=SNAPSHOT`,
+  `complete=true` at 2026-10-15T22:05:08Z: 2 database file references and
+  2 register/CSV file references (one per connected drive).
+- The temporary policy rows were removed and verified absent. Effective defaults:
+  database 24 h, objects 7 days, retention 2, restore drill interval 30 days.
+  No new code deployment, secret rotation or service was necessary for this pass.
+- **Evidence boundary:** this due run was explicitly triggered, not independently
+  scheduled at a due clock. The next **unattended, due** wake and its complete
+  delivery receipt must still be observed before final S5 close. The object-set
+  cadence was not due in this run, so no automatic PROD object archive was claimed.
+  The previously recorded real restoration drill dated 2026-10-11T21:05:50Z
+  verifies 39 tables and 2 objects; it predates the A20-generated snapshot and
+  is not proof of restoration of this particular generation.
+- The separate governed Layer-2 cadence, offline copy and C13–C14 obligations
+  continue independently until C14. MP-4 is not started before C14.
+
+Closure/report status: **OPEN for the independent scheduled due-wake check**;
+the runtime and the first policy-driven hosted backup are verified.
