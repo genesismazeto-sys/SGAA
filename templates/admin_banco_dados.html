@@ -626,6 +626,8 @@
       <div class="db-meta">
         <div data-protection-database-status="{{ protection.database_status.code }}"><strong>Último backup:</strong> <span class="badge status-pill {{ protection.database_status.css }}">{{ protection.database_status.label }}</span></div>
         <div data-protection-validation="{{ protection.validation_status.code }}"><strong>Restauração de teste:</strong> <span class="badge status-pill {{ protection.validation_status.css }}">{{ 'Validada' if protection.validation_status.code == 'CURRENT' else protection.validation_status.label }}</span></div>
+        {# MP-3 A20/A8: the declared-density verification -- the operator checks whether the wake sources fire at the declared rhythm #}
+        <div data-protection-wake-rhythm="{{ protection.wake_rhythm.code }}"{% if protection.wake_rhythm.detail %} title="{{ protection.wake_rhythm.detail }}"{% endif %}><strong>Ritmo do agendador:</strong> <span class="badge status-pill {{ protection.wake_rhythm.css }}">{{ protection.wake_rhythm.label }}</span></div>
       </div>
       {% endif %}
     </article>

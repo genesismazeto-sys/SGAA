@@ -270,26 +270,33 @@ Banco de dados page (database cadence 1–24 h, object cadence 1–7 days) and t
 database itself holds. The policy is read strictly: an unreadable or partial stored policy
 refuses the pass (`POLICY_UNREADABLE` / `POLICY_INVALID`) instead of silently running on
 defaults; the defaults apply only while the policy was never saved (an empty settings table).
-The pass runs on the deadline rule: it records the wake, appends its spacing to a retained window
-of the last eight inter-wake spacings (the platform's documented daily floor when unknown; clamped
-to 1 minute–7 days; a sub-minute elapsed is a duplicate delivery and adds nothing), then runs when
-the deadline could not be met by the next wake at the window's **maximum** (`age ≥ cadence −
-wake_max`) — an upper bound no interleaving of the trigger sources can beat, so a short gap between
-the daily cron and the sub-daily trigger can never inflate the threshold and skip a wake; the
-1-minute conjunct only suppresses a duplicate delivery of the same wake. A generation whose phase
+The pass runs on the declared-density rule: it records the wake, appends its spacing to a retained
+window of the last eight inter-wake spacings (the platform's documented daily floor when unknown;
+clamped to 1 minute–7 days; a sub-minute elapsed is a duplicate delivery and adds nothing), then
+runs when the deadline could not be met by the next wake at the **declared density** — a quarter of
+the cadence, a contract constant, never an observation (`age ≥ cadence − cadence/4 − 5 min`); any
+retained spacing above the declared bound plus the execution tolerance marks the arrangement
+degraded, and the pass then runs at every wake until a full clean window re-establishes the density
+— history can only make the schedule run more, never less, so a temporary dense source cannot shrink
+the margin and initialization has no warm-up dependence. A generation whose phase
 sits later than the wake — a manual
 backup at 07:00 against a 04:47 cron — therefore runs at that very wake instead of skipping to the
-next day; consecutive daily wakes keep running, and a 1 h cadence with a 15-minute waker runs
-45–60 min apart (a waker at half the cadence runs at every wake — still within the cadence). The
-protection gap's bound depends on the waker's density: with a waker at least as dense as the
-cadence the gap stays within the cadence for any interleaving whenever every spacing is at most the
-demonstrated maximum — the residual is a new record spacing (its delta; seconds at the platform's
-precision), and the design adds no slack — but a lone daily cron cannot compress its own spacing — under
+next day; a 1 h cadence with a 15-minute waker runs 45–60 min apart. The
+protection gap's bound depends on the waker's density: with the declared density honored (every
+spacing at most a quarter of the cadence plus the execution tolerance) the gap stays within the
+cadence — the design adds no slack — while a sparser source degrades to run-at-every-wake (the gap
+equals the spacing, met whenever the spacing is within the cadence); a lone daily cron cannot
+compress its own spacing — under
 Hobby's in-hour precision two consecutive wakes can be 24 h 59 min apart (04:00 then 04:59) and
-both run, so the daily-cron-alone gap is the spacing itself. The wake ladder covers the bound:
+both run, so the daily-cron-alone gap is the spacing itself; an abrupt loss of a source costs at
+most one oversized gap before the detector flags it (the wakes are not there). The wake ladder covers
+the bound:
 the descriptor's daily cron is the zero-cost floor, and the free Supabase Cron with `pg_net` —
 the trigger the phase design already names, its bearer held in Supabase Vault — supplies the
-sub-daily wakes; every wake uses the same bearer. Every wake is recorded with its completeness: only a wake
+sub-daily wakes; every wake uses the same bearer. The declared density is verifiable where the
+operator works: the protection card's "Ritmo do agendador" line shows whether the retained spacings
+are within the declared bound (Sem dados / Em dia / Degradado), and the endpoint's value-free
+responses carry `wake_degraded`. Every wake is recorded with its completeness: only a wake
 that reached **every** connected drive with the snapshot, the registers and (when due) the
 sealed object set advances the protection clock and the page's status; a partial delivery is
 recorded as incomplete (it owns the files that did land, so retention bounds them), answers

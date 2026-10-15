@@ -68,20 +68,30 @@ LOCK_ACQUIRE_SQL = (
 )
 LOCK_RELEASE_SQL = "DELETE FROM sgaa_ops.backup_lock WHERE lock_key = 1 AND holder = %s"
 
-#: A7 (maximum-demonstrated-spacing scheduling): the pass runs when the deadline could not be met
-#: by the next wake at the MAXIMUM inter-wake spacing the topology has demonstrated.  The
-#: last-interval estimate was unreliable when trigger sources interleave (a 1 h 13 min gap between
-#: a daily cron and a sub-daily trigger inflated the threshold and skipped the wakes that should
-#: have met the deadline); a maximum over a retained window cannot be beaten by any interleaving --
-#: the union's spacings are bounded by the densest source's period, which the window captures.
-DEFAULT_WAKE_SECONDS = 24 * 60 * 60  # the platform's documented daily floor (the first wake)
+#: A8 (declared-density scheduling): the margin is a CONTRACT CONSTANT, never an observation.  The
+#: approved wake ladder declares that the wake sources fire at least every ``cadence / WAKE_DENSITY``
+#: (a quarter of the cadence -- the SPEC's recommendation), and the pass runs when the deadline
+#: could not be met by the next wake at that declared density.  The retained window is demoted to a
+#: conservative detector: any spacing above the declared bound plus the execution tolerance marks
+#: the arrangement degraded, and the pass runs at every wake until a full window of clean spacings
+#: re-establishes it -- history can only make the schedule run MORE, never less.  The guarantee:
+#: ``gap <= cadence`` whenever every spacing is within the declared bound; degraded, the gap equals
+#: the spacing (met iff the spacing <= cadence -- the necessary condition of any schedule).  An
+#: abrupt loss of a wake source can still produce one oversized gap before detection: the wakes are
+#: not there (the documented infrastructure limitation).
+DEFAULT_WAKE_SECONDS = 24 * 60 * 60  # the first wake's stored placeholder
 #: Under a minute the elapsed time is a duplicate delivery, not a spacing; the same minute guards
 #: the decision so a duplicated wake never re-runs a fresh generation.
 WAKE_MIN_SECONDS = 60
 WAKE_MAX_SECONDS = 7 * 24 * 60 * 60
-#: The retained window of inter-wake spacings: long enough to hold a full daily cycle of a mixed
-#: daily + sub-daily topology, so a transition (a source enabled or disabled) rolls out within it.
+#: The retained window of inter-wake spacings: the degradation detector's evidence.
 WAKE_HISTORY = 8
+#: The declared wake density (A8): every source spacing must be at most ``cadence / WAKE_DENSITY``.
+WAKE_DENSITY = 4
+#: The platform's execution tolerance on a single spacing (the pass's own runtime and the trigger's
+#: minute granularity): a spacing counts as a density violation only above bound + this, and the
+#: deadline test keeps the same tolerance so the guarantee stays within the cadence.
+WAKE_DENSITY_TOLERANCE = 5 * 60
 SCHEDULE_DDL = (
     *pg_posture.SCHEMA_DDL,
     "CREATE TABLE IF NOT EXISTS sgaa_ops.backup_schedule ("
@@ -443,7 +453,7 @@ def prune_owned(conn, raw, sent, folders, keep, *, registers_skip):
 
 
 def _next_history(history, interval) -> list:
-    """The retained window of inter-wake spacings after one more fire (A7).
+    """The retained window of inter-wake spacings after one more fire (A8).
 
     A sub-minute interval (``None`` here) is a duplicate delivery, not a spacing: it adds nothing.
     """
@@ -452,35 +462,39 @@ def _next_history(history, interval) -> list:
     return ([int(value) for value in history] + [int(interval)])[-WAKE_HISTORY:]
 
 
-def _wake_max(history) -> int:
-    """The maximum demonstrated inter-wake spacing -- an upper bound on the next one that no
-    interleaving of the trigger sources can beat (the platform's daily floor when none yet)."""
-    values = [int(value) for value in history]
-    return max(values) if values else DEFAULT_WAKE_SECONDS
+def _degraded(history, bound_seconds) -> bool:
+    """The arrangement is degraded when the retained window holds any spacing above the declared
+    bound plus the platform's execution tolerance (A8) -- the conservative direction only."""
+    return any(int(value) > bound_seconds + WAKE_DENSITY_TOLERANCE for value in history)
 
 
-def _due_seconds(age, cadence_seconds, wake_max_seconds) -> bool:
-    """A wake runs when the deadline could not be met by the next wake at the maximum demonstrated
-    spacing, and this wake is not a sub-minute duplicate of the last generation (A7)."""
-    return age >= cadence_seconds - wake_max_seconds and age >= WAKE_MIN_SECONDS
+def _due_seconds(age, cadence_seconds, degraded) -> bool:
+    """A wake runs when the deadline could not be met by the next wake at the declared density
+    (`age >= cadence - cadence/4 - tolerance`), or at every wake while the density is degraded; a
+    sub-minute age never runs (a duplicate delivery of the same wake).  A8."""
+    if age < WAKE_MIN_SECONDS:
+        return False
+    if degraded:
+        return True
+    return age >= cadence_seconds - cadence_seconds // WAKE_DENSITY - WAKE_DENSITY_TOLERANCE
 
 
-def note_wake(raw, now) -> int:
-    """Record this wake and return the maximum demonstrated inter-wake spacing (A7 scheduling).
+def note_wake(raw, now) -> list:
+    """Record this wake and return the retained window of inter-wake spacings (A8 scheduling).
 
     One transaction: the wake's spacing (the just-elapsed time, clamped to [1 min, 7 days]) joins
-    the retained window; a sub-minute elapsed is a duplicate delivery and adds nothing.  The
-    decision uses the window's MAXIMUM -- an upper bound on the next spacing that no interleaving of
-    the trigger sources can beat -- so a short gap between a daily cron and a sub-daily trigger can
-    never inflate the threshold and skip a wake.  The first wake stores the platform's daily floor.
-    Runs under the backup lock, so the row has a single writer.
+    the retained window; a sub-minute elapsed is a duplicate delivery and adds nothing.  The window
+    is the degradation detector's evidence -- the DECISION never infers a margin from it (the margin
+    is the declared density), so history can only make the schedule run more, never less.  The
+    first wake stores the platform's daily floor as a placeholder.  Runs under the backup lock, so
+    the row has a single writer.
     """
     pg_posture.run_ddl(raw, SCHEDULE_DDL)
     with raw.transaction():
         row = raw.execute(SCHEDULE_SELECT_SQL).fetchone()
         if row is None:
             raw.execute(SCHEDULE_INSERT_SQL, (now, DEFAULT_WAKE_SECONDS, []))
-            return DEFAULT_WAKE_SECONDS
+            return []
         last, stored, history = row[0], int(row[1]), list(row[2] or [])
         elapsed = (now - last).total_seconds()
         interval = min(max(int(elapsed), WAKE_MIN_SECONDS), WAKE_MAX_SECONDS) \
@@ -488,7 +502,25 @@ def note_wake(raw, now) -> int:
         history = _next_history(history, interval)
         raw.execute(SCHEDULE_UPDATE_SQL,
                     (now, interval if interval is not None else stored, history))
-        return _wake_max(history)
+        return history
+
+
+def wake_rhythm(raw, cadence_hours) -> dict:
+    """The declared-density verification (A8): the retained wake spacings against the declared
+    bound (a quarter of the cadence).  ``known=False`` when the schedule was never recorded or
+    cannot be read -- never an error, never a page failure."""
+    try:
+        with raw.transaction():
+            row = raw.execute(SCHEDULE_SELECT_SQL).fetchone()
+    except Exception:
+        return {"known": False}
+    if row is None:
+        return {"known": False}
+    history = [int(value) for value in (row[2] or [])]
+    bound = int(cadence_hours) * 3600 // WAKE_DENSITY
+    return {"known": True, "bound_seconds": bound,
+            "max_spacing_seconds": max(history) if history else None,
+            "degraded": _degraded(history, bound)}
 
 
 def run_backup_pass(*, store=None, build_objects=None) -> dict:
@@ -496,9 +528,11 @@ def run_backup_pass(*, store=None, build_objects=None) -> dict:
 
     The wake interval is not contract; every wake reads the administrator's policy strictly (M3:
     an unreadable or unverifiable policy refuses the run, never a substituted default) and the
-    receipts, records itself and runs on the deadline rule (M4/A4, A6, A7: run when the deadline
-    could not be met by the next wake at the maximum demonstrated inter-wake spacing,
-    `age >= cadence - wake_max`; the residual is a new record spacing).  A receipt is only
+    receipts, records itself and runs on the declared-density rule (M4/A4, A6, A8: the margin is the
+    declared wake density -- a quarter of the cadence -- never an observation; the retained window
+    only detects a degraded arrangement, in which case the pass runs at every wake until a full
+    window of clean spacings re-establishes the density; the guarantee is `gap <= cadence` whenever
+    every spacing is within the declared bound).  A receipt is only
     published when every connected drive received every required artifact (M1).  ``build_objects``
     is the background object-set builder the scheduler service injects (``app.backup.object_sets``).
     Returns a value-free dict with ``result_code`` (``OK``, ``NOT_DUE``, ``SKIPPED_BUSY``,
@@ -515,10 +549,10 @@ def run_backup_pass(*, store=None, build_objects=None) -> dict:
     try:
         now = datetime.datetime.now(datetime.timezone.utc)
         try:
-            # A7: record this wake and read the maximum demonstrated inter-wake spacing; the
-            # decision needs it.  A failure here refuses the pass (nothing runs on a schedule it
+            # A8: record this wake and read the retained spacings; the density detector and the
+            # decision need them.  A failure here refuses the pass (nothing runs on a schedule it
             # cannot reason about).
-            wake_max_seconds = note_wake(raw, now)
+            history = note_wake(raw, now)
         except Exception:
             return {"result_code": RESULT_DATABASE_UNREADABLE}
         posture = pg_posture.read(raw)
@@ -540,31 +574,36 @@ def run_backup_pass(*, store=None, build_objects=None) -> dict:
         object_hours = int(policy["pg_object_cadence_days"]) * 24
         latest = posture["latest_generation_at"]
         latest_objects = posture["latest_object_set_at"]
-        # A7: run when the deadline could not be met by the next wake at the maximum demonstrated
-        # spacing (`age >= cadence - wake_max`) -- an upper bound no interleaving of the trigger
-        # sources can beat, so a short gap between a daily cron and a sub-daily trigger cannot skip
-        # a wake and stretch the gap; the residual is a new record spacing (its delta).  The
-        # one-minute conjunct only suppresses a duplicate delivery of the same wake (a sub-minute
-        # age); it never delays a legitimate run.
+        # A8: the margin is the DECLARED density (a quarter of the cadence), never an observation;
+        # the retained window only detects a degraded arrangement (a spacing above the declared
+        # bound plus the execution tolerance), in which case the pass runs at every wake until a
+        # full window of clean spacings re-establishes the density.  The guarantee: `gap <= cadence`
+        # whenever every spacing is within the declared bound; degraded, the gap equals the spacing
+        # (met iff the spacing <= cadence -- the necessary condition of any schedule).  The
+        # one-minute conjunct only suppresses a duplicate delivery of the same wake.
+        degraded_database = _degraded(history, cadence_hours * 3600 // WAKE_DENSITY)
+        degraded_objects = _degraded(history, object_hours * 3600 // WAKE_DENSITY)
         age_database = None if latest is None else (now - latest).total_seconds()
         age_objects = None if latest_objects is None else (now - latest_objects).total_seconds()
         due_database = age_database is None or _due_seconds(age_database, cadence_hours * 3600,
-                                                            wake_max_seconds)
+                                                            degraded_database)
         due_objects = age_objects is None or _due_seconds(age_objects, object_hours * 3600,
-                                                          wake_max_seconds)
+                                                          degraded_objects)
         if not due_database and not due_objects:
             return {"result_code": RESULT_NOT_DUE, "database_due": False, "objects_due": False,
-                    "wake_max_seconds": wake_max_seconds}
+                    "wake_degraded": degraded_database}
         result = _deliver(prune=True, with_objects=due_objects, store=store, build_objects=build_objects)
         action = "SNAPSHOT+OBJECTS" if due_objects else "SNAPSHOT"
         if result["set_error"] is not None:
             return {"result_code": result["set_error"], "database_due": due_database,
-                    "objects_due": due_objects, "action": "NONE"}
+                    "objects_due": due_objects, "action": "NONE", "wake_degraded": degraded_database}
         if result["sent"] is None:
-            return {"result_code": RESULT_SNAPSHOT_FAILED, "action": "NONE"}
+            return {"result_code": RESULT_SNAPSHOT_FAILED, "action": "NONE",
+                    "wake_degraded": degraded_database}
         if not result["sent"]:
             return {"result_code": RESULT_NO_DRIVE, "action": "NONE",
-                    "database_due": due_database, "objects_due": due_objects}
+                    "database_due": due_database, "objects_due": due_objects,
+                    "wake_degraded": degraded_database}
         if not result["delivery_complete"]:
             # M1: some connected drive is missing a required artifact.  The receipt was recorded with
             # its completeness marker (it owns its files), but the protection clock, the due dates and
@@ -574,15 +613,18 @@ def run_backup_pass(*, store=None, build_objects=None) -> dict:
                     "database_due": due_database, "objects_due": due_objects,
                     "sent": list(result["sent"]), "failed": list(result["failed"]),
                     "registers_failed": list(result["registers_failed"]),
-                    "objects_failed": list(result["objects_failed"])}
+                    "objects_failed": list(result["objects_failed"]),
+                    "wake_degraded": degraded_database}
         report = {
             "result_code": RESULT_OK, "database_due": due_database, "objects_due": due_objects,
             "action": action, "sent": list(result["sent"]), "failed": list(result["failed"]),
             "registers_failed": list(result["registers_failed"]), "objects_failed": list(result["objects_failed"]),
+            "wake_degraded": degraded_database,
         }
         if result["manifest"] is None:
             return {"result_code": RESULT_SNAPSHOT_NOT_RECORDED, "action": action,
-                    "sent": report["sent"], "failed": report["failed"]}
+                    "sent": report["sent"], "failed": report["failed"],
+                    "wake_degraded": degraded_database}
         return report
     finally:
         backup_unlock(conn, holder)
@@ -594,7 +636,8 @@ __all__ = [
     "RESULT_DELIVERY_INCOMPLETE", "RESULT_NOT_DUE", "RESULT_NOT_POSTGRES", "RESULT_NO_DRIVE", "RESULT_OK",
     "RESULT_POLICY_INVALID", "RESULT_POLICY_UNREADABLE", "RESULT_SKIPPED_BUSY", "RESULT_SNAPSHOT_FAILED",
     "RESULT_SNAPSHOT_NOT_RECORDED", "RESULT_UPLOAD_FAILED", "SCHEDULE_DDL", "SCHEDULE_INSERT_SQL",
-    "SCHEDULE_SELECT_SQL", "SCHEDULE_UPDATE_SQL", "WAKE_HISTORY", "WAKE_MAX_SECONDS", "WAKE_MIN_SECONDS",
+    "SCHEDULE_SELECT_SQL", "SCHEDULE_UPDATE_SQL", "WAKE_DENSITY", "WAKE_DENSITY_TOLERANCE",
+    "WAKE_HISTORY", "WAKE_MAX_SECONDS", "WAKE_MIN_SECONDS",
     "active_cloud_account", "backup_lock", "backup_unlock", "cloud_drive_folder_setting", "note_wake",
-    "prune_owned", "run_backup_pass", "send_snapshot",
+    "prune_owned", "run_backup_pass", "send_snapshot", "wake_rhythm",
 ]

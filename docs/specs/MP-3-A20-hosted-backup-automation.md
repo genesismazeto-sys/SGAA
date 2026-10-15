@@ -65,7 +65,7 @@ After confirmation and the gated deploy, without any operator workstation or man
 | # | Requirement | Mechanism | Evidence lane (later slices) | Residual / boundary |
 |---|---|---|---|---|
 | 1 | Complete, restorable DB and object backups, independent off-platform copies | Snapshot carries every `MIGRATE_EXACT` table (registers, images, `storage_objects` rows), proven table-by-table at creation; the sealed object set carries every object's bytes (dedup by SHA-256); both go to every connected drive (user-owned accounts, independent of Vercel/Supabase); restore = hosted "Recuperar" or Path-B for the DB, unzip → `verify-backup` → `restore-objects` for the bytes | real-PG lanes: snapshot → Path-B fingerprint equality; set zip round-trip → verify → restore into scratch; served lane shows the generation | Target-side classes (settings, OAuth, schema metadata, ephemeral) are kept/recreated by the installation by policy, not carried in the snapshot; provider accounts are user-managed |
-| 2 | Configured cadences incl. sub-daily on free plans | The endpoint is cadence-agnostic and deadline-driven (M4/A4, A6, A7): every wake records itself, appends its spacing to a retained window (daily floor when unknown, clamped, sub-minute = duplicate), and runs when the deadline could not be met by the next wake at the window's **maximum** (`age ≥ cadence − wake_max`) — so a generation whose phase sits later than the wake (a manual at 07:00 vs a 04:47 cron) runs at that same wake, a short interleaved gap between the daily cron and the sub-daily trigger can never inflate the threshold (the R3 round 3 finding), the 47 h gap stays impossible, a delayed wake can never stretch the gap by a design guard, and sub-daily cadences run at the last wake before the deadline (never per wake for a waker sparser than half the cadence, never past it); wakes come from the descriptor cron (daily floor, zero cost) plus Supabase Cron + pg_net (free; bearer in Vault; user-enabled) for sub-daily | due/no-op/allow sequences with a simulated clock, the reviewer's manual→wake and interleaved-source sequences as discriminating real-PG lanes, the interval-learning and duplicate lanes, the edge-wake lane (A6), the adversarial topology sweep (A7); the daily-only spacing and ladder bound lanes (A5); the trigger firing proven on the platform lane before it is relied upon | The wake interval itself is not contract; the observed spacings are a record, not a setting; the RPO bound depends on the waker's density (A5/A6/A7) — the ladder of D4 bounds it (cadence for any interleaving; the residual is a new record spacing), the lone daily cron's spacing (cadence + in-hour precision) is documented, never claimed as the guarantee |
+| 2 | Configured cadences incl. sub-daily on free plans | The endpoint is cadence-agnostic and density-driven (M4/A4, A6, A8): every wake records itself, appends its spacing to a retained window (daily floor when unknown, clamped, sub-minute = duplicate), and runs when the deadline could not be met by the next wake at the **declared density** — a quarter of the cadence, a contract constant, never an observation (`age ≥ cadence − cadence/4 − tolerance`); any retained spacing above the declared bound plus the execution tolerance marks the arrangement degraded and every wake then runs until a full clean window re-establishes the density (history can only make the schedule run more, never less) — so a temporary dense source cannot shrink the margin (the R3 round 4 finding 1), initialization has no warm-up dependence (finding 2), a generation whose phase sits later than the wake (a manual at 07:00 vs a 04:47 cron) runs at that same wake, and sub-daily cadences run near the cadence (never per wake when the density holds); wakes come from the descriptor cron (daily floor, zero cost) plus Supabase Cron + pg_net (free; bearer in Vault; user-enabled) for sub-daily | due/no-op/allow sequences with a simulated clock, the reviewer's manual→wake, interleaved-source and round-4 sequences as discriminating real-PG lanes, the window/degradation and duplicate lanes, the adversarial topology sweep and the abrupt-loss lane (A8); the daily-only spacing and ladder lanes (A5); the trigger firing proven on the platform lane before it is relied upon | The wake interval itself is not contract; the observed spacings are a record (the degradation detector's evidence), never the margin; the guarantee is `gap ≤ cadence` whenever every spacing is within the declared density — the degraded mode runs at every wake (the gap equals the spacing, met iff the spacing ≤ cadence); an abrupt source loss costs at most one oversized gap (detected, visible, documented); the lone daily cron's spacing is documented, never claimed as the guarantee |
 | 3 | Hosting limits, concurrency, idempotency, failure recovery | Runs inside the existing scheduler function (`maxDuration` 300, scratch `/tmp`); object set pre-checks (object count, manifest size, free space) refuse loudly; a lock ROW with a lease in `sgaa_ops.backup_lock` (M2/A3) — taken and released in transactions committed on their own (visible through the transaction pooler and past any ambient request transaction), expired leases stolen, holder-checked release, never a false-busy state — shared by the pass, the manual button and the restore; control DDL retries once against concurrent-first-use catalog races; receipts insert `ON CONFLICT DO NOTHING`; uploads never replace; unique identity+token names; every receipt records its completeness and only complete wakes advance the clock (M1/A3); a killed run retries next wake; partial receipts own their files so retention bounds every drive | overflow refusal; duplicate-wake no-duplicate lane; busy-lock lane; lease-steal, holder-safe release and cross-backend visibility lanes; partial-delivery/retry and mixed-history lanes; killed-run recovery lane | Object sets beyond the function envelope fail visibly; batching deferred (§15) |
 | 4 | Security and credential boundaries | New path on the existing bearer-authenticated scheduler front: no session, no CSRF, fail-closed 404/401/405; no secret read or written; value-free bodies and logs; backups contain personal data and travel only to the user's drives over the existing TLS clients; P6/§12 custody untouched | extended auth-negative and leak-audit lanes; guard test: no new secret, no web route/RBAC/CSRF inventory change | none |
 | 5 | C13–C14 governed obligations and ledger invariants | The hosted layer writes only `sgaa_ops` receipts (as the manual button does) and never `sgaa_cutover` or a business table; it claims no ledger provenance and no C14 cadence satisfaction — through C14 the operator governed cadence remains the obligation; after C14 (where the ledger records no generation) it is the product's primary protection | guard lane: no cutover/business writes; ledger lanes unaffected; C14 gate tests unchanged | After C14 the operator pipeline remains the recovery asset of record (D6) |
@@ -80,13 +80,14 @@ After confirmation and the gated deploy, without any operator workstation or man
 - S2 — scheduler job: `hosted_backup.run_backup_pass()`; the scheduler front gains
   `GET|POST /internal/scheduler/backup` (thin dispatch, same auth posture as the mirror). Due-ness from
   one posture read (identity-filtered, intact receipts only) against a strictly read policy (M3) and a
-  **deadline rule** (M4/A4, A6, A7): the wake records itself, appends its spacing to a retained
+  **deadline rule** (M4/A4, A6, A8): the wake records itself, appends its spacing to a retained
   window (the platform's daily floor when unknown, clamped to [1 min, 7 days], a sub-minute elapsed
   being a duplicate delivery and adding nothing), and runs when the deadline could not be met by the
-  next wake at the window's **maximum** (`age ≥ cadence − wake_max`) — an upper bound no interleaving
-  of the trigger sources can beat, so a short gap between a daily cron and a sub-daily trigger can
-  never inflate the threshold and skip a wake; the 1-minute conjunct only suppresses a duplicate
-  delivery. Actions: objects due →
+  next wake at the **declared density** — a quarter of the cadence, a contract constant, never an
+  observation (`age ≥ cadence − cadence/4 − tolerance`); any retained spacing above the declared
+  bound plus the execution tolerance marks the arrangement degraded and every wake then runs until a
+  full clean window re-establishes the density (history can only make the schedule run more, never
+  less); the 1-minute conjunct only suppresses a duplicate delivery. Actions: objects due →
   fresh DB snapshot + sealed object set in one receipt; DB due only → snapshot; neither → 200 no-op.
   Unreadable/invalid policy → 503 (`POLICY_UNREADABLE` / `POLICY_INVALID`), nothing runs or is deleted.
 - S3 — object set: built by `object_backup.backup()` in scratch (owner of the builder:
@@ -136,18 +137,20 @@ Open decisions: none.
 - A receipt is only recorded for a run whose snapshot (and set, when due) verified; every receipt
   carries its completeness, and only complete receipts advance the protection clock, the due dates
   or the page's status (M1/A3); a refusal never undoes a completed generation.
-- The schedule runs on the deadline rule (M4/A4, A6, A7): a wake runs when the deadline could not be
-  met by the next wake at the maximum demonstrated inter-wake spacing
-  (`age ≥ cadence − wake_max`, the maximum of a retained window of spacings); the observed spacings
-  are a record, never a setting.
-- The RPO guarantee is a property of the wake ladder (D4/A5, A6, A7): with a waker at least as dense
-  as the cadence, the gap stays within the cadence for any interleaving of the trigger sources
-  whenever every spacing is at most the demonstrated maximum — the residual is a new record spacing
-  (its delta); the design adds no slack.  The spacing of a lone daily cron (up to cadence + the
-  platform's in-hour precision) is documented, never claimed as the bound.
+- The schedule runs on the declared-density rule (M4/A4, A6, A8): a wake runs when the deadline
+  could not be met by the next wake at the declared density (`age ≥ cadence − cadence/4 − tolerance`);
+  the margin is a contract constant and the retained spacings are a record — the detector's evidence,
+  never a setting, and history can only make the schedule run more, never less.
+- The RPO guarantee (D4/A5, A6, A8): with the declared density honored (every wake spacing at most a
+  quarter of the cadence plus the execution tolerance) the gap never exceeds the cadence; a degraded
+  arrangement runs at every wake (the gap equals the spacing — met iff the spacing ≤ cadence, the
+  necessary condition of any schedule), and an abrupt loss of a wake source costs at most one
+  oversized gap before detection (documented, visible).  The spacing of a lone daily cron is
+  documented, never claimed as the bound.
 - The page reports the automatic protection against the administrator's cadence itself (A7): a
   generation past its cadence is LATE (the cutover ledger keeps its own tolerance for the governed
-  operator cadence).
+  operator cadence), and the wake rhythm line (A8) shows whether the declared density is being met
+  — the operational verification of the arrangement.
 - Manual snapshot, download and restore routes, and every operator tool, keep their behaviour; the only
   addition on the manual paths is the shared busy lock (a clear message, nothing lost).
 - No new secret anywhere; no schema change; no web route, RBAC or CSRF inventory change.
@@ -267,16 +270,19 @@ cross-family R3 review from a packet the executor prepares; the deploy waits for
   and the restore share it, and a killed run can never leave a persistent false-busy state.  **M3**
   the scheduled decision reads the administrator's policy strictly: an unreadable policy answers
   `POLICY_UNREADABLE` and a partial or invalid one `POLICY_INVALID`; the defaults are used only when
-  the policy is provably unset (empty table).  **M4** the due test runs on the deadline rule
-  (A4, refined by A6 and A7): each wake is recorded, its spacing appended to a retained window (the
-  platform's daily floor when unknown, clamped to 1 minute–7 days; a sub-minute elapsed is a
+  the policy is provably unset (empty table).  **M4** the due test runs on the declared-density
+  rule (A4, refined by A6 and A8): each wake is recorded, its spacing appended to a retained window
+  (the platform's daily floor when unknown, clamped to 1 minute–7 days; a sub-minute elapsed is a
   duplicate delivery and adds nothing), and the pass runs when the deadline could not be met by the
-  next wake at the window's maximum (`age ≥ cadence − wake_max`; the 1-minute conjunct only
-  suppressing a duplicate delivery) — so a generation whose phase sits later than the wake (a
-  manual at 07:00 against a 04:47 cron) runs at that same wake, a short interleaved gap between the
-  daily cron and the sub-daily trigger can never inflate the threshold (the R3 round 3 finding), the
-  reported ~47 h gap stays impossible, a delayed wake can never stretch the gap by a design guard,
-  and sub-daily cadences still never run on every wake (for a waker sparser than half the cadence).
+  next wake at the declared density — a quarter of the cadence, a contract constant, never an
+  observation (`age ≥ cadence − cadence/4 − tolerance`; the 1-minute conjunct only suppressing a
+  duplicate delivery); any retained spacing above the declared bound plus the execution tolerance
+  marks the arrangement degraded and every wake then runs until a full clean window re-establishes
+  the density (history can only make the schedule run more, never less) — so a temporary dense
+  source cannot shrink the margin (the R3 round 4 finding 1), initialization has no warm-up
+  dependence (finding 2), a generation whose phase sits later than the wake (a manual at 07:00
+  against a 04:47 cron) runs at that same wake, the reported ~47 h gap stays impossible, and
+  sub-daily cadences run near the cadence (never per wake when the density holds).
   Focused evidence
   replaces a new
   full suite (TEP; the previous T5 baseline is qualified): the A20 suite (58 nodes incl. the M1
@@ -367,7 +373,7 @@ cross-family R3 review from a packet the executor prepares; the deploy waits for
   declared topology, reproduced real-PostgreSQL on `23d10b7` (a complete manual at Day1 10:00; the
   six-hourly trigger plus the daily 04:47 cron: Day2 04:47 and 06:00 `NOT_DUE`, Day2 12:00 ran —
   26 h between complete generations; the 04:47→06:00 gap of 1 h 13 min inflated the threshold to
-  22 h 47 min).  The scheduling contract is now **maximum-demonstrated-spacing**: every wake appends
+  22 h 47 min).  The scheduling contract became **maximum-demonstrated-spacing**: every wake appends
   its spacing (clamped; a sub-minute elapsed is a duplicate delivery and adds nothing) to a retained
   window (`WAKE_HISTORY` = 8, a full daily cycle of a mixed topology), and the pass runs when the
   deadline could not be met by the next wake at the window's MAXIMUM (`age ≥ cadence − wake_max`;
@@ -375,7 +381,11 @@ cross-family R3 review from a packet the executor prepares; the deploy waits for
   a fire at least every densest-source period, the window's maximum converges to that bound and no
   interleaving can lower it; the guarantee is `gap ≤ cadence` for any interleaving whenever every
   spacing is at most the demonstrated maximum — the residual is a new record spacing (its delta,
-  seconds at the platform's precision).  Consequences: the interleaved sequence runs at Day2 04:47
+  seconds at the platform's precision).  *(Superseded by A8: the demonstrated maximum is a past
+  observation, and the future can exceed it — a temporary dense source evicts the larger spacings
+  from the window, initialization has not seen a full cycle, and a source removal invalidates the
+  bound; the margin is now the declared density, a contract constant.)*  Consequences: the
+  interleaved sequence runs at Day2 04:47
   (gap 18 h 47 min); a transition (a source enabled or disabled) rolls out of the window within 8
   fires, running conservatively meanwhile; a waker sparser than the cadence still runs at every
   wake with the page showing LATE (the documented mode); duplicates and interrupted/failed wakes
@@ -389,6 +399,43 @@ cross-family R3 review from a packet the executor prepares; the deploy waits for
   manual at an arbitrary time, exact and jittered, asserting `gap ≤ cadence` and never-per-wake for
   a waker at a quarter of the cadence), the updated posture lanes, and the A20 suite (74 nodes) —
   green.
+- A8 2026-10-15 — R3 round 4: the historical-estimation approach failed again, on `394d0fe`,
+  reproduced real-PostgreSQL: (1) a **temporary higher-frequency source** filled the retained window
+  (maximum 1 h → threshold 23 h); when it stopped, the cron-only spacing (24 h) arrived after the
+  skipped dense wakes — **27 h 47 min** under a 24 h policy; (2) during **initialization** the first
+  window (4 h 47 min, 1 h 13 min) set the threshold to 6 h 13 min and the 06:00 wake skipped by
+  13 minutes — **12 h** under an 11 h policy.  The structural assumption — the observed past bounds
+  the future — fails at initialization, on source removal/reconfiguration, and whenever the window
+  evicts the larger spacings; no estimator fixes it, because the future is not a function of the
+  past.  The scheduling contract is now **declared density**: the approved ladder declares that the
+  wake sources fire at least every `cadence / WAKE_DENSITY` (a quarter of the cadence — the SPEC's
+  existing recommendation), and the pass runs when the deadline could not be met by the next wake at
+  that density (`age ≥ cadence − cadence/4 − tolerance`; the tolerance is the platform's execution
+  precision, 5 minutes, kept on both sides so the guarantee stays within the cadence).  The retained
+  window is demoted to a **conservative detector**: any spacing above the declared bound plus the
+  tolerance marks the arrangement degraded and the pass runs at every wake until a full clean window
+  re-establishes the density — history can only make the schedule run MORE, never less.  The
+  guarantee: `gap ≤ cadence` whenever every spacing is within the declared density (the runs land
+  between 3·cadence/4 and cadence apart — near the cadence, never per wake); degraded, the gap
+  equals the spacing (met iff the spacing ≤ cadence — the necessary condition of any schedule).  The
+  explicit infrastructure limitations: (L1) a trigger sparser than a quarter of the cadence (for
+  example 6 h at an 11 h cadence) degrades to run-at-every-wake — the RPO is still met whenever the
+  spacing is within the cadence, at the wake rate; (L2) an **abrupt loss** of a wake source can
+  produce one oversized gap before detection — the wakes are not there (bounded by the threshold
+  plus the new spacing, detected at the first spacing above the bound, and visible on the page);
+  (L3) the daily cron alone cannot guarantee a 24 h cadence to the minute (its in-hour precision)
+  nor any cadence below 24 h; (L4) the platform's execution precision bounds any guarantee.  The
+  declared density is **operationally verifiable**: the page's "Ritmo do agendador" line shows
+  whether the retained spacings are within the declared bound (A20 adds the line to the protection
+  card and the view's UT-8 symbol record gains the one helper; the endpoint's value-free responses
+  carry `wake_degraded`; the runbook documents the SQL check on
+  `sgaa_ops.backup_schedule.interval_history`), and the degraded mode adds no recurring
+  cost — the same function, the same free plans, the same drives (more generations within the
+  policy's retention).  Evidence: the two round-4 sequences as discriminating real-PostgreSQL lanes
+  (they fail on `394d0fe`), the window/degradation unit lane, the adversarial topology sweep
+  (cadences 1–24 h, several trigger periods, duplicates, a manual at an arbitrary time, exact and
+  jittered), the abrupt-loss lane (the L2 bound), the rhythm-read lane, and the A20 suite (77
+  nodes) — green; the focused regression set follows under the TEP.
 
 ## 17. Closure
 

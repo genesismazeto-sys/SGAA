@@ -368,6 +368,45 @@ _POSTURE_STATUS_LABELS = {
     "UNVERIFIED": ("Não verificado", "status-negative"),
 }
 
+_POSTURE_WAKE_RHYTHM_LABELS = {
+    # MP-3 A20/A8: the declared-density verification -- whether the wake sources fire at the
+    # declared rhythm (at most a quarter of the cadence).  The operator's operational check.
+    "CURRENT": ("Em dia", "status-positive"),
+    "DEGRADED": ("Degradado", "status-caution"),
+    "NONE": ("Sem dados", "status-neutral"),
+}
+
+
+def _wake_rhythm_context(rhythm: dict) -> dict:
+    """The scheduler-rhythm line (MP-3 A20/A8): the retained wake spacings against the declared
+    density.  Value-free; unknown when the schedule was never recorded or cannot be read."""
+    if not rhythm.get("known"):
+        label, css = _POSTURE_WAKE_RHYTHM_LABELS["NONE"]
+        return {"code": "NONE", "label": label, "css": css, "detail": ""}
+
+    def duration(seconds):
+        if seconds is None:
+            return "—"
+        minutes = int(seconds) // 60
+        if minutes < 60:
+            return f"{minutes} min"
+        hours, rest = divmod(minutes, 60)
+        return f"{hours} h" if not rest else f"{hours} h {rest} min"
+
+    bound = duration(rhythm.get("bound_seconds"))
+    observed = duration(rhythm.get("max_spacing_seconds"))
+    if rhythm.get("degraded"):
+        code = "DEGRADED"
+        detail = (f"O gatilho externo não está disparando no ritmo declarado (um disparo a cada até "
+                  f"{bound}); os backups rodam a cada disparo até o ritmo voltar. "
+                  f"Maior intervalo observado: {observed}.")
+    else:
+        code = "CURRENT"
+        detail = ("Os disparos do agendador automático estão dentro do ritmo declarado "
+                  f"(um disparo a cada até {bound}).")
+    label, css = _POSTURE_WAKE_RHYTHM_LABELS[code]
+    return {"code": code, "label": label, "css": css, "detail": detail}
+
 
 _POLICY_FIELD_TEXT = {
     "pg_database_cadence_hours": ("Backup do banco a cada (horas)", "Define o RPO."),
@@ -396,7 +435,7 @@ def _database_protection_context(conn) -> dict:
     if posture["state"] == "UNREADABLE":
         # The records could not be read; the policy stays visible and editable on its own.
         if raw is None:
-            return {"state": "UNREADABLE"}
+            return {"state": "UNREADABLE", "wake_rhythm": _wake_rhythm_context({})}
         policy = pg_posture.read_policy(raw)
         try:
             ceiling = pg_posture.opening_ceiling(raw)
@@ -406,7 +445,9 @@ def _database_protection_context(conn) -> dict:
                 "policy_fields": _policy_fields(ceiling), "policy_configured": policy["configured"], "policy_invalid": bool(policy.get("invalid")),
                 "policy_updated_label": _format_drive_timestamp(
                     str(policy["updated_at"]).replace(" ", "T") + "+00:00" if policy["updated_at"] else ""),
-                "retention_generations": policy["pg_retention_generations"]}
+                "retention_generations": policy["pg_retention_generations"],
+                "wake_rhythm": _wake_rhythm_context(
+                    _hosted_backup.wake_rhythm(raw, policy["pg_database_cadence_hours"]))}
 
     def when(moment):
         return _format_drive_timestamp(moment.isoformat()) if moment else ""
@@ -436,6 +477,8 @@ def _database_protection_context(conn) -> dict:
         "database_status": status(posture["database_status"]),
         "objects_status": status(posture["objects_status"]),
         "validation_status": status(posture["validation_status"]),
+        "wake_rhythm": _wake_rhythm_context(
+            _hosted_backup.wake_rhythm(raw, posture["cadence_hours"])),
         "next_generation_due_label": when(posture["next_generation_due"]),
         "next_object_set_due_label": when(posture["next_object_set_due"]),
         "next_restore_test_due_label": when(posture["next_restore_test_due"]),

@@ -117,6 +117,9 @@ POST_UT8_HELPER_NAMES = (
     # MP-3 A19: the PostgreSQL backup posture card (delegates to app.backup.pg_posture).
     "_database_protection_context",
     "_policy_fields",
+    # MP-3 A20/A8: the "Ritmo do agendador" line -- the declared-density verification the operator
+    # reads (delegates to app.backup.hosted_backup.wake_rhythm).
+    "_wake_rhythm_context",
     # MP-3 A19: "Gerar backup agora" under PostgreSQL (delegates to app.backup.pg_snapshot).
     "_postgres_backup_now",
     "_send_postgres_snapshot",

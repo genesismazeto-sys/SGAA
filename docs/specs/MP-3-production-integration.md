@@ -969,7 +969,9 @@ Executor amendments (consequences of the above; not material beyond what the use
   retention the newest run observed (generations kept in both directories), the newest generation and
   object set as current / late / none (A20/A7: LATE once the cadence itself is exceeded, so a hosted
   RPO breach is visible; the cutover ledger keeps its own 1.5x tolerance for the governed operator
-  cadence), the newest restore validation and
+  cadence), the newest restore validation,
+  the scheduler rhythm (A20/A8: the "Ritmo do agendador" line — the retained wake spacings against
+  the declared density, Sem dados / Em dia / Degradado) and
   the five newest generations; "no record" is shown as unprotected, never as protected. The page runs
   no backup: a hosted "back up now" would need the PROD password stored on the platform (P6) and could
   not make the off-platform copy. `ops_backup`: a governed run publishes the ledger's records with its
