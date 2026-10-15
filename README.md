@@ -1,6 +1,13 @@
-# Sistema de Atividades Complementares (Flask)
+# SGAA — Sistema de Gestão de Atividades Acadêmicas
 
-Pequena aplicação Flask com SQLite para gestão de cursos, turmas, alunos, atividades e requisições.
+O SGAA está em produção em **https://sgaa.vercel.app**, com Flask na Vercel,
+PostgreSQL e armazenamento canônico no Supabase, além de backups automáticos
+em Google Drive e OneDrive (MP-3 A20). O estado operacional atual, os gates
+pendentes e a roadmap estão em [`PROJECT_STATE.md`](PROJECT_STATE.md).
+O contrato de execução hospedada está em [`docs/HOSTED_RUNTIME.md`](docs/HOSTED_RUNTIME.md).
+
+As instruções abaixo descrevem o **runtime local legado/de desenvolvimento**
+(SQLite, Windows) e não são um procedimento de implantação em produção.
 
 ## Requisitos
 
