@@ -66,15 +66,18 @@ def test_no_record_is_shown_as_no_protection_never_as_protected():
 
 
 def test_a_generation_within_the_cadence_is_current_and_a_late_one_is_late():
-    assert _summary(_rows(_generation(30)))["database_status"] == "CURRENT"  # 30 h <= 1.5 x 24 h
-    assert _summary(_rows(_generation(37)))["database_status"] == "LATE"  # beyond the tolerance
+    assert _summary(_rows(_generation(23)))["database_status"] == "CURRENT"  # within the cadence
+    assert _summary(_rows(_generation(25)))["database_status"] == "LATE"  # A7: past it the page says LATE
+    assert _summary(_rows(_generation(37)))["database_status"] == "LATE"
     assert _summary(_rows(_generation(5)), cadence=2)["database_status"] == "LATE"  # the recorded cadence binds
 
 
 def test_the_object_set_has_its_own_weekly_cadence():
-    posture = _summary(_rows(_generation(2, objects=False), _generation(24 * 9)))
+    posture = _summary(_rows(_generation(2, objects=False), _generation(24 * 6)))
     assert posture["database_status"] == "CURRENT"
-    assert posture["objects_status"] == "CURRENT"  # 9 days <= 1.5 weeks
+    assert posture["objects_status"] == "CURRENT"  # 6 days <= the weekly cadence
+    posture = _summary(_rows(_generation(2, objects=False), _generation(24 * 9)))
+    assert posture["objects_status"] == "LATE"  # A7: past the weekly cadence
     posture = _summary(_rows(_generation(2, objects=False), _generation(24 * 11)))
     assert posture["objects_status"] == "LATE"
     assert _summary(_rows(_generation(2, objects=False)))["objects_status"] == "NONE"

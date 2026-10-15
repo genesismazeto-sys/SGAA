@@ -57,7 +57,7 @@ def env(monkeypatch):
     """The pass with every boundary scripted; ``_deliver``, the posture reads and the wake clock are fakes."""
     state = SimpleNamespace(deliveries=[], deliver_result=None, posture=None, raises=None,
                             unlocks=[], locks=[True], deliver_kwargs=None, policy_error=None,
-                            wake_interval=86400)
+                            wake_max=86400)
     monkeypatch.setattr(hosted_backup, "get_db_connection", lambda: _Conn())
 
     def lock(_conn):
@@ -67,7 +67,7 @@ def env(monkeypatch):
     monkeypatch.setattr(hosted_backup, "backup_lock", lock)
     monkeypatch.setattr(hosted_backup, "backup_unlock", lambda _conn, _holder: state.unlocks.append(1))
     monkeypatch.setattr(pg_posture, "read", lambda raw, now=None: state.posture)
-    monkeypatch.setattr(hosted_backup, "note_wake", lambda raw, now: state.wake_interval)
+    monkeypatch.setattr(hosted_backup, "note_wake", lambda raw, now: state.wake_max)
 
     def read_policy(raw, strict=False):
         # M3: the pass reads the policy strictly; the fake reproduces the same contract
@@ -181,7 +181,7 @@ def test_an_unexpected_failure_is_a_500_with_a_fixed_code(front, monkeypatch, ca
 
 
 def test_nothing_due_is_a_no_op_that_never_delivers(env):
-    env.wake_interval = 900  # a 15-minute waker under a 24 h policy: threshold 23 h 45 min
+    env.wake_max = 900  # a 15-minute waker under a 24 h policy: threshold 23 h 45 min
     env.posture = _posture(latest_hours=1, latest_objects_hours=2)
     report = hosted_backup.run_backup_pass()
     assert report["result_code"] == hosted_backup.RESULT_NOT_DUE
@@ -213,11 +213,11 @@ def test_the_object_cadence_alone_still_ships_a_fresh_database_copy(env):
 
 
 def test_a_wake_runs_when_the_deadline_could_not_be_met_by_the_next_expected_wake(env):
-    """M4/A6: the decision uses the learned wake interval; a wake at exactly `cadence - interval`
-    runs -- the next expected wake could arrive late and miss the deadline (the old guard inside
-    the threshold skipped it, and a delayed wake then stretched the gap past the cadence)."""
+    """M4/A6/A7: the decision uses the maximum demonstrated inter-wake spacing; a wake at exactly
+    `cadence - wake_max` runs -- the next wake could arrive at that spacing and miss the deadline
+    (the old guard inside the threshold skipped it, and a delayed wake then stretched the gap)."""
     env.deliver_result = _delivered()
-    env.wake_interval = 6 * 3600  # a 6-hourly waker under a 24 h policy: threshold 18 h
+    env.wake_max = 6 * 3600  # a 6-hourly waker under a 24 h policy: threshold 18 h
     env.posture = _posture(latest_hours=17, latest_objects_hours=17)
     assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_NOT_DUE
     env.posture = _posture(latest_hours=18, latest_objects_hours=18)  # the edge: runs
@@ -225,7 +225,7 @@ def test_a_wake_runs_when_the_deadline_could_not_be_met_by_the_next_expected_wak
     env.posture = _posture(latest_hours=19, latest_objects_hours=19)
     assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK
     # a daily waker: the deadline could never be met by the next daily wake, so every wake runs
-    env.wake_interval = 86400
+    env.wake_max = 86400
     env.posture = _posture(latest_hours=1, latest_objects_hours=1)
     assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK
 
@@ -249,7 +249,7 @@ def test_a_one_hour_policy_runs_at_the_last_wake_before_the_deadline(env):
     (the next expected wake could be late), so runs are 45-60 min apart -- never past the cadence,
     never per wake."""
     env.deliver_result = _delivered()
-    env.wake_interval = 900
+    env.wake_max = 900
     env.posture = _posture(cadence=1, latest_hours=0.67, latest_objects_hours=1)  # 40 min: not due
     assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_NOT_DUE
     env.posture = _posture(cadence=1, latest_hours=0.75, latest_objects_hours=1)  # 45 min: the edge
@@ -259,10 +259,10 @@ def test_a_one_hour_policy_runs_at_the_last_wake_before_the_deadline(env):
 
 
 def test_a_dense_waker_never_lets_a_gap_exceed_the_cadence(env):
-    """M4/RPO (A5): over a week of adversarial wakes -- the daily cron at 04:00/04:59 alternating
-    plus 6-hourly trigger wakes -- every gap between consecutive generations stays at or under the
-    24 h cadence.  The ladder of D4 is what bounds the RPO; a lone daily cron cannot (its spacing,
-    up to cadence + the platform's in-hour precision, is the bound -- see the real-PG lanes)."""
+    """A7/RPO: over a week of adversarial wakes -- the daily cron at 04:00/04:59 alternating plus
+    6-hourly trigger wakes -- every gap between consecutive generations stays at or under the 24 h
+    cadence.  The retained window and the decision are the real ones; the ladder of D4 bounds the
+    RPO (a lone daily cron cannot: its spacing is the bound -- see the real-PG lanes)."""
     env.deliver_result = _delivered()
     base = datetime.datetime(2026, 10, 1, tzinfo=datetime.timezone.utc)
     wakes = []
@@ -273,12 +273,16 @@ def test_a_dense_waker_never_lets_a_gap_exceed_the_cadence(env):
         if day < 5:
             wakes.append(base + datetime.timedelta(days=day + 1, hours=0))
     wakes = sorted(set(wakes))
+    history = []
     last_generation = None
     previous_wake = None
     gaps = []
     for wake in wakes:
-        env.wake_interval = (int((wake - previous_wake).total_seconds()) if previous_wake
-                             else hosted_backup.DEFAULT_WAKE_SECONDS)
+        interval = None if previous_wake is None else int((wake - previous_wake).total_seconds())
+        if interval is not None and interval < hosted_backup.WAKE_MIN_SECONDS:
+            interval = None  # a duplicate delivery is not a spacing
+        history = hosted_backup._next_history(history, interval)
+        env.wake_max = hosted_backup._wake_max(history)
         age = None if last_generation is None else (wake - last_generation).total_seconds() / 3600.0
         object_age = None if last_generation is None else (wake - wakes[0]).total_seconds() / 3600.0
         env.posture = _posture(latest_hours=age, latest_objects_hours=object_age)
@@ -288,7 +292,81 @@ def test_a_dense_waker_never_lets_a_gap_exceed_the_cadence(env):
             last_generation = wake
         previous_wake = wake
     assert gaps and all(gap <= datetime.timedelta(hours=24) for gap in gaps)
-    assert max(gaps) >= datetime.timedelta(hours=20)  # runs near the deadline, not on every wake
+    assert max(gaps) >= datetime.timedelta(hours=18)  # runs near the deadline, not on every wake
+
+
+def test_the_retained_window_rolls_a_long_spacing_out():
+    """A7: the window keeps the last `WAKE_HISTORY` spacings -- a transition (a source enabled or
+    disabled) rolls out of it, and a duplicate never enters it."""
+    history = [24 * 3600]
+    for _ in range(hosted_backup.WAKE_HISTORY):
+        history = hosted_backup._next_history(history, 6 * 3600)
+    assert len(history) == hosted_backup.WAKE_HISTORY
+    assert hosted_backup._wake_max(history) == 6 * 3600
+    assert hosted_backup._next_history(history, None) == history  # a duplicate adds nothing
+    assert hosted_backup._wake_max([]) == hosted_backup.DEFAULT_WAKE_SECONDS
+    assert hosted_backup._next_history([], None) == []
+
+
+def _simulate_gaps(wakes, cadence_hours, *, manual_at=None):
+    """Drive the REAL A7 helpers over a wake schedule; return the gaps between consecutive runs.
+
+    A wake whose run is interrupted or fails never advances the clock (M1/A3) and is covered by the
+    real-PostgreSQL partial-delivery lanes; this sweep models the scheduling contract itself.
+    """
+    generation = manual_at
+    history = []
+    recorded = None
+    gaps = []
+    for wake in wakes:
+        interval = None if recorded is None else int((wake - recorded).total_seconds())
+        if interval is not None and interval < hosted_backup.WAKE_MIN_SECONDS:
+            interval = None
+        elif interval is not None:
+            interval = min(interval, hosted_backup.WAKE_MAX_SECONDS)
+        history = hosted_backup._next_history(history, interval)
+        recorded = wake
+        wake_max = hosted_backup._wake_max(history)
+        age = None if generation is None else (wake - generation).total_seconds()
+        if age is None or hosted_backup._due_seconds(age, cadence_hours * 3600, wake_max):
+            if generation is not None:
+                gaps.append(wake - generation)
+            generation = wake
+    return gaps
+
+
+def test_the_scheduling_contract_holds_across_adversarial_topologies():
+    """A7 adversarial sweep: mixed daily + sub-daily sources, duplicates and a manual at an
+    arbitrary time, over every cadence 1-24 h and several trigger periods.  The gap between
+    consecutive generations never exceeds the cadence (exact) or the cadence plus the jitter record
+    (jittered), and a waker at or under a quarter of the cadence never runs per wake.
+    """
+    import random
+
+    base = datetime.datetime(2026, 10, 1, tzinfo=datetime.timezone.utc)
+    for cadence in (1, 2, 4, 6, 12, 24):
+        for period_minutes in (15, 30, 60, 180, 360):
+            if period_minutes * 60 > cadence * 3600:
+                continue  # a waker sparser than the cadence cannot guarantee it (the documented mode)
+            period = datetime.timedelta(minutes=period_minutes)
+            wakes = []
+            moment = base
+            while moment < base + datetime.timedelta(days=3):
+                wakes.append(moment)
+                moment += period
+            for day in range(3):
+                wakes.append(base + datetime.timedelta(days=day, hours=4, minutes=47))  # the daily cron
+            wakes.append(base + datetime.timedelta(days=1, hours=6, seconds=30))  # a duplicate delivery
+            wakes.sort()
+            manual = base + datetime.timedelta(hours=10, minutes=13)
+            exact = _simulate_gaps(wakes, cadence, manual_at=manual)
+            assert exact and max(exact) <= datetime.timedelta(hours=cadence)
+            if period_minutes * 4 <= cadence * 60:  # the recommended density: never per wake
+                assert len(exact) <= len(wakes) // 2 + 1
+            rng = random.Random(cadence * 1000 + period_minutes)
+            jittered = sorted(w + datetime.timedelta(seconds=rng.randint(-60, 60)) for w in wakes)
+            jittered_gaps = _simulate_gaps(jittered, cadence, manual_at=manual)
+            assert jittered_gaps and max(jittered_gaps) <= datetime.timedelta(hours=cadence, minutes=2)
 
 
 def test_an_invalid_policy_refuses_and_delivers_nothing(env):
@@ -1054,24 +1132,28 @@ class _ScheduleRaw:
         if sql == hosted_backup.SCHEDULE_SELECT_SQL:
             self._pending = "select"
         elif sql == hosted_backup.SCHEDULE_INSERT_SQL:
-            self.row = (params[0], params[1])
+            self.row = (params[0], params[1], list(params[2]))
         elif sql == hosted_backup.SCHEDULE_UPDATE_SQL:
-            self.row = (params[0], params[1])
+            self.row = (params[0], params[1], list(params[2]))
         return self
 
     def fetchone(self):
         return self.row if getattr(self, "_pending", None) == "select" else None
 
 
-def test_note_wake_learns_the_interval_and_clamps_it():
-    """M4: the first wake stores the daily floor; later wakes learn the elapsed time (clamped);
-    an elapsed time under a minute is a duplicate delivery and keeps the stored interval."""
+def test_note_wake_keeps_the_maximum_of_the_retained_spacings():
+    """A7: the first wake stores the daily floor; later wakes append the elapsed spacing (clamped,
+    a sub-minute one being a duplicate delivery) and the decision reads the window's MAXIMUM -- a
+    short interleaved gap can never lower it."""
     raw = _ScheduleRaw()
     t0 = datetime.datetime(2026, 10, 1, 6, 0, tzinfo=datetime.timezone.utc)
     assert hosted_backup.note_wake(raw, t0) == hosted_backup.DEFAULT_WAKE_SECONDS
     assert hosted_backup.DEFAULT_WAKE_SECONDS == 86400
     assert hosted_backup.note_wake(raw, t0 + datetime.timedelta(hours=23)) == 23 * 3600
-    assert hosted_backup.note_wake(raw, t0 + datetime.timedelta(hours=23, seconds=30)) == 23 * 3600
+    # a short interleaved gap must not lower the maximum (the R3 round 3 finding)
+    assert hosted_backup.note_wake(raw, t0 + datetime.timedelta(hours=23, minutes=7)) == 23 * 3600
+    # a duplicate delivery adds nothing
+    assert hosted_backup.note_wake(raw, t0 + datetime.timedelta(hours=23, minutes=7, seconds=30)) == 23 * 3600
     assert hosted_backup.note_wake(raw, t0 + datetime.timedelta(days=20)) == hosted_backup.WAKE_MAX_SECONDS
     assert (hosted_backup.WAKE_MIN_SECONDS, hosted_backup.WAKE_MAX_SECONDS) == (60, 7 * 24 * 3600)
 
@@ -1251,6 +1333,37 @@ def test_the_deadline_edge_wake_runs_so_a_delayed_wake_cannot_stretch_the_gap(pr
     assert codes == ["OK", "NOT_DUE", "NOT_DUE", "OK", "NOT_DUE"]
     posture = _posture_of(env)
     assert posture["latest_generation_at"].strftime("%Y-%m-%dT%H:%M:%SZ") == "2026-10-01T18:00:00Z"
+
+
+@needs_pg
+def test_the_reviewer_sequence_interleaved_triggers_never_stretch_the_gap(production):
+    """R3 round 3 (A7) discriminating lane: a complete manual at Day1 10:00, the six-hourly trigger
+    and the daily cron (04:47).  Under the last-interval rule (23d10b7) the short interleaved gap
+    (04:47 -> 06:00, 1 h 13 min) inflated the threshold: Day2 04:47 and 06:00 answered NOT_DUE and
+    Day2 12:00 ran -- 26 h between complete generations.  Under the maximum-demonstrated-spacing
+    rule the 04:47 wake runs (age 18 h 47 min >= 24 h - 6 h) and the gap stays under the cadence."""
+    env = production
+    _set_policy(env, database_cadence_hours=24, object_cadence_days=7, retention_generations=2,
+                restore_test_days=30)
+    run = lambda: hosted_backup.run_backup_pass(store=env.store,  # noqa: E731
+                                                build_objects=object_sets.build_objects_archive)
+    codes = [
+        _run_at(env, 1, 0, 0, run)["result_code"],      # the first wake (no receipts) -> a generation
+        _run_at(env, 1, 6, 0, run)["result_code"],
+    ]
+    manual = _run_at(env, 1, 10, 0, lambda: hosted_backup.send_snapshot())
+    assert manual[1] == ["google"]  # the complete manual generation
+    codes += [
+        _run_at(env, 1, 12, 0, run)["result_code"],
+        _run_at(env, 1, 18, 0, run)["result_code"],
+        _run_at(env, 2, 0, 0, run)["result_code"],
+        _run_at(env, 2, 4, 47, run)["result_code"],     # the cron: must run
+        _run_at(env, 2, 6, 0, run)["result_code"],      # the interleaved short gap: must not run
+        _run_at(env, 2, 12, 0, run)["result_code"],
+    ]
+    assert codes == ["OK", "NOT_DUE", "NOT_DUE", "NOT_DUE", "NOT_DUE", "OK", "NOT_DUE", "NOT_DUE"]
+    posture = _posture_of(env)
+    assert posture["latest_generation_at"].strftime("%Y-%m-%dT%H:%M:%SZ") == "2026-10-02T04:47:00Z"
 
 
 @needs_pg

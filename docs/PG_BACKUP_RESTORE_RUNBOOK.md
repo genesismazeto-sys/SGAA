@@ -497,25 +497,30 @@ the CLI seals), all to every connected drive, with retention pruning each kind t
 protection clock and the page's status; a partial delivery is recorded as incomplete (it owns the
 files that did land, so retention bounds them and rotates complete generations and partial runs
 separately), answers `DELIVERY_INCOMPLETE` and stays due for the next wake — the page shows the delay
-rather than an overstated protection. The pass runs on the deadline rule: each wake is recorded and
-learns the interval to the next expected wake from the time elapsed since the last one (the daily
-floor when unknown; clamped to 1 minute–7 days; a sub-minute elapsed is a duplicate and keeps the
-stored interval), and the pass runs when the deadline could not be met by that next wake
-(`age ≥ cadence − interval`; the edge wake runs, and the 1-minute conjunct only suppresses a
-duplicate delivery) — so a manual generation at 07:00 against a 04:47 cron runs at that same wake,
+rather than an overstated protection. The pass runs on the deadline rule: each wake is recorded,
+appends its spacing to a retained window of the last eight inter-wake spacings (the daily
+floor when unknown; clamped to 1 minute–7 days; a sub-minute elapsed is a duplicate and adds
+nothing), and the pass runs when the deadline could not be met by the next wake at the window's
+**maximum** (`age ≥ cadence − wake_max`; the 1-minute conjunct only suppresses a
+duplicate delivery) — an upper bound no interleaving of the sources can beat, so a short gap
+between the daily cron and the sub-daily trigger can never inflate the threshold and skip a wake; a
+manual generation at 07:00 against a 04:47 cron runs at that same wake,
 consecutive daily wakes keep running, a 1 h cadence with a 15-minute waker runs 45–60 min apart
 (a waker at half the cadence runs at every wake, still within the cadence), and the platform's
 up-to-an-hour cron precision can never skip a whole day at the 24 h default. The gap's bound
 depends on the waker's density: a waker at least as dense as the cadence keeps the gap within the
-cadence plus the waker's spacing spread (the just-elapsed estimate vs the actual next spacing;
-seconds for the minute-granularity trigger — the design adds no slack), but the daily cron alone
+cadence for any interleaving whenever every spacing is at most the demonstrated maximum (the
+residual is a new record spacing — its delta, seconds for the minute-granularity trigger; the
+design adds no slack), but the daily cron alone
 cannot compress its own spacing — two consecutive wakes can be 24 h 59 min
 apart (04:00 then 04:59) and both run, so the daily-cron-alone gap is the spacing itself. The
 committed descriptor adds the daily cron entry (the zero-cost floor), and the wake ladder's
 sub-daily waker — Supabase Cron with `pg_net`, free, calling
 the same endpoint — is what holds every cadence within the bound; the bearer is stored in Supabase
 Vault (the same pattern as the mirror trigger),
-so no job text holds a secret. The pass, the manual "Gerar backup agora" and the restore share one
+so no job text holds a secret. A generation past its cadence is LATE (A20/A7): the page reports the
+automatic protection against the cadence itself; the cutover ledger keeps its own tolerance for the
+governed operator cadence. The pass, the manual "Gerar backup agora" and the restore share one
 lock row with a lease (`sgaa_ops.backup_lock`), taken and released in transactions committed on their
 own (valid through the transaction pooler and past the request's ambient transaction; the control DDL
 retries once against concurrent-first-use races; an expired lease is stolen, so a killed run never

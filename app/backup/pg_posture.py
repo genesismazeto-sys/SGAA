@@ -46,8 +46,6 @@ from app import hosting
 DEFAULT_CADENCE_HOURS = 24
 OBJECT_CADENCE_HOURS = 7 * 24
 MIN_GENERATIONS = 2
-#: A generation older than this multiple of the cadence is late (the cutover ledger's tolerance).
-CADENCE_TOLERANCE = 1.5
 RECENT_LIMIT = 5
 
 #: The administrable policy: setting key -> (minimum, maximum, default, label).
@@ -372,10 +370,13 @@ def _parse(moment) -> datetime | None:
 
 
 def _status(latest: datetime | None, now: datetime, cadence_hours: int) -> str:
+    """CURRENT while the generation is within the cadence, LATE past it (A7: the page reports the
+    automatic protection against the cadence itself; the cutover ledger keeps its own 1.5x
+    tolerance for the governed operator cadence)."""
     if latest is None:
         return "NONE"
     age_hours = (now - latest).total_seconds() / 3600
-    return "CURRENT" if age_hours <= cadence_hours * CADENCE_TOLERANCE else "LATE"
+    return "CURRENT" if age_hours <= cadence_hours else "LATE"
 
 
 def read(raw, *, now: datetime | None = None) -> dict:
@@ -574,7 +575,7 @@ def owned_in(owned, provider: str, drive_id: str = "") -> set:
 
 
 __all__ = [
-    "CADENCE_TOLERANCE", "DEFAULT_CADENCE_HOURS", "MIN_GENERATIONS", "OBJECT_CADENCE_HOURS", "POLICY_FIELDS",
+    "DEFAULT_CADENCE_HOURS", "MIN_GENERATIONS", "OBJECT_CADENCE_HOURS", "POLICY_FIELDS",
     "CeilingUnverifiable", "PolicyError", "PostureError", "default_policy", "opening_ceiling", "owned_files",
     "owned_in",
     "policy_from_rows", "publish", "read",

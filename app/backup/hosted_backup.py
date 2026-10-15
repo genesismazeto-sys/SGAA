@@ -68,30 +68,42 @@ LOCK_ACQUIRE_SQL = (
 )
 LOCK_RELEASE_SQL = "DELETE FROM sgaa_ops.backup_lock WHERE lock_key = 1 AND holder = %s"
 
-#: M4 (deadline scheduling): the pass runs when the deadline would otherwise fall before the NEXT
-#: expected wake.  The interval is the just-elapsed time between wakes (a static window cannot serve
-#: both a daily cron and a sub-daily trigger: a generation whose phase sits later than the wake -- a
-#: manual backup at 07:00 vs a 04:47 cron -- made the next wake skip and pushed the following one
-#: ~46 h out).  Unknown: the platform's documented daily floor.
-DEFAULT_WAKE_SECONDS = 24 * 60 * 60
-#: Under a minute the elapsed time is a duplicate delivery, not an interval; the same minute guards
+#: A7 (maximum-demonstrated-spacing scheduling): the pass runs when the deadline could not be met
+#: by the next wake at the MAXIMUM inter-wake spacing the topology has demonstrated.  The
+#: last-interval estimate was unreliable when trigger sources interleave (a 1 h 13 min gap between
+#: a daily cron and a sub-daily trigger inflated the threshold and skipped the wakes that should
+#: have met the deadline); a maximum over a retained window cannot be beaten by any interleaving --
+#: the union's spacings are bounded by the densest source's period, which the window captures.
+DEFAULT_WAKE_SECONDS = 24 * 60 * 60  # the platform's documented daily floor (the first wake)
+#: Under a minute the elapsed time is a duplicate delivery, not a spacing; the same minute guards
 #: the decision so a duplicated wake never re-runs a fresh generation.
 WAKE_MIN_SECONDS = 60
 WAKE_MAX_SECONDS = 7 * 24 * 60 * 60
+#: The retained window of inter-wake spacings: long enough to hold a full daily cycle of a mixed
+#: daily + sub-daily topology, so a transition (a source enabled or disabled) rolls out within it.
+WAKE_HISTORY = 8
 SCHEDULE_DDL = (
     *pg_posture.SCHEMA_DDL,
     "CREATE TABLE IF NOT EXISTS sgaa_ops.backup_schedule ("
     " schedule_key smallint PRIMARY KEY, last_wake_at timestamptz NOT NULL,"
-    " last_interval_seconds integer NOT NULL)",
+    " last_interval_seconds integer NOT NULL,"
+    " interval_history integer[] NOT NULL DEFAULT '{}')",
+    "ALTER TABLE sgaa_ops.backup_schedule ADD COLUMN IF NOT EXISTS interval_history integer[]"
+    " NOT NULL DEFAULT '{}'",
     "REVOKE ALL ON sgaa_ops.backup_schedule FROM PUBLIC",
 )
 SCHEDULE_SELECT_SQL = (
-    "SELECT last_wake_at, last_interval_seconds FROM sgaa_ops.backup_schedule WHERE schedule_key = 1"
+    "SELECT last_wake_at, last_interval_seconds, interval_history FROM sgaa_ops.backup_schedule"
+    " WHERE schedule_key = 1"
 )
-SCHEDULE_INSERT_SQL = "INSERT INTO sgaa_ops.backup_schedule (schedule_key, last_wake_at, last_interval_seconds)" \
-                      " VALUES (1, %s, %s)"
-SCHEDULE_UPDATE_SQL = "UPDATE sgaa_ops.backup_schedule SET last_wake_at = %s, last_interval_seconds = %s" \
-                      " WHERE schedule_key = 1"
+SCHEDULE_INSERT_SQL = (
+    "INSERT INTO sgaa_ops.backup_schedule (schedule_key, last_wake_at, last_interval_seconds,"
+    " interval_history) VALUES (1, %s, %s, %s)"
+)
+SCHEDULE_UPDATE_SQL = (
+    "UPDATE sgaa_ops.backup_schedule SET last_wake_at = %s, last_interval_seconds = %s,"
+    " interval_history = %s WHERE schedule_key = 1"
+)
 
 RESULT_OK = "OK"
 RESULT_NOT_DUE = "NOT_DUE"
@@ -430,27 +442,53 @@ def prune_owned(conn, raw, sent, folders, keep, *, registers_skip):
 # ---------------------------------------------------------------------------
 
 
-def note_wake(raw, now) -> int:
-    """Record this wake and return the interval to the next expected one (M4 deadline scheduling).
+def _next_history(history, interval) -> list:
+    """The retained window of inter-wake spacings after one more fire (A7).
 
-    One transaction: the first wake stores the platform's documented daily floor; later wakes learn
-    the just-elapsed time between wakes (clamped to [1 min, 7 days]) — a duplicate delivery (under a
-    minute) keeps the stored regular interval.  Runs under the backup lock, so the row has a single
-    writer.
+    A sub-minute interval (``None`` here) is a duplicate delivery, not a spacing: it adds nothing.
+    """
+    if interval is None:
+        return [int(value) for value in history]
+    return ([int(value) for value in history] + [int(interval)])[-WAKE_HISTORY:]
+
+
+def _wake_max(history) -> int:
+    """The maximum demonstrated inter-wake spacing -- an upper bound on the next one that no
+    interleaving of the trigger sources can beat (the platform's daily floor when none yet)."""
+    values = [int(value) for value in history]
+    return max(values) if values else DEFAULT_WAKE_SECONDS
+
+
+def _due_seconds(age, cadence_seconds, wake_max_seconds) -> bool:
+    """A wake runs when the deadline could not be met by the next wake at the maximum demonstrated
+    spacing, and this wake is not a sub-minute duplicate of the last generation (A7)."""
+    return age >= cadence_seconds - wake_max_seconds and age >= WAKE_MIN_SECONDS
+
+
+def note_wake(raw, now) -> int:
+    """Record this wake and return the maximum demonstrated inter-wake spacing (A7 scheduling).
+
+    One transaction: the wake's spacing (the just-elapsed time, clamped to [1 min, 7 days]) joins
+    the retained window; a sub-minute elapsed is a duplicate delivery and adds nothing.  The
+    decision uses the window's MAXIMUM -- an upper bound on the next spacing that no interleaving of
+    the trigger sources can beat -- so a short gap between a daily cron and a sub-daily trigger can
+    never inflate the threshold and skip a wake.  The first wake stores the platform's daily floor.
+    Runs under the backup lock, so the row has a single writer.
     """
     pg_posture.run_ddl(raw, SCHEDULE_DDL)
     with raw.transaction():
         row = raw.execute(SCHEDULE_SELECT_SQL).fetchone()
         if row is None:
-            interval = DEFAULT_WAKE_SECONDS
-            raw.execute(SCHEDULE_INSERT_SQL, (now, interval))
-            return interval
-        last, stored = row[0], int(row[1])
+            raw.execute(SCHEDULE_INSERT_SQL, (now, DEFAULT_WAKE_SECONDS, []))
+            return DEFAULT_WAKE_SECONDS
+        last, stored, history = row[0], int(row[1]), list(row[2] or [])
         elapsed = (now - last).total_seconds()
         interval = min(max(int(elapsed), WAKE_MIN_SECONDS), WAKE_MAX_SECONDS) \
-            if elapsed >= WAKE_MIN_SECONDS else stored
-        raw.execute(SCHEDULE_UPDATE_SQL, (now, interval))
-        return interval
+            if elapsed >= WAKE_MIN_SECONDS else None
+        history = _next_history(history, interval)
+        raw.execute(SCHEDULE_UPDATE_SQL,
+                    (now, interval if interval is not None else stored, history))
+        return _wake_max(history)
 
 
 def run_backup_pass(*, store=None, build_objects=None) -> dict:
@@ -458,9 +496,9 @@ def run_backup_pass(*, store=None, build_objects=None) -> dict:
 
     The wake interval is not contract; every wake reads the administrator's policy strictly (M3:
     an unreadable or unverifiable policy refuses the run, never a substituted default) and the
-    receipts, records itself and runs on the deadline rule (M4/A4, A6: run when the deadline could
-    not be met by the next expected wake, `age >= cadence - interval`, the interval learned from the
-    just-elapsed time between wakes; the residual is the waker's spacing spread).  A receipt is only
+    receipts, records itself and runs on the deadline rule (M4/A4, A6, A7: run when the deadline
+    could not be met by the next wake at the maximum demonstrated inter-wake spacing,
+    `age >= cadence - wake_max`; the residual is a new record spacing).  A receipt is only
     published when every connected drive received every required artifact (M1).  ``build_objects``
     is the background object-set builder the scheduler service injects (``app.backup.object_sets``).
     Returns a value-free dict with ``result_code`` (``OK``, ``NOT_DUE``, ``SKIPPED_BUSY``,
@@ -477,10 +515,10 @@ def run_backup_pass(*, store=None, build_objects=None) -> dict:
     try:
         now = datetime.datetime.now(datetime.timezone.utc)
         try:
-            # M4: record this wake and learn the interval to the next one; the deadline rule needs
-            # it to decide.  A failure here refuses the pass (nothing runs on a schedule it cannot
-            # reason about).
-            interval_seconds = note_wake(raw, now)
+            # A7: record this wake and read the maximum demonstrated inter-wake spacing; the
+            # decision needs it.  A failure here refuses the pass (nothing runs on a schedule it
+            # cannot reason about).
+            wake_max_seconds = note_wake(raw, now)
         except Exception:
             return {"result_code": RESULT_DATABASE_UNREADABLE}
         posture = pg_posture.read(raw)
@@ -502,21 +540,21 @@ def run_backup_pass(*, store=None, build_objects=None) -> dict:
         object_hours = int(policy["pg_object_cadence_days"]) * 24
         latest = posture["latest_generation_at"]
         latest_objects = posture["latest_object_set_at"]
-        # M4/A6: run when the deadline could not be met by the next expected wake -- the deadline
-        # falls at or before the next wake at the just-observed spacing (`age >= cadence - interval`)
-        # -- so the edge wake runs and a delayed next wake can never stretch the gap past the cadence
-        # by a design guard; the residual is the waker's own spacing spread (estimate vs actual).
-        # The one-minute conjunct only suppresses a duplicate delivery of the same wake (a sub-minute
+        # A7: run when the deadline could not be met by the next wake at the maximum demonstrated
+        # spacing (`age >= cadence - wake_max`) -- an upper bound no interleaving of the trigger
+        # sources can beat, so a short gap between a daily cron and a sub-daily trigger cannot skip
+        # a wake and stretch the gap; the residual is a new record spacing (its delta).  The
+        # one-minute conjunct only suppresses a duplicate delivery of the same wake (a sub-minute
         # age); it never delays a legitimate run.
         age_database = None if latest is None else (now - latest).total_seconds()
         age_objects = None if latest_objects is None else (now - latest_objects).total_seconds()
-        due_database = age_database is None or (age_database >= cadence_hours * 3600 - interval_seconds
-                                                and age_database >= WAKE_MIN_SECONDS)
-        due_objects = age_objects is None or (age_objects >= object_hours * 3600 - interval_seconds
-                                              and age_objects >= WAKE_MIN_SECONDS)
+        due_database = age_database is None or _due_seconds(age_database, cadence_hours * 3600,
+                                                            wake_max_seconds)
+        due_objects = age_objects is None or _due_seconds(age_objects, object_hours * 3600,
+                                                          wake_max_seconds)
         if not due_database and not due_objects:
             return {"result_code": RESULT_NOT_DUE, "database_due": False, "objects_due": False,
-                    "interval_seconds": interval_seconds}
+                    "wake_max_seconds": wake_max_seconds}
         result = _deliver(prune=True, with_objects=due_objects, store=store, build_objects=build_objects)
         action = "SNAPSHOT+OBJECTS" if due_objects else "SNAPSHOT"
         if result["set_error"] is not None:
@@ -556,7 +594,7 @@ __all__ = [
     "RESULT_DELIVERY_INCOMPLETE", "RESULT_NOT_DUE", "RESULT_NOT_POSTGRES", "RESULT_NO_DRIVE", "RESULT_OK",
     "RESULT_POLICY_INVALID", "RESULT_POLICY_UNREADABLE", "RESULT_SKIPPED_BUSY", "RESULT_SNAPSHOT_FAILED",
     "RESULT_SNAPSHOT_NOT_RECORDED", "RESULT_UPLOAD_FAILED", "SCHEDULE_DDL", "SCHEDULE_INSERT_SQL",
-    "SCHEDULE_SELECT_SQL", "SCHEDULE_UPDATE_SQL", "WAKE_MAX_SECONDS", "WAKE_MIN_SECONDS",
+    "SCHEDULE_SELECT_SQL", "SCHEDULE_UPDATE_SQL", "WAKE_HISTORY", "WAKE_MAX_SECONDS", "WAKE_MIN_SECONDS",
     "active_cloud_account", "backup_lock", "backup_unlock", "cloud_drive_folder_setting", "note_wake",
     "prune_owned", "run_backup_pass", "send_snapshot",
 ]

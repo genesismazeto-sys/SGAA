@@ -223,7 +223,9 @@ retention route saves, under PostgreSQL, the database backup frequency (1-24 h, 
 the cadence an opening of this database recorded), the object-set frequency (1-7 days), the
 generations kept in each directory (2-30) and the restore-test interval (7-90 days), in the
 product's backup settings (`configuracoes_backup`, keys `pg_*`). `ops_backup` rotates by it and every
-status and due date is judged against it.
+status and due date is judged against it. A generation past its cadence is LATE (A20/A7): the page
+reports the automatic protection against the cadence itself, so a breach of the RPO is visible; the
+cutover ledger keeps its own 1.5x tolerance for the governed operator cadence.
 
 "Gerar backup agora" (the existing backup route, `app.backup.pg_snapshot`) copies the database inside
 one repeatable-read read-only transaction into a schema-v16 SQLite snapshot in scratch, proves it table
@@ -268,20 +270,21 @@ Banco de dados page (database cadence 1–24 h, object cadence 1–7 days) and t
 database itself holds. The policy is read strictly: an unreadable or partial stored policy
 refuses the pass (`POLICY_UNREADABLE` / `POLICY_INVALID`) instead of silently running on
 defaults; the defaults apply only while the policy was never saved (an empty settings table).
-The pass runs on the deadline rule: it records the wake and learns the
-interval to the next expected wake from the time elapsed since the last one (the platform's
-documented daily floor when unknown; clamped to 1 minute–7 days; a sub-minute elapsed is a
-duplicate delivery and keeps the stored interval), then runs when the deadline could not be met by
-that next wake (`age ≥ cadence − interval`) — the edge wake itself runs, so a delayed next wake
-can never stretch the gap by a guard in the threshold; the 1-minute conjunct only suppresses a
-duplicate delivery of the same wake. A generation whose phase sits later than the wake — a manual
+The pass runs on the deadline rule: it records the wake, appends its spacing to a retained window
+of the last eight inter-wake spacings (the platform's documented daily floor when unknown; clamped
+to 1 minute–7 days; a sub-minute elapsed is a duplicate delivery and adds nothing), then runs when
+the deadline could not be met by the next wake at the window's **maximum** (`age ≥ cadence −
+wake_max`) — an upper bound no interleaving of the trigger sources can beat, so a short gap between
+the daily cron and the sub-daily trigger can never inflate the threshold and skip a wake; the
+1-minute conjunct only suppresses a duplicate delivery of the same wake. A generation whose phase
+sits later than the wake — a manual
 backup at 07:00 against a 04:47 cron — therefore runs at that very wake instead of skipping to the
 next day; consecutive daily wakes keep running, and a 1 h cadence with a 15-minute waker runs
 45–60 min apart (a waker at half the cadence runs at every wake — still within the cadence). The
 protection gap's bound depends on the waker's density: with a waker at least as dense as the
-cadence the gap stays within the cadence plus the waker's spacing spread (the just-elapsed estimate
-vs the actual next spacing — seconds for the minute-granularity trigger; the design adds no slack),
-but a lone daily cron cannot compress its own spacing — under
+cadence the gap stays within the cadence for any interleaving whenever every spacing is at most the
+demonstrated maximum — the residual is a new record spacing (its delta; seconds at the platform's
+precision), and the design adds no slack — but a lone daily cron cannot compress its own spacing — under
 Hobby's in-hour precision two consecutive wakes can be 24 h 59 min apart (04:00 then 04:59) and
 both run, so the daily-cron-alone gap is the spacing itself. The wake ladder covers the bound:
 the descriptor's daily cron is the zero-cost floor, and the free Supabase Cron with `pg_net` —

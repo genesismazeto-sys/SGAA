@@ -967,7 +967,9 @@ Executor amendments (consequences of the above; not material beyond what the use
   entries naming this database's live identity (`app.hosting`), and shows the cadence and RPO (the
   cadence the opening recorded in `sgaa_cutover.opening`, else 24 h), the weekly object set, the
   retention the newest run observed (generations kept in both directories), the newest generation and
-  object set as current / late / none (tolerance 1.5, as the ledger), the newest restore validation and
+  object set as current / late / none (A20/A7: LATE once the cadence itself is exceeded, so a hosted
+  RPO breach is visible; the cutover ledger keeps its own 1.5x tolerance for the governed operator
+  cadence), the newest restore validation and
   the five newest generations; "no record" is shown as unprotected, never as protected. The page runs
   no backup: a hosted "back up now" would need the PROD password stored on the platform (P6) and could
   not make the off-platform copy. `ops_backup`: a governed run publishes the ledger's records with its
