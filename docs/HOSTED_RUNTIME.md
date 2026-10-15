@@ -116,7 +116,7 @@ authorization gate, RBAC and the route inventories are unchanged.
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth application (also the Picker values `GOOGLE_PICKER_API_KEY`, `GOOGLE_APP_ID`) | secret / no |
 | `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_TENANT_ID` | the Microsoft application the connected Microsoft account authorizes (delegated `User.Read`, `Files.ReadWrite`, `Mail.Send`; MSAL adds `offline_access`); the callback is `APP_PUBLIC_BASE_URL` + `/onedrive/callback`. Required by the product in production: every SGAA e-mail (password recovery, access links, request decisions) is sent through Microsoft Graph by that account (SPEC MP-3 A19). The process still starts without them; the Banco de dados card then names the missing variables and every mail surface reports itself unavailable, so the runbook proves them (GP2, section 5) rather than a startup blocker. `MS_GRAPH_BASE_URL` only when the default is wrong | secret / no / no |
 | `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SGAA_STORAGE_BUCKET`, `SUPABASE_PUBLISHABLE_KEY` | canonical document storage | secret key only |
-| `CRON_SECRET` | enables the scheduler front (at least 32 characters; unset or shorter: disabled) | yes |
+| `CRON_SECRET` | enables the scheduler front (any non-empty ASCII value; unset or empty: disabled) | yes |
 | `SGAA_ADMISSION` | `operator` (only the operator is admitted, section 2a) or `open`; required in production | no |
 | `SGAA_OPERATOR_TOKEN` | the operator credential while `SGAA_ADMISSION=operator` (at least 32 printable ASCII characters); kept until the rollback window closes, so a rollback can close admission again | yes |
 | `SGAA_OPENING_REFERENCE` | with `SGAA_ADMISSION=open` in production: the cutover reference entry's hash the opening is lifted with (section 2a); stays set while production is open, removed by a rollback | no |
@@ -309,7 +309,7 @@ races), and an expired lease is stolen, so a killed run never leaves a false-bus
 refused publication never undoes a completed generation, and retention deletes only files this
 database's own receipts name — rotating complete generations and partial runs separately.
 
-- `CRON_SECRET` (at least 32 ASCII characters, surrounding whitespace ignored) enables
+- `CRON_SECRET` (any non-empty ASCII value, surrounding whitespace ignored) enables
   the front; without it every request is a `404` (so a caller can tell "not configured"
   from "wrong credential"). It is compared in constant time over SHA-256 digests; nothing is read
   from the query string, no session or cookie is consulted, and no application,
@@ -457,7 +457,7 @@ set above the application's own per-address limits combined (`LOGIN_MAX_ATTEMPTS
 of a shared campus address) so that the platform never refuses a legitimate user first;
 the action is the default 429. Counters are per region and approximate. Attack Challenge Mode is the incident lever.
 
-**Scheduler.** `CRON_SECRET` (at least 32 random characters) enables the front; it is
+**Scheduler.** `CRON_SECRET` (any non-empty ASCII value) enables the front; it is
 unset until the mirror is wanted (the cron entry then reaches a disabled front that answers
 404). A route-level rule is not added: the user agent of a platform cron or of a database
 trigger is spoofable and the bearer is the control.

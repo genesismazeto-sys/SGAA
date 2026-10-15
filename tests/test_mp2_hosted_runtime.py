@@ -198,13 +198,17 @@ def test_production_also_requires_the_canonical_storage_variables(hosted_env, mo
     assert SENTINEL not in repr(hosting.startup_blockers(production=True))
 
 
-def test_the_scheduler_secret_needs_the_minimum_length(monkeypatch):
+def test_the_scheduler_secret_accepts_any_non_empty_ascii_value(monkeypatch):
     monkeypatch.delenv("CRON_SECRET", raising=False)
     assert hosting.scheduler_secret_configured() is False
-    monkeypatch.setenv("CRON_SECRET", "s" * (hosting.CRON_SECRET_MIN_LENGTH - 1))
+    monkeypatch.setenv("CRON_SECRET", "")
     assert hosting.scheduler_secret_configured() is False
-    monkeypatch.setenv("CRON_SECRET", "s" * hosting.CRON_SECRET_MIN_LENGTH)
+    monkeypatch.setenv("CRON_SECRET", "   ")
+    assert hosting.scheduler_secret_configured() is False
+    monkeypatch.setenv("CRON_SECRET", "curto")
     assert hosting.scheduler_secret_configured() is True
+    monkeypatch.setenv("CRON_SECRET", "s3nhá")  # not an HTTP-header value
+    assert hosting.scheduler_secret_configured() is False
 
 
 # ---------------------------------------------------------------------------

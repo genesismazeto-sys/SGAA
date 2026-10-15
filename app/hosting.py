@@ -32,7 +32,6 @@ PROXY_TRUST_ENV = "TRUST_PROXY_XFF"
 LOG_DIR_ENV = "APP_LOG_DIR"
 #: Vercel Cron's own variable name; the scheduler front reads it (never a query string).
 CRON_SECRET_ENV = "CRON_SECRET"
-CRON_SECRET_MIN_LENGTH = 32
 SCRATCH_DIRNAME = "sgaa-scratch"
 #: Who a hosted process admits.  ``operator``: only requests that present the operator credential
 #: (``app.web.admission_gate``); everyone else is refused before any view or database access.
@@ -141,11 +140,11 @@ def cron_secret(environ=None) -> str | None:
     """The scheduler credential, or ``None`` when the front is disabled.
 
     One rule for the front and the readiness report: surrounding whitespace is
-    ignored, at least ``CRON_SECRET_MIN_LENGTH`` characters, ASCII only (an HTTP
-    header cannot carry anything else faithfully).
+    ignored; any non-empty ASCII value is accepted (an HTTP header cannot carry
+    anything else faithfully).
     """
     secret = str(_environ(environ).get(CRON_SECRET_ENV) or "").strip()
-    return secret if len(secret) >= CRON_SECRET_MIN_LENGTH and secret.isascii() else None
+    return secret if secret and secret.isascii() else None
 
 
 def scheduler_secret_configured(environ=None) -> bool:
@@ -575,7 +574,6 @@ __all__ = [
     "opening_tag",
     "operator_token",
     "CRON_SECRET_ENV",
-    "CRON_SECRET_MIN_LENGTH",
     "SUPABASE_POOLER_SUFFIX",
     "SUPABASE_TRANSACTION_PORT",
     "connection_kind",

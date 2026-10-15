@@ -24,8 +24,7 @@ CONTRACT
         404  any other path, or the front is disabled
 
     The front is DISABLED -- every request is a 404 -- unless ``CRON_SECRET``
-    is accepted by ``hosting.cron_secret`` (at least
-    ``hosting.CRON_SECRET_MIN_LENGTH`` ASCII characters).  Nothing is
+    is accepted by ``hosting.cron_secret`` (any non-empty ASCII value).  Nothing is
     read from the query string, no cookie or session is ever consulted, the
     comparison is constant-time over SHA-256 digests, and no application,
     database or provider is touched before authentication succeeds.

@@ -416,7 +416,7 @@ promoted one, `PUBLIC_ADDRESS_NOT_PROMOTED`).
 2. GG2: **(user terminal)** `python -m app.storage.cli mirror-run --limit 1 --passes 1`, then
    raise the batch; `verify --drive`. Anything `reconciliation_required` is understood before
    going on (`mirror-requeue` only after the cause is fixed).
-3. GD2: the user sets `CRON_SECRET` (at least 32 characters; dashboard or interactive prompt)
+3. GD2: the user sets `CRON_SECRET` (any non-empty value; dashboard or interactive prompt)
    and the same commit is deployed and promoted again (`deploy_audit deploy … --admission
    operator`, then `promote`); the daily pass is observed. If the backlog needs a higher cadence,
    the external trigger is created under the same gate, with no secret in it:

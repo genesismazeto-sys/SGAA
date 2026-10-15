@@ -113,7 +113,7 @@ seams as thin delegates and drops the file path code.
 
 Scheduler front: `application(environ, start_response)`. `GET` or `POST` on
 `/internal/scheduler/mirror` only. Authentication is `Authorization: Bearer <CRON_SECRET>`
-compared in constant time over SHA-256 digests; a missing or shorter than 32 character
+compared in constant time over SHA-256 digests; a missing or empty
 secret disables the front (every request 404). Unauthorized requests are answered before
 the application, a connection or any provider is created. An authorized call builds
 `create_app()` once per process and runs `drive_mirror.run_mirror_pass` with `limit`
@@ -201,7 +201,7 @@ Open decisions (product or architecture): none.
 - H1 A hosted process writes nothing outside the scratch root and never touches the
   machine secret store (tripwire guard with a negative control).
 - H2 The web application's route, endpoint, RBAC and CSRF inventories are unchanged.
-- H3 The scheduler is fail-closed: no or short `CRON_SECRET` means disabled, a session is
+- H3 The scheduler is fail-closed: no or empty `CRON_SECRET` means disabled, a session is
   never accepted, nothing secret appears in a body or log, and no provider is touched
   before authentication.
 - H4 Backup and verify only read canonical objects; restore never overwrites or deletes.
@@ -400,7 +400,7 @@ Open decisions (product or architecture): none.
   markers, so a card save writes only the credentials it shows; (d) the carried S1-NM1 report
   description cap is withdrawn (see §15). Not material.
 - A6 2026-10-09 — Slice-4 review amendments (R2, no material finding): the enable rule lives once in
-  `hosting.cron_secret` (stripped, at least 32 ASCII characters) and serves both the front and the
+  `hosting.cron_secret` (stripped, any non-empty ASCII value) and serves both the front and the
   readiness report; the presented token is encoded latin-1 as WSGI decodes headers, so a non-ASCII
   header is a 401, never an error; the lease floor is `2 * LEASE_SAFETY_SECONDS` (the CLI's), because
   below it only the first claimed object of a pass can clear the worker's safety margin; the default

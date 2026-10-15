@@ -250,7 +250,7 @@ remains possible. W ends only on the C14 criteria; purge and legacy contraction 
   per-address attempt limit within the same window so the platform never refuses a legitimate user
   first; counters are per region, recorded as a residual. Everything else rests on the durable
   application throttle (MP-2). Attack Challenge Mode is documented as the incident lever.
-- Scheduler: bearer `CRON_SECRET` (random, at least 32 characters, rotated by redeploy), fail-closed
+- Scheduler: bearer `CRON_SECRET` (any non-empty ASCII value, rotated by redeploy), fail-closed
   front, path rule limiting the route to the cron user agent as noise reduction only.
 - Secrets: a matrix of every variable, its owner, generation, platform scope (write-only where the
   plan offers it), rotation effect (`APP_SECRET_KEY` ends sessions and clears throttle windows;

@@ -72,8 +72,8 @@ def _assert_clean(response):
 # --- the gate -----------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("secret", [None, "", "short", "x" * (hosting.CRON_SECRET_MIN_LENGTH - 1)])
-def test_the_front_is_disabled_without_a_long_enough_secret(front, untouched, monkeypatch, secret):
+@pytest.mark.parametrize("secret", [None, "", "   "])
+def test_the_front_is_disabled_without_a_secret(front, untouched, monkeypatch, secret):
     if secret is None:
         monkeypatch.delenv("CRON_SECRET")
     else:
@@ -85,8 +85,8 @@ def test_the_front_is_disabled_without_a_long_enough_secret(front, untouched, mo
     assert untouched.build.calls == [] and untouched.run.calls == []
 
 
-def test_the_minimum_length_boundary_enables_the_front(front, untouched, monkeypatch):
-    exact = "e" * hosting.CRON_SECRET_MIN_LENGTH
+def test_a_short_secret_enables_the_front(front, untouched, monkeypatch):
+    exact = "curto"
     monkeypatch.setenv("CRON_SECRET", exact)
     response = front.client.get(front.path, headers={"Authorization": "Bearer nope"})
     assert response.status_code == 401  # enabled: it asks for credentials
@@ -279,7 +279,6 @@ def test_a_startup_failure_is_a_500_that_is_retried_not_cached(front, monkeypatc
 def test_the_documented_numbers_are_pinned_not_derived():
     """HOSTED_RUNTIME section 9 states these values; a change must be a deliberate edit of both."""
     assert (scheduler.DEFAULT_BATCH, scheduler.MAX_BATCH, scheduler.DEFAULT_LEASE_SECONDS) == (5, 25, 300)
-    assert hosting.CRON_SECRET_MIN_LENGTH == 32
 
 
 @pytest.mark.parametrize("raw", ["9" * 5000, "1" * 10])
@@ -291,16 +290,16 @@ def test_an_absurdly_long_numeric_setting_falls_back_instead_of_raising(monkeypa
 
 
 def test_the_secret_rule_has_one_owner_for_the_front_and_the_readiness_report(front, untouched, monkeypatch):
-    for value, enabled in (
-        ("   " + SECRET + "  ", True),            # surrounding whitespace is ignored
-        ("s" * 31, False),
-        ("é" * 40, False),                          # non-ASCII can never be presented faithfully
+    for value, presented, enabled in (
+        ("   " + SECRET + "  ", SECRET, True),    # surrounding whitespace is ignored
+        ("s", "s", True),                         # any non-empty ASCII value is accepted
+        ("é" * 40, SECRET, False),                  # non-ASCII can never be presented faithfully
     ):
         monkeypatch.setenv("CRON_SECRET", value)
         assert hosting.scheduler_secret_configured() is enabled
         assert (hosting.cron_secret() is not None) is enabled
-        status = front.client.get(front.path, headers=front.headers).status_code
-        # enabled: the presented SECRET authenticates (it reaches the application build, which the
+        status = front.client.get(front.path, headers={"Authorization": f"Bearer {presented}"}).status_code
+        # enabled: the presented value authenticates (it reaches the application build, which the
         # `untouched` spy fails -> 500); disabled: the front does not exist (404)
         assert status == (500 if enabled else 404)
 
