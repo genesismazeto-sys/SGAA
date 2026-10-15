@@ -1388,3 +1388,33 @@ Graph confirmed the send) and the user confirmed the message arrived. Re-opening
 Pending: the cross-family R3 review verdict (the user runs it from the regenerated packet) and, optionally, GA2
 (a DEV Google client) for the OAuth callback rehearsal. GP0 is not authorized. The DEV database credential was repaired by the user and every database lane ran
 (A14); DEV `public` was left empty and its Data API off.
+
+
+### Post-C13 governed restoration evidence — 2026-10-15
+
+The production cutover remains at **C13**; this is an evidence entry, not a
+C14 transition. The operator reported `tools/ops_backup.py drill` exit 0,
+`DRILL_VERIFIED`, using the post-C13 governed `LIVE_RUN` generation from
+2026-10-15T20:07:04Z (manifest
+`cbce02ea1946b3305b0bc6e25daeb7d5e5f129b0d97f2519d65db1d1e41ed760`).
+The operation targeted a fresh isolated PostgreSQL 17.11 scratch database, with
+`DATABASE_URL` absent. It verified 39 tables and 2 objects, including the
+sealed object set and restored object-row coverage. The copy-integrity and
+clone-sequence checks passed; scratch resources were removed. The ledger's
+recorded restore entry is seq 109; reported head
+`668b0ab73b0d7a86211a17cefb01b5bcc9e737bb8c8ea68b21f8c9082391a5f0`.
+The operator's log remains in their local custody; no private data is copied
+into this SPEC.
+
+Independent read-only production inspection after the report found that the
+new restore receipt was **not yet published** to `sgaa_ops.backup_records`:
+the latest PROD-facing restore record remains from 2026-10-11. Publication
+must use the existing governed `ops_backup publish` process or the next
+governed backup run, never a manually reconstructed SQL insert. This does not
+invalidate the cutover-ledger receipt.
+
+Remaining C14 guards: the 30-day window from the recorded C13 timestamp;
+uninterrupted governed database/object-set cadence; zero unresolved
+reconciliation; and the exact restore receipt already recorded for this
+post-C13 generation. The hosted A20 cron receipts are separate and do not
+replace the Layer-2 governed cadence. MP-4 remains unstarted.
