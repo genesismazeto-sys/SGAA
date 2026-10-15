@@ -19,9 +19,8 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
 - Logical schema `prod-1` v16 on SQLite and PostgreSQL (v16 adds two empty, ephemeral
   tables: `auth_throttle_events`, `admin_import_previews`).
 - PostgreSQL schema authority, runtime dialect and transaction semantics are in
-  place. Two tools are qualified on local PostgreSQL 15 but not cut over: the
-  Path-B cutover tool (which accepts converged legacy rows) and the Layer-2
-  backup/restore tool (`tools/pg_backup.py`).
+  place. The production database is hosted in Supabase PostgreSQL 17; Path-B
+  migration, governed Layer-2 backup/restore and the production cutover are recorded.
 - Runtimes (`docs/HOSTED_RUNTIME.md` is the operator contract):
   - `local` (default): the Windows workstation, development, tests — unchanged;
   - `hosted` (`SGAA_RUNTIME=hosted`, declared, never inferred): PostgreSQL only,
@@ -35,8 +34,9 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
     (direct signed TUS);
   - Google Drive is the asynchronous mirror, run by the operator CLI
     `python -m app.storage.cli` (`mirror-run`, `mirror-requeue`) or by the
-    authenticated scheduler front `app.storage.scheduler:application`
-    (`CRON_SECRET`; its own function, nothing deploys it yet);
+    deployed authenticated scheduler front `app.storage.scheduler:application`.
+    The backup endpoint is also called by Supabase Cron every 15 minutes;
+    Vercel Hobby supplies the daily mirror and backup fallback.
   - the same CLI provides `census`, `verify` (cross-check of references,
     canonical objects, bucket and mirrors), `converge` (legacy Google / local →
     canonical, dry run by default) and the object-byte backup
@@ -52,22 +52,32 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
 - STORAGE S1–S3: CLOSED_AND_PUBLISHED. MP-0 (governance): CLOSED.
 - MP-1 storage convergence: CLOSED (`docs/specs/MP-1-storage-convergence.md`).
 - MP-2 hosting readiness: CLOSED (`docs/specs/MP-2-hosting-readiness.md`).
-- MP-3 production integration / cutover: IN PRODUCTION, C12 OPEN_PONR_PENDING
-  (`docs/specs/MP-3-production-integration.md`; cutover ledger outside the repository). The
-  opening was recorded on 2026-10-12; admission is PAUSED (the governed operator-only deployment
-  promoted; the opening authorization stands, no write barrier) for the pre-PONR product-contract
-  remediation A19: the operator-visible PostgreSQL backup posture and the Microsoft integration
-  the mail transport depends on, both removed or deferred during the hosted transition without
-  the user's authorization. C13 (PONR) is not recorded; re-opening needs the user's GC2.
+- MP-3 production integration / cutover: IN PRODUCTION, **C13 PONR_RECORDED**
+  (`docs/specs/MP-3-production-integration.md`; governed ledger outside the repository).
+  Public admission is OPEN, with no write barrier or unresolved ledger act.
+  C14 remains pending until the governed rollback window can be closed.
+- A19 is deployed (operator-visible PostgreSQL backup posture and Microsoft integration).
+  A20 hosted automation is in PROD: commit `ffa2749`, deployment
+  `dpl_Att7FUkPuzyj63yk12kE3Zp79L3E`, smoke 11/11. Supabase Cron calls the
+  bearer-authenticated backup endpoint every 15 minutes. One triggered due pass
+  produced a complete hosted snapshot to Google Drive and OneDrive on 2026-10-15
+  22:05 UTC (two snapshot and two CSV file receipts, zero delivery failures).
+  The first subsequently scheduled DUE pass is still awaiting observation;
+  a no-op scheduled wake returned HTTP 200/NOT_DUE. The configured policy is the
+  default 24 h database / 7 d objects / 2 retained / 30 d restoration drill.
 
 ## Production
 
 - Web runtime: Vercel Hobby project `sgaa` (`https://sgaa.vercel.app`), Supabase Free PROD
   `sgaa-prod` (`uckadhcwfknklmdktuyi`) holding the migrated data, canonical storage bucket and the
   Google Drive mirror (proven at C11). Every PROD action follows the runbook and the ledger.
-- Backups: operator-run governed generations (`tools/ops_backup.py --ledger-dir`) on the cadence
-  recorded at the opening, restore drills, an off-platform copy; their records are published into
-  PROD for the Banco de dados page (A19).
+- Backups: the production A20 scheduler runs on the hosted platform; it records
+  complete deliveries to every connected drive. The separate operator-run governed
+  Layer-2 generations (`tools/ops_backup.py --ledger-dir`) and off-platform copies
+  remain mandatory through C14 and are not replaced by the A20 receipts.
+  The previously published actual restoration drill (2026-10-11) verified
+  39 tables and 2 objects. A new drill of the A20-created generation has not
+  been claimed.
 - The workstation SQLite runtime is stopped and frozen: the rollback asset until the window
   closes (C14); its contraction is MP-4.
 - Residuals recorded by MP-2 (no hosting impact today): `main.py` still attaches a file handler
@@ -107,5 +117,5 @@ needs the gitignored `database.db`, so it fails in a clean worktree.
 | MP-0 | Spec-driven governance transition | CLOSED |
 | MP-1 | Storage convergence — Drive mirror worker (S4); legacy-migration tooling, census, DEV rehearsal (S5); storage reconciliation | CLOSED |
 | MP-2 | Hosting readiness — read-only filesystem, environment-only secrets, scheduler trigger (mirror worker included), object-byte backup (S7, part of S6) | CLOSED |
-| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | C12 OPEN_PONR_PENDING; admission paused for the pre-PONR remediation A19; C13 and C14 pending |
+| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | C13 PONR_RECORDED; admission OPEN, A19 deployed, A20 S5 operational with first hosted backup verified; autonomous due wake and C14 pending |
 | MP-4 | Legacy contraction after the rollback window — legacy document paths and bytes, SQLite file backup, Windows scheduler, purge policy (rest of S6) | NOT STARTED |
