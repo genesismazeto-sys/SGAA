@@ -1418,3 +1418,44 @@ uninterrupted governed database/object-set cadence; zero unresolved
 reconciliation; and the exact restore receipt already recorded for this
 post-C13 generation. The hosted A20 cron receipts are separate and do not
 replace the Layer-2 governed cadence. MP-4 remains unstarted.
+
+
+### Confirmed C14 cadence nonconformance — 2026-10-15
+
+The operator completed a **read-only audit of the verified 109-entry local cutover
+ledger**, including raw backup enumeration and execution of the real
+`cutover_ledger._check_window` predicate in memory. The chain remained OK,
+C13 recorded, no unresolved operation. This updates the tentative warning in
+`PROJECT_STATE.md`; it is not a waiver or a change to the frozen acceptance
+contract.
+
+- C12 began at 2026-10-12T09:12:20Z, with a 24-hour Layer-2 cadence and
+  1.5x tolerance (36 hours). Governed seq 89's generation at
+  2026-10-13T15:07:54Z and seq 94's generation at
+  2026-10-15T20:07:04Z are **52 h 59 m 10 s** apart, 16 h 59 m 10 s over
+  the limit. No intervening recorded backup exists. Unregistered local sets
+  are not admissible evidence.
+- The object cadence is valid. The post-C13 restore receipt, seq 109, is
+  valid and bound to seq 94's manifest. Both conditions are independent of
+  the database-cadence breach.
+- The append-only ledger and generation-time guards make this breach
+  permanent under the existing contract: future timely generations do not
+  make `_gaps_within` true. C14 currently refuses
+  `WINDOW_NOT_ELAPSED`; once that window has elapsed it necessarily refuses
+  `BACKUP_CADENCE_BROKEN`. The original acceptance requirement has **not**
+  been met.
+- **Governance finding: BLOCKER / material R3 escalation.** The owner must
+  decide whether to preserve C13 indefinitely with the original C14 blocked
+  or authorize an openly recorded, independently reviewed remedial closure
+  contract with new prospective proof. No evidence may be backdated, invented,
+  removed, migrated to a side ledger, or silently excluded from a check.
+  Any proposed exception must remain conspicuous in the chain and the final
+  handover and must not claim uninterrupted protection from C12.
+- Until a decision and reviewed change, keep running governed Layer-2
+  backups and their off-platform object copies on the established cadence;
+  A20 hosted wakes do not substitute. The seq 109 restore receipt remains
+  pending publication through the genuine `ops_backup publish` path.
+  C14 and MP-4 are **not authorized**.
+
+Operator-provided raw audit outputs remain in their local custody. No
+production access or policy/ledger mutation was performed by this audit.
