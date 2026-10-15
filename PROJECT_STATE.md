@@ -75,9 +75,14 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   complete deliveries to every connected drive. The separate operator-run governed
   Layer-2 generations (`tools/ops_backup.py --ledger-dir`) and off-platform copies
   remain mandatory through C14 and are not replaced by the A20 receipts.
-  The previously published actual restoration drill (2026-10-11) verified
-  39 tables and 2 objects. A new drill of the A20-created generation has not
-  been claimed.
+  The governed post-C13 generation from 2026-10-15T20:07:04Z was restored
+  into a new isolated PostgreSQL 17 scratch database on 2026-10-15: 39 tables
+  and 2 objects verified; the restore was recorded as cutover ledger seq 109
+  (DRILL_VERIFIED, head 668b0ab7...). Scratch was removed after verification;
+  PROD data and configuration were untouched. This was a governed Layer-2
+  generation, NOT the separate A20-generated hosted snapshot. The drill
+  receipt is in the cutover ledger; its publication to the PROD Banco de dados
+  posture remains pending via the governed `ops_backup publish` procedure.
 - The workstation SQLite runtime is stopped and frozen: the rollback asset until the window
   closes (C14); its contraction is MP-4.
 - Residuals recorded by MP-2 (no hosting impact today): `main.py` still attaches a file handler
