@@ -271,15 +271,17 @@ defaults; the defaults apply only while the policy was never saved (an empty set
 The pass runs on the deadline rule: it records the wake and learns the
 interval to the next expected wake from the time elapsed since the last one (the platform's
 documented daily floor when unknown; clamped to 1 minute–7 days; a sub-minute elapsed is a
-duplicate delivery and keeps the stored interval), then runs when the deadline would otherwise
-fall before that next wake (`age ≥ cadence − interval + 1 min`; the same minute guards a
-duplicated wake). A generation whose phase sits later than the wake — a manual backup at 07:00
-against a 04:47 cron — therefore runs at that very wake instead of skipping to the next day;
-consecutive daily wakes keep running, and a 1 h cadence with a 15- or 30-minute waker runs at
-~60 min, never past the cadence and never on every wake. The protection gap's bound depends on
-the waker's density: with a waker at least as dense as the cadence the gap stays within the
-cadence plus the 1-minute guard plus twice the waker's timing deviation (≈ cadence + 1 min for
-the minute-granularity trigger), but a lone daily cron cannot compress its own spacing — under
+duplicate delivery and keeps the stored interval), then runs when the deadline could not be met by
+that next wake (`age ≥ cadence − interval`) — the edge wake itself runs, so a delayed next wake
+can never stretch the gap by a guard in the threshold; the 1-minute conjunct only suppresses a
+duplicate delivery of the same wake. A generation whose phase sits later than the wake — a manual
+backup at 07:00 against a 04:47 cron — therefore runs at that very wake instead of skipping to the
+next day; consecutive daily wakes keep running, and a 1 h cadence with a 15-minute waker runs
+45–60 min apart (a waker at half the cadence runs at every wake — still within the cadence). The
+protection gap's bound depends on the waker's density: with a waker at least as dense as the
+cadence the gap stays within the cadence plus the waker's spacing spread (the just-elapsed estimate
+vs the actual next spacing — seconds for the minute-granularity trigger; the design adds no slack),
+but a lone daily cron cannot compress its own spacing — under
 Hobby's in-hour precision two consecutive wakes can be 24 h 59 min apart (04:00 then 04:59) and
 both run, so the daily-cron-alone gap is the spacing itself. The wake ladder covers the bound:
 the descriptor's daily cron is the zero-cost floor, and the free Supabase Cron with `pg_net` —

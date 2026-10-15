@@ -212,15 +212,19 @@ def test_the_object_cadence_alone_still_ships_a_fresh_database_copy(env):
     assert env.deliveries == [{"prune": True, "with_objects": True}]
 
 
-def test_a_wake_runs_when_the_deadline_falls_before_the_next_expected_wake(env):
-    """M4: the decision uses the learned wake interval, not a static window."""
+def test_a_wake_runs_when_the_deadline_could_not_be_met_by_the_next_expected_wake(env):
+    """M4/A6: the decision uses the learned wake interval; a wake at exactly `cadence - interval`
+    runs -- the next expected wake could arrive late and miss the deadline (the old guard inside
+    the threshold skipped it, and a delayed wake then stretched the gap past the cadence)."""
     env.deliver_result = _delivered()
     env.wake_interval = 6 * 3600  # a 6-hourly waker under a 24 h policy: threshold 18 h
     env.posture = _posture(latest_hours=17, latest_objects_hours=17)
     assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_NOT_DUE
+    env.posture = _posture(latest_hours=18, latest_objects_hours=18)  # the edge: runs
+    assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK
     env.posture = _posture(latest_hours=19, latest_objects_hours=19)
     assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK
-    # a daily waker: the deadline (24 h) always falls before the next daily wake, so every wake runs
+    # a daily waker: the deadline could never be met by the next daily wake, so every wake runs
     env.wake_interval = 86400
     env.posture = _posture(latest_hours=1, latest_objects_hours=1)
     assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK
@@ -240,13 +244,16 @@ def test_a_47_hour_gap_cannot_happen_under_a_24_hour_policy(env):
     assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK
 
 
-def test_a_one_hour_policy_runs_on_cadence_with_a_sub_daily_waker(env):
-    """M4: with a 15-minute waker at a 1 h policy the threshold is 45 min: the run happens at the
-    first wake that would otherwise miss the deadline (~45-60 min), never later."""
+def test_a_one_hour_policy_runs_at_the_last_wake_before_the_deadline(env):
+    """M4/A6: with a 15-minute waker at a 1 h policy the threshold is 45 min and the edge wake runs
+    (the next expected wake could be late), so runs are 45-60 min apart -- never past the cadence,
+    never per wake."""
     env.deliver_result = _delivered()
     env.wake_interval = 900
     env.posture = _posture(cadence=1, latest_hours=0.67, latest_objects_hours=1)  # 40 min: not due
     assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_NOT_DUE
+    env.posture = _posture(cadence=1, latest_hours=0.75, latest_objects_hours=1)  # 45 min: the edge
+    assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK
     env.posture = _posture(cadence=1, latest_hours=0.84, latest_objects_hours=1)  # ~50 min: due
     assert hosted_backup.run_backup_pass()["result_code"] == hosted_backup.RESULT_OK
 
@@ -1220,6 +1227,30 @@ def test_the_reviewer_sequence_a_manual_at_0700_then_the_0447_wake_runs(producti
     assert day2["result_code"] == hosted_backup.RESULT_OK  # THE discriminator (was NOT_DUE)
     posture = _posture_of(env)
     assert posture["latest_generation_at"].strftime("%Y-%m-%dT%H:%M:%SZ") == "2026-10-02T04:47:00Z"
+
+
+@needs_pg
+def test_the_deadline_edge_wake_runs_so_a_delayed_wake_cannot_stretch_the_gap(production):
+    """A6 discriminating lane: Day1 00:00 generation, 6-hourly wakes.  At Day1 18:00 the age (18 h)
+    equals `cadence - interval` (24 h - 6 h): the old threshold (18 h 01 m, the guard inside the
+    deadline test) skipped it, and a 1-minute-delayed Day2 00:01 wake then ran -- a 24 h 01 min gap
+    (reproduced on db72ce2).  The deadline test is now `age >= cadence - interval` with no guard in
+    the threshold, so the edge wake runs (an 18 h gap) and the delayed wake is a no-op."""
+    env = production
+    _set_policy(env, database_cadence_hours=24, object_cadence_days=7, retention_generations=2,
+                restore_test_days=30)
+    run = lambda: hosted_backup.run_backup_pass(store=env.store,  # noqa: E731
+                                                build_objects=object_sets.build_objects_archive)
+    codes = [
+        _run_at(env, 1, 0, 0, run)["result_code"],
+        _run_at(env, 1, 6, 0, run)["result_code"],
+        _run_at(env, 1, 12, 0, run)["result_code"],
+        _run_at(env, 1, 18, 0, run)["result_code"],   # the edge: must run
+        _run_at(env, 2, 0, 1, run)["result_code"],    # the delayed wake: must be a no-op
+    ]
+    assert codes == ["OK", "NOT_DUE", "NOT_DUE", "OK", "NOT_DUE"]
+    posture = _posture_of(env)
+    assert posture["latest_generation_at"].strftime("%Y-%m-%dT%H:%M:%SZ") == "2026-10-01T18:00:00Z"
 
 
 @needs_pg

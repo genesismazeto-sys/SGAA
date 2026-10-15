@@ -458,9 +458,9 @@ def run_backup_pass(*, store=None, build_objects=None) -> dict:
 
     The wake interval is not contract; every wake reads the administrator's policy strictly (M3:
     an unreadable or unverifiable policy refuses the run, never a substituted default) and the
-    receipts, records itself and runs on the deadline rule (M4/A4: run when the deadline would
-    otherwise fall before the next expected wake, the interval learned from the just-elapsed time
-    between wakes).  A receipt is only
+    receipts, records itself and runs on the deadline rule (M4/A4, A6: run when the deadline could
+    not be met by the next expected wake, `age >= cadence - interval`, the interval learned from the
+    just-elapsed time between wakes; the residual is the waker's spacing spread).  A receipt is only
     published when every connected drive received every required artifact (M1).  ``build_objects``
     is the background object-set builder the scheduler service injects (``app.backup.object_sets``).
     Returns a value-free dict with ``result_code`` (``OK``, ``NOT_DUE``, ``SKIPPED_BUSY``,
@@ -502,15 +502,18 @@ def run_backup_pass(*, store=None, build_objects=None) -> dict:
         object_hours = int(policy["pg_object_cadence_days"]) * 24
         latest = posture["latest_generation_at"]
         latest_objects = posture["latest_object_set_at"]
-        # M4: run when the deadline would otherwise fall before the next expected wake (the interval
-        # just learned), with a one-minute guard so a duplicate delivery of the same wake never
-        # re-runs.  A generation whose phase sits later than the wake -- a manual at 07:00 vs a
-        # 04:47 cron -- therefore runs at that very wake instead of skipping to the next day, and the
-        # gap between consecutive generations never exceeds the cadence.
-        due_database = latest is None or (now - latest).total_seconds() >= (
-            cadence_hours * 3600 - interval_seconds + WAKE_MIN_SECONDS)
-        due_objects = latest_objects is None or (now - latest_objects).total_seconds() >= (
-            object_hours * 3600 - interval_seconds + WAKE_MIN_SECONDS)
+        # M4/A6: run when the deadline could not be met by the next expected wake -- the deadline
+        # falls at or before the next wake at the just-observed spacing (`age >= cadence - interval`)
+        # -- so the edge wake runs and a delayed next wake can never stretch the gap past the cadence
+        # by a design guard; the residual is the waker's own spacing spread (estimate vs actual).
+        # The one-minute conjunct only suppresses a duplicate delivery of the same wake (a sub-minute
+        # age); it never delays a legitimate run.
+        age_database = None if latest is None else (now - latest).total_seconds()
+        age_objects = None if latest_objects is None else (now - latest_objects).total_seconds()
+        due_database = age_database is None or (age_database >= cadence_hours * 3600 - interval_seconds
+                                                and age_database >= WAKE_MIN_SECONDS)
+        due_objects = age_objects is None or (age_objects >= object_hours * 3600 - interval_seconds
+                                              and age_objects >= WAKE_MIN_SECONDS)
         if not due_database and not due_objects:
             return {"result_code": RESULT_NOT_DUE, "database_due": False, "objects_due": False,
                     "interval_seconds": interval_seconds}

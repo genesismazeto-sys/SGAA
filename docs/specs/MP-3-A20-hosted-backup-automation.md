@@ -65,7 +65,7 @@ After confirmation and the gated deploy, without any operator workstation or man
 | # | Requirement | Mechanism | Evidence lane (later slices) | Residual / boundary |
 |---|---|---|---|---|
 | 1 | Complete, restorable DB and object backups, independent off-platform copies | Snapshot carries every `MIGRATE_EXACT` table (registers, images, `storage_objects` rows), proven table-by-table at creation; the sealed object set carries every object's bytes (dedup by SHA-256); both go to every connected drive (user-owned accounts, independent of Vercel/Supabase); restore = hosted "Recuperar" or Path-B for the DB, unzip → `verify-backup` → `restore-objects` for the bytes | real-PG lanes: snapshot → Path-B fingerprint equality; set zip round-trip → verify → restore into scratch; served lane shows the generation | Target-side classes (settings, OAuth, schema metadata, ephemeral) are kept/recreated by the installation by policy, not carried in the snapshot; provider accounts are user-managed |
-| 2 | Configured cadences incl. sub-daily on free plans | The endpoint is cadence-agnostic and deadline-driven (M4/A4): every wake records itself, learns the interval to the next expected wake from the just-elapsed time between wakes (daily floor when unknown, clamped, sub-minute = duplicate), and runs when the deadline would otherwise fall before that next wake — so a generation whose phase sits later than the wake (a manual at 07:00 vs a 04:47 cron) runs at that same wake, the 47 h gap stays impossible, and sub-daily cadences run on cadence (never per wake, never past it); wakes come from the descriptor cron (daily floor, zero cost) plus Supabase Cron + pg_net (free; bearer in Vault; user-enabled) for sub-daily | due/no-op/allow sequences with a simulated clock, the reviewer's manual→wake sequence as a discriminating real-PG lane, the interval-learning and duplicate lanes; the daily-only spacing and ladder bound lanes (A5); the trigger firing proven on the platform lane before it is relied upon | The wake interval itself is not contract; the observed interval is a record, not a setting; the RPO bound depends on the waker's density (A5) — the ladder of D4 bounds it (cadence + guard + 2·deviation), the lone daily cron's spacing (cadence + in-hour precision) is documented, never claimed as the guarantee |
+| 2 | Configured cadences incl. sub-daily on free plans | The endpoint is cadence-agnostic and deadline-driven (M4/A4, A6): every wake records itself, learns the interval to the next expected wake from the just-elapsed time between wakes (daily floor when unknown, clamped, sub-minute = duplicate), and runs when the deadline could not be met by that next wake (`age ≥ cadence − interval`; the edge wake runs) — so a generation whose phase sits later than the wake (a manual at 07:00 vs a 04:47 cron) runs at that same wake, the 47 h gap stays impossible, a delayed wake can never stretch the gap by a design guard, and sub-daily cadences run at the last wake before the deadline (never per wake for a waker sparser than half the cadence, never past it); wakes come from the descriptor cron (daily floor, zero cost) plus Supabase Cron + pg_net (free; bearer in Vault; user-enabled) for sub-daily | due/no-op/allow sequences with a simulated clock, the reviewer's manual→wake sequence as a discriminating real-PG lane, the interval-learning and duplicate lanes, the edge-wake lane (A6); the daily-only spacing and ladder bound lanes (A5); the trigger firing proven on the platform lane before it is relied upon | The wake interval itself is not contract; the observed interval is a record, not a setting; the RPO bound depends on the waker's density (A5/A6) — the ladder of D4 bounds it (cadence + the waker's spacing spread; no design slack), the lone daily cron's spacing (cadence + in-hour precision) is documented, never claimed as the guarantee |
 | 3 | Hosting limits, concurrency, idempotency, failure recovery | Runs inside the existing scheduler function (`maxDuration` 300, scratch `/tmp`); object set pre-checks (object count, manifest size, free space) refuse loudly; a lock ROW with a lease in `sgaa_ops.backup_lock` (M2/A3) — taken and released in transactions committed on their own (visible through the transaction pooler and past any ambient request transaction), expired leases stolen, holder-checked release, never a false-busy state — shared by the pass, the manual button and the restore; control DDL retries once against concurrent-first-use catalog races; receipts insert `ON CONFLICT DO NOTHING`; uploads never replace; unique identity+token names; every receipt records its completeness and only complete wakes advance the clock (M1/A3); a killed run retries next wake; partial receipts own their files so retention bounds every drive | overflow refusal; duplicate-wake no-duplicate lane; busy-lock lane; lease-steal, holder-safe release and cross-backend visibility lanes; partial-delivery/retry and mixed-history lanes; killed-run recovery lane | Object sets beyond the function envelope fail visibly; batching deferred (§15) |
 | 4 | Security and credential boundaries | New path on the existing bearer-authenticated scheduler front: no session, no CSRF, fail-closed 404/401/405; no secret read or written; value-free bodies and logs; backups contain personal data and travel only to the user's drives over the existing TLS clients; P6/§12 custody untouched | extended auth-negative and leak-audit lanes; guard test: no new secret, no web route/RBAC/CSRF inventory change | none |
 | 5 | C13–C14 governed obligations and ledger invariants | The hosted layer writes only `sgaa_ops` receipts (as the manual button does) and never `sgaa_cutover` or a business table; it claims no ledger provenance and no C14 cadence satisfaction — through C14 the operator governed cadence remains the obligation; after C14 (where the ledger records no generation) it is the product's primary protection | guard lane: no cutover/business writes; ledger lanes unaffected; C14 gate tests unchanged | After C14 the operator pipeline remains the recovery asset of record (D6) |
@@ -80,10 +80,11 @@ After confirmation and the gated deploy, without any operator workstation or man
 - S2 — scheduler job: `hosted_backup.run_backup_pass()`; the scheduler front gains
   `GET|POST /internal/scheduler/backup` (thin dispatch, same auth posture as the mirror). Due-ness from
   one posture read (identity-filtered, intact receipts only) against a strictly read policy (M3) and a
-  **deadline rule** (M4/A4): the wake records itself and learns the interval to the next expected wake
-  from the just-elapsed time between wakes (the platform's daily floor when unknown, clamped to
-  [1 min, 7 days], a sub-minute elapsed being a duplicate delivery), and runs when the deadline would
-  otherwise fall before that next wake (`age ≥ cadence − interval + 1 min`). Actions: objects due →
+  **deadline rule** (M4/A4, A6): the wake records itself and learns the interval to the next expected
+  wake from the just-elapsed time between wakes (the platform's daily floor when unknown, clamped to
+  [1 min, 7 days], a sub-minute elapsed being a duplicate delivery), and runs when the deadline could
+  not be met by that next wake (`age ≥ cadence − interval`; the edge wake runs, and the 1-minute
+  conjunct only suppresses a duplicate delivery). Actions: objects due →
   fresh DB snapshot + sealed object set in one receipt; DB due only → snapshot; neither → 200 no-op.
   Unreadable/invalid policy → 503 (`POLICY_UNREADABLE` / `POLICY_INVALID`), nothing runs or is deleted.
 - S3 — object set: built by `object_backup.backup()` in scratch (owner of the builder:
@@ -133,12 +134,13 @@ Open decisions: none.
 - A receipt is only recorded for a run whose snapshot (and set, when due) verified; every receipt
   carries its completeness, and only complete receipts advance the protection clock, the due dates
   or the page's status (M1/A3); a refusal never undoes a completed generation.
-- The schedule runs on the deadline rule (M4/A4): a wake runs when the deadline would otherwise fall
-  before the next expected wake; the observed wake interval is a record, never a setting.
-- The RPO guarantee is a property of the wake ladder (D4/A5): with a waker at least as dense as the
-  cadence, the gap never exceeds the cadence by more than the duplicate guard and twice the waker's
-  timing deviation; the spacing of a lone daily cron (up to cadence + the platform's in-hour
-  precision) is documented, never claimed as the bound.
+- The schedule runs on the deadline rule (M4/A4, A6): a wake runs when the deadline could not be met
+  by the next expected wake (`age ≥ cadence − interval`, the interval learned from the just-elapsed
+  time between wakes); the observed wake interval is a record, never a setting.
+- The RPO guarantee is a property of the wake ladder (D4/A5, A6): with a waker at least as dense as
+  the cadence, the gap stays within the cadence plus the waker's spacing spread (the just-elapsed
+  estimate vs the actual next spacing) — the design adds no slack; the spacing of a lone daily cron
+  (up to cadence + the platform's in-hour precision) is documented, never claimed as the bound.
 - Manual snapshot, download and restore routes, and every operator tool, keep their behaviour; the only
   addition on the manual paths is the shared busy lock (a clear message, nothing lost).
 - No new secret anywhere; no schema change; no web route, RBAC or CSRF inventory change.
@@ -258,13 +260,16 @@ cross-family R3 review from a packet the executor prepares; the deploy waits for
   and the restore share it, and a killed run can never leave a persistent false-busy state.  **M3**
   the scheduled decision reads the administrator's policy strictly: an unreadable policy answers
   `POLICY_UNREADABLE` and a partial or invalid one `POLICY_INVALID`; the defaults are used only when
-  the policy is provably unset (empty table).  **M4** the due test runs on the deadline rule (A4):
-  each wake is recorded and learns the interval to the next expected wake (the platform's daily floor
-  when unknown, clamped to 1 minute–7 days; a sub-minute elapsed is a duplicate delivery), and the
-  pass runs when the deadline would otherwise fall before that next wake
-  (`age ≥ cadence − interval + 1 min`) — so a generation whose phase sits later than the wake (a
+  the policy is provably unset (empty table).  **M4** the due test runs on the deadline rule
+  (A4, refined by A6): each wake is recorded and learns the interval to the next expected wake (the
+  platform's daily floor when unknown, clamped to 1 minute–7 days; a sub-minute elapsed is a
+  duplicate delivery), and the pass runs when the deadline could not be met by that next wake
+  (`age ≥ cadence − interval`; the edge wake runs, the 1-minute conjunct only suppressing a
+  duplicate delivery) — so a generation whose phase sits later than the wake (a
   manual at 07:00 against a 04:47 cron) runs at that same wake, the reported ~47 h gap stays
-  impossible, and sub-daily cadences still never run on every wake.  Focused evidence replaces a new
+  impossible, a delayed wake can never stretch the gap by a design guard, and sub-daily cadences
+  still never run on every wake (for a waker sparser than half the cadence).  Focused evidence
+  replaces a new
   full suite (TEP; the previous T5 baseline is qualified): the A20 suite (58 nodes incl. the M1
   partial-delivery/retry lane, the M2 lock/lease lanes, the M3 partial-policy lane and the M4
   deadline/47 h-gap lanes on real PostgreSQL) plus the
@@ -300,10 +305,12 @@ cross-family R3 review from a packet the executor prepares; the deploy waits for
   documented daily floor when unknown; clamped to [1 min, 7 days]; a sub-minute elapsed is a
   duplicate delivery and keeps the stored interval), and the pass runs when the deadline would
   otherwise fall before that next wake (`age ≥ cadence − interval + 1 min`; the same minute guards a
-  duplicated wake).  Consequences: a generation whose phase sits later than the wake runs at that
+  duplicated wake).  *(Superseded by A6: the guard moves out of the deadline test — the edge wake
+  runs and no design slack remains.)*  Consequences: a generation whose phase sits later than the wake runs at that
   same wake (the reviewer's sequence runs Day2 04:47, gap 21 h 47 min); consecutive daily wakes keep
   running; a 1 h cadence with a 15- or 30-minute waker runs at ~60 min (never past the cadence,
-  never per wake); a duplicated delivery never re-runs a fresh generation.  Evidence: the reviewer's
+  never per wake).  *(The run spacing and the bound are refined by A6.)*  A duplicated delivery
+  never re-runs a fresh generation.  Evidence: the reviewer's
   sequence as a discriminating real-PostgreSQL lane (NOT_DUE on `692cedd`, OK now), the
   interval-learning and duplicate real-PG lanes, the `note_wake` unit lane, and the 435-node focused
   regression set — all green on this candidate.
@@ -314,7 +321,8 @@ cross-family R3 review from a packet the executor prepares; the deploy waits for
   by the spacing itself (reproduced: gaps 24 h 59 min / 23 h 1 min / 24 h 59 min, every wake `OK`;
   worst case = cadence + 59 min 59 s).  The coverage is already defined: the wake ladder of D4 —
   the descriptor daily cron plus the free Supabase Cron/`pg_net` trigger (bearer in Supabase Vault;
-  the one-time enablement already in §10/§12 S5).  With the ladder, the deadline rule's bound is the
+  the one-time enablement already in §10/§12 S5).  *(Superseded by A6: the guard moves out of the
+  deadline test, so the ladder's bound carries no design slack.)*  With the ladder, the deadline rule's bound is the
   cadence plus the 1-minute duplicate guard plus twice the waker's timing deviation: the run happens
   at the first wake whose age reaches `cadence − interval + 1 min`, and the next interval adds at
   most its own spacing (which the just-elapsed estimate reflects), so a minute-granularity trigger
@@ -326,6 +334,26 @@ cross-family R3 review from a packet the executor prepares; the deploy waits for
   same daily jitter plus 6-hourly trigger wakes over three days: every gap ≤ 24 h, 4 runs across 15
   wakes) and the week-long adversarial unit simulation (every gap ≤ 24 h) — all green with the A20
   suite.
+- A6 2026-10-15 — Final M4 contract clarification: the A5 bound (`cadence + 1 min + 2 × deviation`)
+  exceeded the configured cadence, and the reported sequence reproduced exactly: with the guard
+  inside the deadline test (`age ≥ cadence − interval + 1 min`), the edge wake at
+  `cadence − interval` skipped (Day1 18:00, age 18 h < 18 h 01 m) and a 1-minute-delayed Day2 00:01
+  wake ran — a 24 h 01 min gap under a 24 h policy (reproduced real-PostgreSQL on `db72ce2`; the
+  discriminating lane fails there with `NOT_DUE` at the edge and `OK` on the delayed wake).  The
+  deadline test is now `age ≥ cadence − interval` with no guard inside it: the edge wake runs (the
+  deadline falls at or before the next expected wake, which could arrive late), so a delayed next
+  wake can never stretch the gap by a design guard; the 1-minute conjunct only suppresses a
+  duplicate delivery of the same wake (a sub-minute age) and never delays a legitimate run.  The
+  precise residual: the gap stays within `cadence + the waker's spacing spread` (the just-elapsed
+  estimate vs the actual next spacing) — zero design slack; with the minute-granularity trigger
+  this is seconds.  An exact `≤ cadence` guarantee is infeasible with any skipping rule (an early
+  wake can skip and the next can arrive late by up to its deviation) — running at every wake would
+  bound the gap by the spacing but abandons the near-cadence run spacing; the ladder's trigger
+  should therefore stay at most a quarter of the cadence (a 6-hourly trigger at 24 h runs ~18 h
+  apart; a 15-minute waker at 1 h runs 45–60 min apart; a waker at half the cadence runs at every
+  wake — still within the cadence).  Evidence: the discriminating real-PostgreSQL lane (the
+  reviewer's exact sequence; fails on `db72ce2`, passes now), the updated edge/boundary unit lanes,
+  the ladder and daily-only lanes (unchanged or green), and the A20 suite (71 nodes) — green.
 
 ## 17. Closure
 

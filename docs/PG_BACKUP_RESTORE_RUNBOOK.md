@@ -500,14 +500,16 @@ separately), answers `DELIVERY_INCOMPLETE` and stays due for the next wake — t
 rather than an overstated protection. The pass runs on the deadline rule: each wake is recorded and
 learns the interval to the next expected wake from the time elapsed since the last one (the daily
 floor when unknown; clamped to 1 minute–7 days; a sub-minute elapsed is a duplicate and keeps the
-stored interval), and the pass runs when the deadline would otherwise fall before that next wake
-(`age ≥ cadence − interval + 1 min`, the same minute guarding a duplicated wake) — so a manual
-generation at 07:00 against a 04:47 cron runs at that same wake, consecutive daily wakes keep
-running, a 1 h cadence with a 15- or 30-minute waker runs at ~60 min (never past the cadence, never
-per wake), and the platform's up-to-an-hour cron precision can never skip a whole day at the 24 h
-default. The gap's bound depends on the waker's density: a waker at least as dense as the cadence
-keeps the gap within the cadence plus the 1-minute guard plus twice the waker's timing deviation,
-but the daily cron alone cannot compress its own spacing — two consecutive wakes can be 24 h 59 min
+stored interval), and the pass runs when the deadline could not be met by that next wake
+(`age ≥ cadence − interval`; the edge wake runs, and the 1-minute conjunct only suppresses a
+duplicate delivery) — so a manual generation at 07:00 against a 04:47 cron runs at that same wake,
+consecutive daily wakes keep running, a 1 h cadence with a 15-minute waker runs 45–60 min apart
+(a waker at half the cadence runs at every wake, still within the cadence), and the platform's
+up-to-an-hour cron precision can never skip a whole day at the 24 h default. The gap's bound
+depends on the waker's density: a waker at least as dense as the cadence keeps the gap within the
+cadence plus the waker's spacing spread (the just-elapsed estimate vs the actual next spacing;
+seconds for the minute-granularity trigger — the design adds no slack), but the daily cron alone
+cannot compress its own spacing — two consecutive wakes can be 24 h 59 min
 apart (04:00 then 04:59) and both run, so the daily-cron-alone gap is the spacing itself. The
 committed descriptor adds the daily cron entry (the zero-cost floor), and the wake ladder's
 sub-daily waker — Supabase Cron with `pg_net`, free, calling
