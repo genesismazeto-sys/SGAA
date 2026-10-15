@@ -55,7 +55,12 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
 - MP-3 production integration / cutover: IN PRODUCTION, **C13 PONR_RECORDED**
   (`docs/specs/MP-3-production-integration.md`; governed ledger outside the repository).
   Public admission is OPEN, with no write barrier or unresolved ledger act.
-  C14 remains pending until the governed rollback window can be closed.
+  C14 remains pending until the 30-day window and all governed invariants pass.
+  A read-only PROD posture audit found a possible cadence blocker: published
+  LIVE_RUN generations at 2026-10-13T15:07:54Z and 2026-10-15T20:07:04Z
+  are ~53 hours apart, above C12's recorded 24 h cadence * 1.5 tolerance
+  (36 h). The operator must verify the complete local ledger before treating
+  this as a definitive C14 refusal; never backfill or fabricate evidence.
 - A19 is deployed (operator-visible PostgreSQL backup posture and Microsoft integration).
   A20 hosted automation is in PROD: commit `ffa2749`, deployment
   `dpl_Att7FUkPuzyj63yk12kE3Zp79L3E`, smoke 11/11. Supabase Cron calls the
