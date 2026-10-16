@@ -13,7 +13,9 @@ that would cost money is not performed; stop and say so.
 
 - **Gates.** A gate is one explicit user message naming its id. Record it with
   `cutover_ledger grant` only after that message exists. A gate covers its state and its
-  resumptions, nothing else.
+  resumptions, nothing else. After the point of no return, one further act has its own gate:
+  `GX2` (one message, granted once) authorizes the single cadence exception of A21 -- the
+  exceptional C14 closure when a recorded cadence breach makes the plain contract unsatisfiable.
 - **Ledger.** Every transition goes through `python tools/cutover_ledger.py` in a directory
   outside the repository. It validates order, gates, value-free evidence and carried
   identities. A refusal is information, not an obstacle to route around. Typed evidence goes
@@ -571,6 +573,34 @@ manifest digest), `unresolved_reconciliation` 0. The ledger refuses before 30 da
 (`RESTORE_RECEIPT_REQUIRED`); a receipt is only ever the drill's own, bound to a recorded
 generation, its source and a scratch target of the PROD major. The window report lists them;
 MP-4 may then be chartered.
+
+**Exceptional closure (A21) when a cadence breach is on record.** A frozen gap of either cadence
+(Layer-2 over 36 h, object sets over 252 h, counted from the opening) makes the criteria above
+unsatisfiable: the chain is append-only and nothing may be backdated. The window then closes only
+through the exception the owner grants once:
+
+1. **(user terminal -- the owner's message)** `cutover_ledger grant --gate GX2 --ref <code>`, then
+   `python tools/cutover_ledger.py cadence-exception --ledger-dir <ledger> --expect-head <head>`.
+   It is ledger-only (no PROD credential): it computes the breach intervals from the ledger itself
+   and records them `NOT_COMPLIANT_HISTORICAL` (with a digest; the historical interval is never
+   represented as compliant). One exception, recorded once.
+2. Keep the governed cadence: `python tools/ops_backup.py --root <primary dir> --off-platform
+   <second dir> --objects --ledger-dir <ledger>` every `h` hours (user terminal, `PGPASSWORD`;
+   SPEC P6 -- no stored PROD secret, so no automatic task can run these). The qualifying window is
+   the trailing 30 days with no violation, derived from the recorded generations; a new missed
+   stretch freezes as a breach (reported with every other one) and restarts the window
+   prospectively -- no new grant, nothing erased. A20's automatic receipts are not generations and
+   never count for the cadence or the window.
+3. After the window completes, take a generation (with objects) and run its restore drill in the
+   drill terminal, as at C8; the drill must run after the window completed.
+4. `advance --state C14 --evidence <json>` with `cadence_exception_sha256` (the exception entry's
+   hash, printed by the act), `restore_validated_manifest_sha256` and `unresolved_reconciliation`
+   0. The ledger refuses an open gap (`QUALIFYING_WINDOW_BROKEN`), a window shorter than 30 days
+   (`QUALIFYING_WINDOW_NOT_ELAPSED`), a validation from outside the window or not post-window
+   (`RESTORE_VALIDATION_NOT_IN_QUALIFYING_WINDOW`, `RESTORE_VALIDATION_NOT_POST_WINDOW`) and a
+   typed copy of the report fields it derives (`LEDGER_DERIVED_EVIDENCE`); it records its own
+   report: the non-compliance of the breached span, every breach with its digest, and the
+   qualifying interval. MP-4 stays blocked until C14 is recorded through either path.
 
 ## 3. Rollback (before C13)
 

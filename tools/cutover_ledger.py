@@ -58,6 +58,16 @@ WHY THIS EXISTS
     observation is bound to the recorded project (and a promotion's to its recorded address); a
     promotion is sent only when it changes what the address serves; ``resume`` is a two-phase act.
 
+    The window after a cadence breach (SPEC A21): when a recorded Layer-2 or object cadence violation
+    -- counted from the opening, unfixable in an append-only chain -- makes the plain C14 contract
+    unsatisfiable, the window closes only through ONE owner-authorized exception (gate ``GX2``, after
+    the PONR): ``cadence-exception`` declares the breach intervals NOT_COMPLIANT_HISTORICAL and enables
+    a deterministic rolling qualifying window (the trailing 30 days with no violation, derived from the
+    ledger's own recorded generations); a later breach restarts it prospectively and is reported with
+    every other one.  The C14 report carries the classification, the breach set with its digest and the
+    qualifying interval -- all derived by the ledger; a typed copy is refused, and the historical
+    interval is never represented as held.
+
 WHAT IT STORES
     One append-only JSON-lines file, ``ledger.jsonl``, in a directory outside
     the repository.  Every entry carries the SHA-256 of the previous entry, so
@@ -115,6 +125,9 @@ COMMANDS
                    ABORTED (A19 R3 rereview R2; rereview of 1245bf2 M1/M2; rereview of 2fdeee6 M1/M2)
     attest-ponr    once, for a declared C13 recorded before restores left a commit marker: bind it forward
                    to the safety copy that restore left in PROD (A19 R3 rereview R1); nothing is rewritten
+    cadence-exception at C13: record the single owner-authorized exception (GX2, A21) that declares the
+                   recorded cadence breach NOT_COMPLIANT_HISTORICAL and enables the rolling qualifying
+                   window of the exceptional C14 path; computed from the chain, recorded once
     status         current state, granted gates, head, chain verdict
     verify         chain verdict and head only
 
@@ -155,10 +168,16 @@ STATES = (
 ENTRY_TYPES = frozenset({
     "init", "advance", "grant", "amendment", "rollback", "reference", "backup", "qualification", "deployment",
     "promotion", "barrier", "restore", "authorization", "supersession", "outcome", "attestation",
-    "deployment_attempt", "admission",
+    "deployment_attempt", "admission", "cadence_exception",
 })
 #: UD4: the rollback window W, counted from the point of no return (C13) to its closing (C14).
 ROLLBACK_WINDOW_DAYS = 30
+#: The qualifying restitution window (SPEC A21): the trailing span after the last recorded cadence
+#: violation in which the cadence must have held for C14 to close through the exception.
+EXCEPTION_WINDOW_DAYS = 30
+#: A breach list is stored whole up to this many items (the value-free list bound); beyond it the
+#: entries keep the count and the digest -- the complete set stays derivable from the ledger itself.
+BREACH_LIST_LIMIT = 64
 #: Before a rollback from the opening is trusted, two live fingerprints this far apart must agree:
 #: longer than the longest request a deployment can still be serving (maxDuration 300 s).
 QUIESCENCE_SECONDS = 330
@@ -176,11 +195,14 @@ STATE_NAMES = {
 }
 GATES = frozenset({
     "GA1", "GA2", "GA4", "GP0", "GP1", "GP2", "GP3", "GR0", "GR1", "GR2", "GR3", "GB1",
-    "GD1", "GD2", "GG1", "GG2", "GO", "GX1", "GF1", "GC1", "GC2",
+    "GD1", "GD2", "GG1", "GG2", "GO", "GX1", "GF1", "GC1", "GC2", "GX2",
 })
 # A forward-fix deployment after the point of no return: the one deployment action that remains.  It is
 # granted once per deployment (a distinct reference each time) and only after the PONR is recorded.
 FORWARD_FIX_GATE = "GF1"
+# The single cadence exception (SPEC A21): the one act that closes a window whose cadence breached.
+# Granted once, from one owner message, only after the PONR; consumed by `cadence-exception`.
+EXCEPTIONAL_CLOSURE_GATE = "GX2"
 # Before the point of no return, after the opening (C12; SPEC A19): GC1 grants ONE product-contract
 # amendment of the candidate (any deployed file may change; the user's message names what it restores);
 # GC2 grants ONE re-opening of that amended code under the same opening reference.  Each grant is
@@ -391,6 +413,14 @@ _SCHEMA = {
     "C14": {"restore_validated_manifest_sha256": _hex64, "unresolved_reconciliation": _zero},
 }
 
+#: A C14 attempt names the recorded exception (SPEC A21) only when a recorded breach made one
+#: necessary; the value is the exception entry's hash.
+_OPTIONAL_EVIDENCE = {"C14": {"cadence_exception_sha256": _hex64}}
+#: The C14 report's derived fields (SPEC A21): the ledger computes them; a typed copy is refused.
+_DERIVED_EVIDENCE_KEYS = frozenset({"historical_classification", "window_classification", "cadence_breaches",
+                                    "cadence_breach_count", "cadence_breach_digest", "restitution_clean_since",
+                                    "restitution_seconds"})
+
 
 # ---------------------------------------------------------------------------
 # the chain
@@ -411,6 +441,10 @@ def _now() -> str:
 
 def _parse(stamp: str) -> datetime:
     return datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+
+
+def _format_stamp(moment: datetime) -> str:
+    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _parse_or_none(stamp) -> datetime | None:
@@ -580,7 +614,7 @@ def _summary(entries: list[dict]) -> dict:
     backups: list[dict] = []
     collected = {"qualification": None, "deployments": [], "promotions": [], "barriers": [], "restores": [],
                  "authorizations": [], "grants": [], "amendments": [], "supersessions": [], "attestations": [],
-                 "attempts": [], "admissions": []}
+                 "attempts": [], "admissions": [], "exceptions": []}
     # An act whose PROD transaction did not commit, or whose outcome is still unknown, has no effect.
     committed = {e["of"] for e in entries if e["type"] == "outcome" and e["result"] == "COMMITTED"}
     committed |= {e["attempt"] for e in entries if e["type"] == "deployment" and e.get("attempt")}
@@ -628,6 +662,8 @@ def _summary(entries: list[dict]) -> dict:
             collected["attestations"].append(entry)
         elif kind == "admission":
             collected["admissions"].append(entry)
+        elif kind == "cadence_exception":
+            collected["exceptions"].append(entry)
     # An open upload whose answer was lost and that was closed without its deployment (ABANDONED; before
     # d0fbba7's rereview, reconciled) may still appear: its code is never authorized (rereview of 2fdeee6, M2).
     unproven = {e["of"] for e in entries if e["type"] == "outcome"
@@ -656,6 +692,11 @@ def _generations(summary: dict) -> list[dict]:
 def _baseline(summary: dict):
     found = [b for b in summary["backups"] if b["kind"] == "BASELINE"]
     return found[-1] if found else None
+
+
+def _exception(summary: dict):
+    """The one recorded cadence exception (SPEC A21), else ``None``."""
+    return summary["exceptions"][-1] if summary["exceptions"] else None
 
 
 def _deployment(summary: dict, deployment_id: str):
@@ -791,29 +832,177 @@ def _gaps_within(times: list[datetime], start: datetime, end: datetime, hours: f
 
 
 def _check_window(summary: dict, evidence: dict) -> None:
-    """C14: UD4's window elapsed since C13; the cadence held from the opening (C12) to now; the drill in the window."""
+    """C14: UD4's window elapsed since C13; the cadence held from the opening (C12) to now; the drill in the window.
+
+    SPEC A21: when a frozen cadence violation exists (either cadence, counted from the opening), the
+    plain contract is unsatisfiable; closure then runs through the recorded exception and the rolling
+    qualifying window, computed here from the ledger's own records only.
+    """
     now = _CLOCK()
     ponr_at = _parse(summary["entered"]["C13"]["at"])
     if now - ponr_at < timedelta(days=ROLLBACK_WINDOW_DAYS):
         raise Refused("WINDOW_NOT_ELAPSED", f"the rollback window is {ROLLBACK_WINDOW_DAYS} days from C13")
-    # The pre-open generation (recorded before C12) anchors both cadences.
     start = _parse(summary["entered"]["C12"]["at"])
     cadence = int(_evidence_of(summary, "C12")["backup_cadence_hours"])
     generations = _generations(summary)
-    database_times = sorted({_parse(b["generation_at"]) for b in generations})
-    anchor = [t for t in database_times if t <= start]
-    if not _gaps_within(database_times, max(anchor) if anchor else start, now, cadence * CADENCE_TOLERANCE):
-        raise Refused("BACKUP_CADENCE_BROKEN", "a Layer-2 generation is missing from the window")
-    object_times = [_parse(b["generation_at"]) for b in generations if b["object_set_name"] != "NONE"]
-    anchor = [t for t in object_times if t <= start]
-    if not _gaps_within(object_times, max(anchor) if anchor else start, now, OBJECT_CADENCE_HOURS * CADENCE_TOLERANCE):
+    facts = _closure_facts(summary, now)
+    if not facts["frozen"]:
+        # The cadence never broke: the original path, byte for byte.
+        database_times = sorted({_parse(b["generation_at"]) for b in generations})
+        anchor = [t for t in database_times if t <= start]
+        if not _gaps_within(database_times, max(anchor) if anchor else start, now, cadence * CADENCE_TOLERANCE):
+            raise Refused("BACKUP_CADENCE_BROKEN", "a Layer-2 generation is missing from the window")
+        object_times = sorted(_parse(b["generation_at"]) for b in generations if b["object_set_name"] != "NONE")
+        anchor = [t for t in object_times if t <= start]
+        if not _gaps_within(object_times, max(anchor) if anchor else start, now,
+                            OBJECT_CADENCE_HOURS * CADENCE_TOLERANCE):
+            raise Refused("OBJECT_CADENCE_BROKEN", "an object set is missing from the window")
+        if evidence.get("cadence_exception_sha256") is not None:
+            raise Refused("EXCEPTION_NOT_REQUIRED", "the cadence held; no exception is used")
+        in_window = [b for b in generations if _parse(b["generation_at"]) > ponr_at and b["object_set_name"] != "NONE"]
+        validated = [b for b in in_window if b["manifest_sha256"] == evidence["restore_validated_manifest_sha256"]]
+        if not validated:
+            raise Refused("RESTORE_VALIDATION_NOT_A_WINDOW_GENERATION")
+        if not _restored(summary, validated[-1]):
+            raise Refused("RESTORE_RECEIPT_REQUIRED", "`ops_backup drill` restores that generation into scratch")
+        return
+    _check_qualifying_window(summary, evidence, facts, ponr_at, now)
+
+
+def _check_qualifying_window(summary: dict, evidence: dict, facts: dict, ponr_at: datetime, now: datetime) -> None:
+    """The exceptional path (SPEC A21): one exception, a rolling clean window, a fresh post-window drill."""
+    exception = _exception(summary)
+    if exception is None:
+        # No exception was ever recorded: the breach stands as it always did.
+        kinds = {kind for kind, _gap in facts["frozen"]}
+        if "LAYER2" in kinds:
+            raise Refused("BACKUP_CADENCE_BROKEN", "a Layer-2 generation is missing from the window")
         raise Refused("OBJECT_CADENCE_BROKEN", "an object set is missing from the window")
-    in_window = [b for b in generations if _parse(b["generation_at"]) > ponr_at and b["object_set_name"] != "NONE"]
-    validated = [b for b in in_window if b["manifest_sha256"] == evidence["restore_validated_manifest_sha256"]]
+    supplied = evidence.get("cadence_exception_sha256")
+    if supplied is None:
+        raise Refused("EXCEPTION_EVIDENCE_REQUIRED", "name the recorded cadence exception (cadence_exception_sha256)")
+    if supplied != exception["hash"]:
+        raise Refused("EXCEPTION_NOT_THE_RECORDED_ONE", "the exception is not the one this ledger recorded")
+    if facts["open_breaks"]:
+        raise Refused("QUALIFYING_WINDOW_BROKEN", "an open cadence gap exceeds its limit: take a generation first")
+    clean_since = facts["clean_since"]
+    if now - clean_since < timedelta(days=EXCEPTION_WINDOW_DAYS):
+        raise Refused("QUALIFYING_WINDOW_NOT_ELAPSED",
+                      f"the qualifying window is {EXCEPTION_WINDOW_DAYS} days after the last breach")
+    generations = _generations(summary)
+    validated = [b for b in generations
+                 if _parse(b["generation_at"]) > clean_since and _parse(b["generation_at"]) > ponr_at
+                 and b["object_set_name"] != "NONE"
+                 and b["manifest_sha256"] == evidence["restore_validated_manifest_sha256"]]
     if not validated:
-        raise Refused("RESTORE_VALIDATION_NOT_A_WINDOW_GENERATION")
-    if not _restored(summary, validated[-1]):
+        raise Refused("RESTORE_VALIDATION_NOT_IN_QUALIFYING_WINDOW",
+                      "the validated generation is not one sealed inside the qualifying window")
+    generation = validated[-1]
+    receipt = next((r for r in sorted(summary["restores"], key=lambda entry: entry["seq"], reverse=True)
+                    if r["manifest_sha256"] == generation["manifest_sha256"] and r["seq"] > generation["seq"]), None)
+    if receipt is None:
         raise Refused("RESTORE_RECEIPT_REQUIRED", "`ops_backup drill` restores that generation into scratch")
+    if _parse(receipt["at"]) < clean_since + timedelta(days=EXCEPTION_WINDOW_DAYS):
+        raise Refused("RESTORE_VALIDATION_NOT_POST_WINDOW", "run the drill after the qualifying window completes")
+
+
+# ---------------------------------------------------------------------------
+# the closure engine (SPEC A21): everything derives from the ledger's own records
+# ---------------------------------------------------------------------------
+
+
+def _anchor_time(times: list[datetime], start: datetime) -> datetime:
+    """The last recorded time at or before the opening, else the opening itself."""
+    before = [t for t in times if t <= start]
+    return max(before) if before else start
+
+
+def _gap_violations(times: list[datetime], start: datetime, end: datetime,
+                    hours: float) -> tuple[list[dict], dict | None]:
+    """The cadence gaps of ``times`` over ``[start, end]`` longer than ``hours``.
+
+    A gap whose later end is a recorded generation is FROZEN evidence; the trailing gap ending at
+    ``end`` (``now``) is the open interval -- healed by taking a generation.  Nothing is typed: every
+    interval derives from the ledger's own recorded generation times.
+    """
+    limit = int(timedelta(hours=hours).total_seconds())
+    recorded = sorted({t for t in times if start < t <= end})
+    sequence = [start, *recorded]
+    open_interval = end not in recorded
+    if open_interval:
+        sequence.append(end)
+    frozen: list[dict] = []
+    open_gap = None
+    for earlier, later in zip(sequence, sequence[1:]):
+        if (later - earlier) > timedelta(seconds=limit):
+            gap = {"start": earlier, "end": later, "seconds": int((later - earlier).total_seconds()),
+                   "limit_seconds": limit}
+            if open_interval and later == end:
+                open_gap = gap
+            else:
+                frozen.append(gap)
+    return frozen, open_gap
+
+
+def _closure_facts(summary: dict, now: datetime) -> dict:
+    """What the A21 closure derives from the ledger: the frozen violations of both cadences
+    (chronological), the open trailing breaks, and ``clean_since`` (the end of the most recent frozen
+    violation -- the restitution start ``R*``; a later breach moves it, restarting the window)."""
+    start = _parse(summary["entered"][OPENING_STATE]["at"])
+    cadence = int(_evidence_of(summary, OPENING_STATE)["backup_cadence_hours"])
+    generations = _generations(summary)
+    database_times = sorted({_parse(b["generation_at"]) for b in generations})
+    object_times = sorted(_parse(b["generation_at"]) for b in generations if b["object_set_name"] != "NONE")
+    frozen: list[tuple[str, dict]] = []
+    open_breaks: list[tuple[str, dict]] = []
+    for kind, times, hours in (("LAYER2", database_times, cadence * CADENCE_TOLERANCE),
+                               ("OBJECT", object_times, OBJECT_CADENCE_HOURS * CADENCE_TOLERANCE)):
+        violations, open_gap = _gap_violations(times, _anchor_time(times, start), now, hours)
+        frozen.extend((kind, gap) for gap in violations)
+        if open_gap is not None:
+            open_breaks.append((kind, open_gap))
+    frozen.sort(key=lambda item: (item[1]["end"], item[0]))
+    return {"cadence_hours": cadence, "frozen": frozen, "open_breaks": open_breaks,
+            "clean_since": frozen[-1][1]["end"] if frozen else None}
+
+
+def _breach_records(frozen: list[tuple[str, dict]]) -> list[dict]:
+    """The value-free records of the frozen violations, in order: kind and the interval's facts."""
+    return [{"kind": kind, "start": _format_stamp(gap["start"]), "end": _format_stamp(gap["end"]),
+             "seconds": gap["seconds"], "limit_seconds": gap["limit_seconds"]} for kind, gap in frozen]
+
+
+def _breach_digest(records: list[dict]) -> str:
+    canonical = json.dumps(records, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(canonical.encode("ascii")).hexdigest()
+
+
+def _breach_list_fields(frozen: list[tuple[str, dict]], *, list_key: str, count_key: str, digest_key: str) -> dict:
+    """``count_key``/``digest_key`` always; the whole list under ``list_key`` while it fits the bound."""
+    records = _breach_records(frozen)
+    fields = {count_key: len(records), digest_key: _breach_digest(records)}
+    if len(records) <= BREACH_LIST_LIMIT:
+        fields[list_key] = records
+    return fields
+
+
+def _c14_report(summary: dict, evidence: dict, now: datetime) -> dict:
+    """The C14 window report the ledger derives and records (SPEC A21).
+
+    On a ledger whose cadence never broke the evidence is returned unchanged (the original path).  On
+    the exceptional path the entry carries the classifications, the complete breach set (with its
+    digest) and the qualifying interval -- never a claim that the historical span was held.
+    """
+    facts = _closure_facts(summary, now)
+    if not facts["frozen"]:
+        return evidence
+    return {**evidence,
+            "historical_classification": "NOT_COMPLIANT_HISTORICAL",
+            "window_classification": "COMPLIANT_OBSERVED",
+            "restitution_clean_since": _format_stamp(facts["clean_since"]),
+            "restitution_seconds": int((now - facts["clean_since"]).total_seconds()),
+            **_breach_list_fields(facts["frozen"], list_key="cadence_breaches",
+                                  count_key="cadence_breach_count", digest_key="cadence_breach_digest")}
 
 
 def advance(directory: Path, state: str, evidence: dict, *, expect_head: str | None = None,
@@ -914,6 +1103,41 @@ def attest_ponr(directory: Path, *, expect_head: str | None = None, observer: Ob
         })
 
 
+def cadence_exception(directory: Path, *, expect_head: str | None = None) -> dict:
+    """Record the single owner-authorized cadence exception (SPEC A21), at C13.
+
+    The gate ``GX2`` is the owner's one message; this act declares the recorded cadence breach(es)
+    NOT_COMPLIANT_HISTORICAL and enables the exceptional C14 path: a deterministic rolling qualifying
+    window -- the trailing 30 days with no cadence violation, derived only from the governed
+    generations the ledger recorded.  A later breach restarts the window prospectively (no new grant,
+    nothing erased).  Nothing here is typed: the breach set is computed from the chain itself.
+    """
+    with _locked(directory):
+        entries = read_ledger(directory)
+        _check_head(entries, expect_head)
+        summary = _summary(entries)
+        if summary["rolled_back"]:
+            raise Refused("ROLLED_BACK")
+        if summary["state"] != PONR_STATE:
+            raise Refused("OUT_OF_ORDER", "the cadence exception is recorded at C13, before the window closes")
+        if EXCEPTIONAL_CLOSURE_GATE not in summary["granted"]:
+            raise Refused("GATE_NOT_GRANTED", EXCEPTIONAL_CLOSURE_GATE)
+        if summary["exceptions"]:
+            raise Refused("REMEDIATION_ALREADY_RECORDED",
+                          "one exception is recorded, once; the qualifying window restarts by itself")
+        facts = _closure_facts(summary, _CLOCK())
+        if not facts["frozen"]:
+            raise Refused("NO_CADENCE_BREACH", "the cadence held: there is nothing to except")
+        return _append(directory, entries, {
+            "type": "cadence_exception",
+            "classification": "NOT_COMPLIANT_HISTORICAL",
+            "cadence_hours": facts["cadence_hours"], "object_cadence_hours": OBJECT_CADENCE_HOURS,
+            "ponr_hash": summary["entered"][PONR_STATE]["hash"], "pre_window_head": _head(entries),
+            **_breach_list_fields(facts["frozen"], list_key="breaches", count_key="breach_count",
+                                  digest_key="breach_digest"),
+        })
+
+
 def _advance_locked(directory: Path, entries: list[dict], state: str, evidence: dict) -> dict:
     summary = _summary(entries)
     if state not in STATES:
@@ -929,16 +1153,28 @@ def _advance_locked(directory: Path, entries: list[dict], state: str, evidence: 
     _check_value_free(evidence)
     if len(json.dumps(evidence, sort_keys=True)) > MAX_EVIDENCE_BYTES:
         raise Refused("EVIDENCE_TOO_LARGE")
+    if state == "C14":
+        derived = sorted(set(evidence) & _DERIVED_EVIDENCE_KEYS)
+        if derived:
+            raise Refused("LEDGER_DERIVED_EVIDENCE", derived[0])
     schema = dict(_SCHEMA[state])
+    optional = dict(_OPTIONAL_EVIDENCE.get(state, {}))
     if state == PONR_STATE and evidence.get("write_class") in DECLARED_PONR_WRITE_CLASSES:
         schema.update(_SCHEMA["C13_DECLARED"])
     for key, predicate in schema.items():
         if key not in evidence or not predicate(evidence[key]):
             raise Refused("EVIDENCE_INVALID", key)
-    unexpected = sorted(set(evidence) - set(schema))
+    for key, predicate in optional.items():
+        if key in evidence and not predicate(evidence[key]):
+            raise Refused("EVIDENCE_INVALID", key)
+    unexpected = sorted(set(evidence) - set(schema) - set(optional))
     if unexpected:
         raise Refused("EVIDENCE_UNEXPECTED_KEY", unexpected[0])
     _check_carried_identities(state, evidence, summary)
+    if state == "C14":
+        # The window report is the ledger's own (SPEC A21); a clean history keeps the evidence as typed.
+        evidence = _c14_report(summary, evidence, _CLOCK())
+        _check_value_free(evidence)
     return _append(directory, entries, {"type": "advance", "state": state, "evidence": evidence})
 
 
@@ -959,6 +1195,13 @@ def grant(directory: Path, gate: str, ref: str, *, expect_head: str | None = Non
                 raise Refused("GATE_ONLY_AFTER_PONR", "a forward-fix deployment exists only after the PONR is recorded")
             if any(e["type"] == "grant" and e["gate"] == gate and e["ref"] == ref for e in entries):
                 raise Refused("GATE_ALREADY_GRANTED")
+            return _append(directory, entries, {"type": "grant", "gate": gate, "ref": ref})
+        if gate == EXCEPTIONAL_CLOSURE_GATE:
+            if current is None or STATES.index(current) < STATES.index(PONR_STATE):
+                raise Refused("GATE_ONLY_AFTER_PONR",
+                              "the cadence exception exists only after the point of no return is recorded")
+            if any(e["type"] == "grant" and e["gate"] == gate for e in entries):
+                raise Refused("GATE_ALREADY_GRANTED", "one exception is granted once")
             return _append(directory, entries, {"type": "grant", "gate": gate, "ref": ref})
         if gate in CONTRACT_GATES:
             if current is None or STATES.index(current) >= STATES.index(PONR_STATE):
@@ -2661,7 +2904,25 @@ def status(directory: Path) -> dict:
         "unresolved_operation": (_unresolved(entries) or {}).get("hash"),
         # The value SGAA_OPENING_REFERENCE carries (also after a refused rollback, to re-open).
         "opening_reference": _opening_reference(summary),
+        # The A21 restitution, when the single exception is recorded (value-free; derived).
+        "cadence_exception": _restitution_state(summary),
     }
+
+
+def _restitution_state(summary: dict) -> dict | None:
+    """What ``status`` shows of the A21 restitution: the exception, the breaches, the window's progress
+    and whether the cadence is broken right now -- all derived from the ledger's own records."""
+    if not summary["exceptions"]:
+        return None
+    now = _CLOCK()
+    facts = _closure_facts(summary, now)
+    state = {"exception_sha256": summary["exceptions"][-1]["hash"],
+             "breaches": len(facts["frozen"]), "breached_now": bool(facts["open_breaks"])}
+    if facts["clean_since"] is not None:
+        state["clean_since"] = _format_stamp(facts["clean_since"])
+        remaining = timedelta(days=EXCEPTION_WINDOW_DAYS) - (now - facts["clean_since"])
+        state["qualifying_seconds_remaining"] = max(0, int(remaining.total_seconds()))
+    return state
 
 
 def _opening_reference(summary: dict):
@@ -2704,7 +2965,7 @@ def main(argv=None, *, out=None, err=None) -> int:
     for name in ("init", "status", "verify"):
         commands.add_parser(name, allow_abbrev=False).add_argument("--ledger-dir", required=True)
     bound = ("grant", "advance", "amend", "qualify", "rollback", "reference", "open", "close", "resume",
-             "authorize-code", "supersede", "reconcile", "attest-ponr", "admit-deployment")
+             "authorize-code", "supersede", "reconcile", "attest-ponr", "admit-deployment", "cadence-exception")
     for name in bound:
         sub = commands.add_parser(name, allow_abbrev=False)
         sub.add_argument("--ledger-dir", required=True)
@@ -2792,6 +3053,8 @@ def main(argv=None, *, out=None, err=None) -> int:
                                abandon_upload=args.abandon_upload)
         elif args.command == "attest-ponr":
             result = attest_ponr(directory, expect_head=args.expect_head, observer=observer)
+        elif args.command == "cadence-exception":
+            result = cadence_exception(directory, expect_head=args.expect_head)
         elif args.command == "supersede":
             result = supersede(directory, expect_head=args.expect_head, observer=observer)
         elif args.command == "rollback":

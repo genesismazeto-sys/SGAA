@@ -1,5 +1,5 @@
 # coding: utf-8
-"""MP-3 slice 5 and the R3 remediations (A15, A16, A17): the cutover evidence ledger (``tools/cutover_ledger.py``).
+"""MP-3 slice 5 and the R3 remediations (A15, A16, A17, A19, A21): the cutover evidence ledger (``tools/cutover_ledger.py``).
 
 The ledger is the cutover's memory and referee: order, gates, value-free evidence, carried
 identities, the hash chain, the head binding and the point of no return.  Where the SPEC forbids
@@ -12,6 +12,7 @@ for all of them and a scripted clock for time.  Each test names the defect it wo
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 from datetime import datetime, timedelta, timezone
@@ -2349,3 +2350,316 @@ def test_rr3_m2_a_code_whose_upload_was_never_proven_absent_is_never_authorized(
     ls.deploy(directory, observer, "dpl_" + "H" * 24, forward_fix_ref=_gf1(directory, "m-h"), **dict(fix, code=third))
     assert ledger.authorize_code(directory, "dpl_" + "H" * 24, observer=observer,
                                  **_ROOTS(directory))["code_sha256"] == third
+
+
+# ---- the window remediation (SPEC A21): one exception, a rolling qualifying window ------------------
+
+
+def _at_c13(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C13", observer=observer)
+    return ledger._CLOCK()
+
+
+def _breach(directory, observer, *, days=3, day=500):
+    """A missed stretch of ``days`` with no generation, healed by one recorded with objects: a frozen
+    Layer-2 violation ending at the healing moment (the real breach was 52 h 59 m 10 s over the 36 h
+    bound -- the same arithmetic, a different size)."""
+    ls.set_clock(ledger._CLOCK() + timedelta(days=days))
+    observer.generation = ls.generation(day)
+    ls.record(directory, observer)
+    return ledger._CLOCK()
+
+
+def _blessed_breach(directory, observer):
+    """C13, one missed stretch healed, the owner's GX2 and the single exception: the A21 fixture."""
+    _at_c13(directory, observer)
+    _breach(directory, observer)
+    ledger.grant(directory, "GX2", "m-gx2")
+    return ledger.cadence_exception(directory)
+
+
+def _rested(directory, observer, start, days, *, base, drill=True):
+    """A compliant stretch: one generation every 24 h from ``start`` (day numbers offset by ``base`` so
+    no manifest repeats across stretches), each with an object set; with ``drill`` the last one is
+    restore-drilled after the stretch completes (the drill must run after the window completes)."""
+    last = None
+    for step in range(1, days + 1):
+        day = base + step
+        digest = hashlib.sha256(f"day-{day}".encode()).hexdigest()
+        ls.set_clock(start + timedelta(days=step))
+        observer.generation = ls.generation(day, objects=f"day-{day}", object_digest=digest)
+        ls.record(directory, observer)
+        last = (observer.generation["manifest_sha256"], digest)
+    ls.set_clock(start + timedelta(days=days, minutes=1))
+    if drill and last is not None:
+        ledger.record_restore(directory, ls.drill_receipt(last[0], objects=last[1]))
+    return last
+
+
+def test_the_exception_gate_and_the_exception_exist_only_after_the_ponr(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C12", observer=observer)
+    assert _code(ledger.grant, directory, "GX2", "m-early") == "GATE_ONLY_AFTER_PONR"
+    assert _code(ledger.cadence_exception, directory) == "OUT_OF_ORDER"
+
+
+def test_the_exception_records_the_breach_once_after_the_ponr(directory, observer):
+    _at_c13(directory, observer)
+    previous = max(b["generation_at"] for b in
+                   ledger._generations(ledger._summary(ledger.read_ledger(directory))))
+    healed = _breach(directory, observer)
+    assert _code(ledger.cadence_exception, directory) == "GATE_NOT_GRANTED"
+    ledger.grant(directory, "GX2", "m-gx2")
+    before = _ledger_bytes(directory)
+    entry = ledger.cadence_exception(directory)
+    assert entry["type"] == "cadence_exception"
+    assert entry["classification"] == "NOT_COMPLIANT_HISTORICAL"
+    assert entry["cadence_hours"] == 24 and entry["object_cadence_hours"] == 168
+    assert entry["breach_count"] == 1
+    gap = entry["breaches"][0]
+    assert gap["kind"] == "LAYER2" and gap["limit_seconds"] == 36 * 3600
+    assert gap["start"] == previous and gap["end"] == ls._stamp(healed)
+    assert gap["seconds"] == int((healed - ledger._parse(previous)).total_seconds()) > gap["limit_seconds"]
+    assert entry["breach_digest"] == ledger._breach_digest(entry["breaches"])
+    assert entry["ponr_hash"] == ledger._summary(ledger.read_ledger(directory))["entered"]["C13"]["hash"]
+    assert _ledger_bytes(directory).startswith(before)  # append-only: nothing rewritten
+    assert _code(ledger.cadence_exception, directory) == "REMEDIATION_ALREADY_RECORDED"
+    assert _code(ledger.grant, directory, "GX2", "m-gx2-again") == "GATE_ALREADY_GRANTED"
+
+
+def test_an_open_missed_stretch_is_not_a_breach_until_it_is_healed(directory, observer):
+    _at_c13(directory, observer)
+    ledger.grant(directory, "GX2", "m-gx2")
+    ls.set_clock(ledger._CLOCK() + timedelta(days=3))  # late, nothing healed yet: only an open gap
+    assert _code(ledger.cadence_exception, directory) == "NO_CADENCE_BREACH"
+    observer.generation = ls.generation(600)  # healing freezes the gap as a violation
+    ls.record(directory, observer)
+    assert ledger.cadence_exception(directory)["breach_count"] == 1
+
+
+def test_a_clean_window_keeps_the_original_path_and_refuses_an_exception(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C13", observer=observer)
+    ledger.grant(directory, "GX2", "m-gx2")
+    assert _code(ledger.cadence_exception, directory) == "NO_CADENCE_BREACH"
+    assert ledger.status(directory)["cadence_exception"] is None
+    ls.window(directory, observer, days=30)
+    with_hash = {**GOOD["C14"], "cadence_exception_sha256": H["a"]}
+    assert _code(ledger.advance, directory, "C14", with_hash) == "EXCEPTION_NOT_REQUIRED"
+    assert ledger.advance(directory, "C14", GOOD["C14"])["state"] == "C14"
+    entry = ledger.read_ledger(directory)[-1]
+    assert set(entry["evidence"]) == {"restore_validated_manifest_sha256", "unresolved_reconciliation"}
+    assert _code(ledger.cadence_exception, directory) == "OUT_OF_ORDER"  # the window already closed
+
+
+def test_a_breach_without_the_recorded_exception_still_refuses_the_original_code(directory, observer):
+    _grant_all(directory)
+    _drive(directory, "C13", observer=observer)
+    ls.window(directory, observer, days=30, skip=(10, 11))  # two nightly generations missing
+    assert _code(ledger.advance, directory, "C14", GOOD["C14"]) == "BACKUP_CADENCE_BROKEN"
+    assert _code(ledger.cadence_exception, directory) == "GATE_NOT_GRANTED"
+
+
+def test_the_exception_opens_a_rolling_window_that_closes_c14_and_reports_the_breach(directory, observer):
+    exception = _blessed_breach(directory, observer)
+    clean_since = ledger._CLOCK()
+    ls.window(directory, observer, days=30)
+    validated = {**GOOD["C14"], "cadence_exception_sha256": exception["hash"]}
+    entry = ledger.advance(directory, "C14", validated)
+    assert entry["state"] == "C14"
+    report = ledger.read_ledger(directory)[-1]["evidence"]
+    assert report["historical_classification"] == "NOT_COMPLIANT_HISTORICAL"
+    assert report["window_classification"] == "COMPLIANT_OBSERVED"
+    assert report["cadence_breach_count"] == 1
+    assert report["cadence_breaches"][0]["kind"] == "LAYER2"
+    assert report["cadence_breach_digest"] == ledger._breach_digest(report["cadence_breaches"])
+    assert report["restitution_clean_since"] == ls._stamp(clean_since)
+    assert report["restitution_seconds"] >= 30 * 24 * 3600
+    assert report["restore_validated_manifest_sha256"] == GOOD["C14"]["restore_validated_manifest_sha256"]
+    assert report["unresolved_reconciliation"] == 0
+
+
+def test_repeated_missed_backups_stay_reported_and_restart_the_window(directory, observer):
+    _at_c13(directory, observer)
+    _breach(directory, observer, day=500)
+    healed = _breach(directory, observer, day=501)  # a second missed stretch heals
+    ledger.grant(directory, "GX2", "m-gx2")
+    exception = ledger.cadence_exception(directory)
+    assert exception["breach_count"] == 2
+    drilled = _rested(directory, observer, healed, 29, base=600)
+    validated = {**GOOD["C14"], "restore_validated_manifest_sha256": drilled[0],
+                 "cadence_exception_sha256": exception["hash"]}
+    assert _code(ledger.advance, directory, "C14", validated) == "QUALIFYING_WINDOW_NOT_ELAPSED"
+    _rested(directory, observer, healed + timedelta(days=29), 11, base=700, drill=False)
+    ledger.record_restore(directory, ls.drill_receipt(drilled[0], objects=drilled[1]))
+    assert ledger.advance(directory, "C14", validated)["state"] == "C14"
+    report = ledger.read_ledger(directory)[-1]["evidence"]
+    assert report["cadence_breach_count"] == 2
+    assert [b["kind"] for b in report["cadence_breaches"]] == ["LAYER2", "LAYER2"]
+    assert report["restitution_clean_since"] == ls._stamp(healed)
+    chain = ledger.read_ledger(directory)
+    assert sum(1 for e in chain if e["type"] == "cadence_exception") == 1
+    assert sum(1 for e in chain if e["type"] == "grant" and e["gate"] == "GX2") == 1
+
+
+def test_a_later_breach_restarts_the_window_and_the_earlier_validation_goes_stale(directory, observer):
+    exception = _blessed_breach(directory, observer)
+    clean_since = ledger._CLOCK()
+    drilled = _rested(directory, observer, clean_since, 30, base=600)
+    # the cadence breaks again after that window: three missed days, healed with objects
+    ls.set_clock(clean_since + timedelta(days=33))
+    observer.generation = ls.generation(800)
+    ls.record(directory, observer)
+    restarted = ledger._CLOCK()
+    validated = {**GOOD["C14"], "restore_validated_manifest_sha256": drilled[0],
+                 "cadence_exception_sha256": exception["hash"]}
+    assert _code(ledger.advance, directory, "C14", validated) == "QUALIFYING_WINDOW_NOT_ELAPSED"
+    second = _rested(directory, observer, restarted, 30, base=900)
+    assert second[0] != drilled[0]
+    assert _code(ledger.advance, directory, "C14", validated) == "RESTORE_VALIDATION_NOT_IN_QUALIFYING_WINDOW"
+    assert ledger.advance(directory, "C14", {**validated, "restore_validated_manifest_sha256": second[0]})["state"] \
+        == "C14"
+    report = ledger.read_ledger(directory)[-1]["evidence"]
+    assert report["cadence_breach_count"] == 2
+    assert report["restitution_clean_since"] == ls._stamp(restarted)
+    chain = ledger.read_ledger(directory)
+    assert sum(1 for e in chain if e["type"] == "cadence_exception") == 1
+    assert sum(1 for e in chain if e["type"] == "grant" and e["gate"] == "GX2") == 1
+
+
+def test_an_open_cadence_gap_refuses_the_window_until_a_generation_heals_it(directory, observer):
+    exception = _blessed_breach(directory, observer)
+    clean_since = ledger._CLOCK()
+    drilled = _rested(directory, observer, clean_since, 30, base=600)
+    validated = {**GOOD["C14"], "restore_validated_manifest_sha256": drilled[0],
+                 "cadence_exception_sha256": exception["hash"]}
+    ls.set_clock(ledger._CLOCK() + timedelta(hours=48))  # two days with no generation: an open gap
+    assert _code(ledger.advance, directory, "C14", validated) == "QUALIFYING_WINDOW_BROKEN"
+    observer.generation = ls.generation(800)  # healing freezes the gap and moves the window
+    ls.record(directory, observer)
+    healed = ledger._CLOCK()
+    second = _rested(directory, observer, healed, 30, base=900)
+    ledger.advance(directory, "C14", {**validated, "restore_validated_manifest_sha256": second[0]})
+    report = ledger.read_ledger(directory)[-1]["evidence"]
+    assert report["cadence_breach_count"] == 2
+    assert report["restitution_clean_since"] == ls._stamp(healed)
+
+
+def test_the_exception_hash_must_be_the_recorded_one(directory, observer):
+    exception = _blessed_breach(directory, observer)
+    clean_since = ledger._CLOCK()
+    drilled = _rested(directory, observer, clean_since, 30, base=600)
+    validated = {**GOOD["C14"], "restore_validated_manifest_sha256": drilled[0],
+                 "cadence_exception_sha256": exception["hash"]}
+    assert _code(ledger.advance, directory, "C14", {**validated, "cadence_exception_sha256": H["a"]}) \
+        == "EXCEPTION_NOT_THE_RECORDED_ONE"
+    assert _code(ledger.advance, directory, "C14", GOOD["C14"]) == "EXCEPTION_EVIDENCE_REQUIRED"
+
+
+def test_the_drill_must_run_after_the_qualifying_window_completes(directory, observer):
+    exception = _blessed_breach(directory, observer)
+    clean_since = ledger._CLOCK()
+    drilled = _rested(directory, observer, clean_since, 20, base=600)  # drilled mid-window
+    _rested(directory, observer, clean_since + timedelta(days=20), 10, base=700, drill=False)
+    validated = {**GOOD["C14"], "restore_validated_manifest_sha256": drilled[0],
+                 "cadence_exception_sha256": exception["hash"]}
+    assert _code(ledger.advance, directory, "C14", validated) == "RESTORE_VALIDATION_NOT_POST_WINDOW"
+    ledger.record_restore(directory, ls.drill_receipt(drilled[0], objects=drilled[1]))  # fresh, post-window
+    assert ledger.advance(directory, "C14", validated)["state"] == "C14"
+
+
+@pytest.mark.parametrize("key,value", [
+    ("historical_classification", "NOT_COMPLIANT_HISTORICAL"),
+    ("window_classification", "COMPLIANT_OBSERVED"),
+    ("cadence_breach_count", 1),
+    ("cadence_breach_digest", H["a"]),
+    ("restitution_clean_since", "2026-11-01T00:00:00Z"),
+    ("restitution_seconds", 1),
+    ("cadence_breaches", []),
+])
+def test_the_c14_report_is_ledger_derived_and_a_typed_copy_is_refused(directory, observer, key, value):
+    exception = _blessed_breach(directory, observer)
+    clean_since = ledger._CLOCK()
+    drilled = _rested(directory, observer, clean_since, 30, base=600)
+    validated = {**GOOD["C14"], "restore_validated_manifest_sha256": drilled[0],
+                 "cadence_exception_sha256": exception["hash"]}
+    before = _ledger_bytes(directory)
+    assert _code(ledger.advance, directory, "C14", {**validated, key: value}) == "LEDGER_DERIVED_EVIDENCE"
+    assert _ledger_bytes(directory) == before
+
+
+def test_an_object_cadence_breach_restarts_the_window_and_is_reported_as_object(directory, observer):
+    _at_c13(directory, observer)
+    _breach(directory, observer, day=500)  # a Layer-2 breach (with objects) heals at +3 days
+    ledger.grant(directory, "GX2", "m-gx2")
+    exception = ledger.cadence_exception(directory)
+    assert [b["kind"] for b in exception["breaches"]] == ["LAYER2"]
+    first_heal = ledger._CLOCK()
+    for step in range(1, 15):  # daily generations; the next OBJECT set only arrives eleven days later
+        day = 600 + step
+        with_objects = step == 14
+        digest = hashlib.sha256(f"day-{day}".encode()).hexdigest()
+        ls.set_clock(first_heal + timedelta(days=step))
+        observer.generation = ls.generation(day, objects=f"day-{day}" if with_objects else None,
+                                            object_digest=digest)
+        ls.record(directory, observer)
+    object_heal = ledger._CLOCK()  # 11 days after the last object set: over its 252 h bound
+    second = _rested(directory, observer, object_heal, 30, base=700)
+    ledger.advance(directory, "C14", {**GOOD["C14"], "restore_validated_manifest_sha256": second[0],
+                                      "cadence_exception_sha256": exception["hash"]})
+    report = ledger.read_ledger(directory)[-1]["evidence"]
+    assert [b["kind"] for b in report["cadence_breaches"]] == ["LAYER2", "OBJECT"]
+    assert report["cadence_breach_count"] == 2
+    assert report["restitution_clean_since"] == ls._stamp(object_heal)
+
+
+def test_status_shows_the_exception_the_breaches_and_the_window(directory, observer):
+    exception = _blessed_breach(directory, observer)
+    reported = ledger.status(directory)["cadence_exception"]
+    assert reported["exception_sha256"] == exception["hash"]
+    assert reported["breaches"] == 1 and reported["breached_now"] is False
+    assert reported["clean_since"] == ls._stamp(ledger._CLOCK())
+    assert reported["qualifying_seconds_remaining"] == 30 * 24 * 3600
+    ls.set_clock(ledger._CLOCK() + timedelta(hours=37))  # an open gap shows as broken
+    assert ledger.status(directory)["cadence_exception"]["breached_now"] is True
+
+
+def test_the_exception_entry_cannot_be_removed_and_the_chain_says_so(directory, observer):
+    _blessed_breach(directory, observer)
+    ls.set_clock(ledger._CLOCK() + timedelta(hours=2))
+    observer.generation = ls.generation(497)  # a later entry: the removal is then a broken link
+    ls.record(directory, observer)
+    path = directory / ledger.LEDGER_FILE
+    lines = path.read_text(encoding="ascii").splitlines()
+    index = next(i for i, line in enumerate(lines) if '"type":"cadence_exception"' in line)
+    del lines[index]
+    path.write_text("\n".join(lines) + "\n", encoding="ascii")
+    assert _code(ledger.read_ledger, directory) == "LEDGER_CHAIN_BROKEN"
+
+
+def test_a_breach_list_beyond_the_list_bound_degrades_to_count_and_digest():
+    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    frozen = [("LAYER2", {"start": base + timedelta(days=2 * i), "end": base + timedelta(days=2 * i + 1),
+                          "seconds": 40 * 3600, "limit_seconds": 36 * 3600}) for i in range(65)]
+    fields = ledger._breach_list_fields(frozen, list_key="cadence_breaches", count_key="cadence_breach_count",
+                                        digest_key="cadence_breach_digest")
+    assert fields["cadence_breach_count"] == 65 and "cadence_breaches" not in fields
+    assert fields["cadence_breach_digest"] == ledger._breach_digest(ledger._breach_records(frozen))
+    whole = ledger._breach_list_fields(frozen[:64], list_key="cadence_breaches", count_key="cadence_breach_count",
+                                       digest_key="cadence_breach_digest")
+    assert len(whole["cadence_breaches"]) == 64 and whole["cadence_breach_count"] == 64
+
+
+def test_the_command_line_records_the_exception_and_binds_it_to_the_head(tmp_path, observer):
+    directory = tmp_path / "cli-exception"
+    ledger.init(directory)
+    _at_c13(directory, observer)
+    _breach(directory, observer)
+    _, err = _cli(["cadence-exception", "--ledger-dir", str(directory)], ok=False)
+    assert err.strip() == "cutover-ledger: refused: HEAD_REQUIRED"
+    ledger.grant(directory, "GX2", "m-gx2")
+    head = ledger.status(directory)["head"]
+    out, _ = _cli(["cadence-exception", "--ledger-dir", str(directory), "--expect-head", head])
+    entry = json.loads(out)
+    assert entry["type"] == "cadence_exception" and entry["breach_count"] == 1 and "head" in entry

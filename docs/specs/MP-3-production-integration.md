@@ -184,7 +184,7 @@ the user has not accepted.
 | C11 MIRROR_PROVEN | GG1 GG2 GD2 | OAuth connect through the hosted UI behind the admission gate (legacy client, registered callback); account key equals the source's; supervised bounded passes; `verify --drive`; `CRON_SECRET` set and the deployment redone (the same commit) so the daily cron reaches the enabled front and, if the backlog needs it, the external trigger enabled (its bearer in Supabase Vault); first scheduled passes observed; admission still CLOSED | results; none `reconciliation_required` |
 | C12 OPEN_PONR_PENDING | GO | a post-C11 generation (Layer-2, object set, off-platform copy) verified and recorded by the ledger, its source proven to be the PROD database and store (A16); the reference fingerprint taken by the ledger while admission is observed CLOSED and that generation is proven current; the reference also writes the opening authorization into PROD (A17); then the lift (`SGAA_ADMISSION=open` with `SGAA_OPENING_REFERENCE` = the reference entry's hash, the same commit deployed by the governed deploy and promoted) and `open`, which observes it, the reference's tag and the authorization; the cadence and RPO recorded and in force through C14; the local runtime stays stopped and protected; rollback is still available | reference fingerprint, database identity, pre-opening backup, cadence, RPO, opening time |
 | C13 PONR_RECORDED | — | the first successful non-operator business write on PROD is detected (fingerprint delta) and recorded explicitly in the ledger; window W starts | the write's class and time, never its content |
-| C14 WINDOW_CLOSED | — | W (UD4, 30 days) elapsed from C13, enforced by the ledger; the backup cadence held from the opening; no unresolved reconciliation; a generation of the PROD database (A16) made after C13 restore-validated by the drill's receipt (A17); object set verified; hand-over to MP-4 | window report |
+| C14 WINDOW_CLOSED | — | W (UD4, 30 days) elapsed from C13, enforced by the ledger; the backup cadence held from the opening; no unresolved reconciliation; a generation of the PROD database (A16) made after C13 restore-validated by the drill's receipt (A17); object set verified; when a recorded cadence breach exists, closure instead follows the exceptional path of A21 -- one owner-authorized exception and a rolling 30-day qualifying window of compliant governed generations, the breach reported NOT_COMPLIANT_HISTORICAL and never as held; hand-over to MP-4 | window report |
 
 Order note. The charter lists the elements; MP-1 D12 and Path-B force convergence before Path-B for
 local rows, and convergence on the frozen copy keeps the live source unmutated. The opening is after
@@ -394,7 +394,7 @@ answer. Gates (§10.2) are separate acts.
 | UD1 | Vercel plan | **Hobby (user decision of record)**; no upgrade. Consequences accepted: daily cron floor, one rate-limit rule, 300 s, 1 h of logs, hard usage ceiling | none: Pro is not selectable under the cost constraint |
 | UD2 | Supabase protection | **Free plan; no provider backup or PITR**; Layer-2 and the object set compensate | none |
 | UD3 | Public host | the free platform hostname; a custom domain only if the user already owns one and it adds no recurring cost | changing the host later reconnects Google |
-| UD4 | Rollback window W | 30 days after C13 (PONR_RECORDED) | shorter/longer; MP-4 cannot start before it closes |
+| UD4 | Rollback window W | 30 days after C13 (PONR_RECORDED) | shorter/longer; MP-4 cannot start before it closes; after a recorded cadence breach, the A21 exceptional closure counts the same 30 days over the rolling qualifying window (derived from the governed generations, restarting on any new breach) |
 | UD5 | Maintenance window | one window of at least twice the S6-measured end-to-end time, announced; date is an input at GR1 | a shorter window needs the optional pre-seed pass (apply on a snapshot copy before the freeze) |
 | UD6 | Terminal and unsupported legacy rows | D15 fail-closed policy, each class accepted by count at C4 | remediate before cutover (re-upload through the application) or block the cutover until zero |
 | UD7 | Authorization gate in production | fail closed (403, error log) | keep shadow allow: a future unmapped route would be open to every admin |
@@ -1264,6 +1264,44 @@ Executor amendments (consequences of the above; not material beyond what the use
   absence for an upload with no identity does not exist, so waiting for it would block the ledger forever.
   Evidence: section 17.
 
+- A21 2026-10-15 -- Exceptional window closure after a recorded cadence breach (user messages "MP-3 / A21 -
+  Supervisor Review: MATERIAL DESIGN CORRECTION" and "SGAA - A21 v2: EXECUTE THE ALREADY APPROVED
+  IMPLEMENTATION"). The production ledger's Layer-2 cadence broke between generation 89
+  (2026-10-13T15:07:54Z) and generation 94 (2026-10-15T20:07:04Z): 52 h 59 m 10 s against the 36 h bound
+  (24 h x 1.5), both ends recorded, no intermediate generation, and an append-only chain has no repair --
+  the plain C14 contract is permanently unsatisfiable and MP-4 stays blocked (UD4). The supervisor review
+  directed, instead of a one-shot refusal (itself an irreversible dead end), a single authorized,
+  append-only exception with a deterministic ROLLING restitution window; the breach stays on record and
+  is never represented as compliant. What is defined:
+  (1) `GX2`, a gate after the PONR, granted once from one owner message. `cadence-exception` (a new ledger
+  command, at C13 only, ledger-only) computes the breach set from the chain itself -- the frozen gaps of
+  both cadences from the opening (Layer-2 over 36 h, object sets over 252 h); open trailing gaps are not
+  breaches yet (heal first) -- and records one entry: the breach records (`kind`, `start`, `end`, `seconds`,
+  `limit_seconds`; stored whole up to 64 items, beyond the list bound the count and the digest), their
+  digest, `classification` NOT_COMPLIANT_HISTORICAL, the C12 cadence and object cadence, the C13 entry's
+  hash and the head before it. A second exception is refused (`REMEDIATION_ALREADY_RECORDED`); with no
+  frozen breach it refuses (`NO_CADENCE_BREACH`); nothing is typed (A17).
+  (2) The qualifying window is the trailing interval after the most recent frozen violation ("clean
+  since", R*) with at least 30 days (UD4's W) in which no Layer-2 or object gap exceeds its limit and no
+  open gap exists at the attempt; a later breach freezes -- its healing generation moves R* -- and the
+  window restarts prospectively, with no new grant and nothing erased. The restore validation must be a
+  generation sealed inside the window, made after C13, whose drill receipt was appended after the window
+  completed. The refusals: `QUALIFYING_WINDOW_BROKEN`, `QUALIFYING_WINDOW_NOT_ELAPSED`,
+  `RESTORE_VALIDATION_NOT_IN_QUALIFYING_WINDOW`, `RESTORE_VALIDATION_NOT_POST_WINDOW`,
+  `EXCEPTION_EVIDENCE_REQUIRED`, `EXCEPTION_NOT_THE_RECORDED_ONE`.
+  (3) The C14 report is the ledger's own: on the exceptional path the entry additionally carries
+  `historical_classification` NOT_COMPLIANT_HISTORICAL, `window_classification` COMPLIANT_OBSERVED, the
+  complete breach set (with its digest; count and digest beyond the list bound), `restitution_clean_since`
+  and `restitution_seconds`; a typed copy of any of these is refused (`LEDGER_DERIVED_EVIDENCE`), and no
+  output describes the breached span as held. A ledger whose cadence never broke follows the original
+  path byte for byte: no report fields, an exception cannot be recorded, and a supplied exception hash is
+  refused (`EXCEPTION_NOT_REQUIRED`). `status` shows the exception, the live breach count and the
+  window's progress.
+  (4) The automatic layer of A20 never substitutes: only governed Layer-2 generations recorded through
+  the ledger's receipts (A16/A17) count for either cadence or the qualifying window; A20's receipts and
+  the product page remain telemetry. MP-4 remains blocked until C14 is recorded through either path.
+  Evidence: section 17.
+
 ## 17. Closure
 
 Level reached: **PREPARED, PENDING R3** -- every executor-side deliverable is landed and evidenced
@@ -1384,6 +1422,19 @@ by the user; the amended candidate redeployed closed so they bind; the administr
 account on the hosted Banco de dados page (callback with code), tested it, and requested a password recovery
 for the administrator's own address: the application logged `password_mail_sent` (written only after Microsoft
 Graph confirmed the send) and the user confirmed the message arrived. Re-opening waits for the user's GC2.
+
+A21 evidence (exceptional window closure, 2026-10-15). `tools/cutover_ledger.py` implements the gate, the
+single exception, the rolling qualifying window and the ledger-derived C14 report; the focused ledger
+module runs 257 tests (the original 234 plus 23 A21 cases: the gate and the exception only after the PONR,
+the breach computed from the chain (open gaps are not breaches until healed), the exception recorded once,
+a clean ledger byte for byte unchanged with an exception hash refused, repeated missed backups all
+reported and restarting the window, a later breach staling the earlier validation and closing again
+through the same exception (no new grant), an open gap refusing the window until healed, the drill
+required after the window completes, the recorded-hash binding, the ledger-derived report refusing typed
+copies, an object-cadence breach restarting the same window and reported as OBJECT, the list-bound
+degradation, the status fields and the chain refusing a removed exception entry). The production ledger
+is untouched by this amendment: no exception is recorded there, no GX2 is granted, C14 is not advanced;
+C14 remains blocked (BACKUP_CADENCE_BROKEN) until the owner authorizes and executes the closure.
 
 Pending: the cross-family R3 review verdict (the user runs it from the regenerated packet) and, optionally, GA2
 (a DEV Google client) for the OAuth callback rehearsal. GP0 is not authorized. The DEV database credential was repaired by the user and every database lane ran
