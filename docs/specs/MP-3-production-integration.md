@@ -1535,3 +1535,33 @@ finding was identified in the M1 rereview. This verdict does not grant GX2,
 record a cadence exception, validate current operator custody, authorize
 C14/MP-4, or change any PROD resource. The original cadence breach remains
 NOT_COMPLIANT_HISTORICAL.
+
+
+### A21 GX2 operator execution report — 2026-10-15 (after R3 M1 PASS)
+
+Following an explicit owner message authorizing the single GX2 grant and the
+single `cadence-exception` act, the operator reported successful execution
+against the real custody ledger using repository commit `2f0b090`.
+The operator verified that chain integrity was OK, the prefix through seq 109
+was unchanged, and exactly one GX2 grant (seq **110**, opaque reference
+`owner-a21-gx2-execute-20261015-2f0b090`) and one
+`cadence_exception` entry (seq **111**, classification
+`NOT_COMPLIANT_HISTORICAL`) were recorded. The exception hash and final
+head were both
+`f90b62598491d9244030d529b817c9ffffb72f609331023d6d44813132526e25`.
+C13 remains entered at seq 83; 111 entries, no unresolved operation.
+
+The A21-derived state at that verification was:
+`breaches=1`, `breached_now=false`,
+`clean_since=2026-10-15T20:07:04Z`, with
+`qualifying_seconds_remaining=2572630`. Hence the earliest qualifying
+30-day boundary is **2026-11-14T20:07:04Z**, not an automatic C14 closure.
+Another governed generation should occur by 2026-10-16T20:07:04Z for the
+24-hour policy (the 36-hour maximum is 2026-10-17T08:07:04Z). A fresh
+post-window governed generation with object set and restore drill will be
+required before C14 can be considered. A20 hosted receipts never count.
+
+This paragraph records the **operator's local-chain report**, not an
+independently mounted/read local custody file. The GitHub documentation
+commit itself does not operate GX2, perform a backup, publish the drill
+receipt, amend PROD, or advance C14.
