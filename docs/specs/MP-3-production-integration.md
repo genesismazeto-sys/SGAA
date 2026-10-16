@@ -1518,3 +1518,20 @@ contract.
 
 Operator-provided raw audit outputs remain in their local custody. No
 production access or policy/ledger mutation was performed by this audit.
+
+
+R3 independent rereview (2026-10-16 UTC; GitHub commit `984dc1f4fdbf97b3922886f2f357efc094012023`):
+**PASS for finding M1**. The independent reviewer inspected the published source and regression
+diff, not merely the executor's summary. `_c14_report` now drops the inline breach list
+if the fully assembled evidence exceeds `MAX_EVIDENCE_BYTES`; `_advance_locked`
+checks the final evidence again before the ledger append, refusing any remaining
+oversize report. The full count, canonical digest, historical classification,
+and restitution fields survive the fallback. The 59/60/64/65-boundary integration
+tests and refusal-without-append injection are present in the committed source.
+The executor reports 262 focused ledger tests passed and 177 adjacent tests
+passed (7 skipped for unavailable PostgreSQL/symlink prerequisites); the
+reviewer did **not** independently execute those tests. No new material
+finding was identified in the M1 rereview. This verdict does not grant GX2,
+record a cadence exception, validate current operator custody, authorize
+C14/MP-4, or change any PROD resource. The original cadence breach remains
+NOT_COMPLIANT_HISTORICAL.
