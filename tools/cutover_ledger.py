@@ -996,13 +996,17 @@ def _c14_report(summary: dict, evidence: dict, now: datetime) -> dict:
     facts = _closure_facts(summary, now)
     if not facts["frozen"]:
         return evidence
-    return {**evidence,
+    report = {**evidence,
             "historical_classification": "NOT_COMPLIANT_HISTORICAL",
             "window_classification": "COMPLIANT_OBSERVED",
             "restitution_clean_since": _format_stamp(facts["clean_since"]),
             "restitution_seconds": int((now - facts["clean_since"]).total_seconds()),
             **_breach_list_fields(facts["frozen"], list_key="cadence_breaches",
                                   count_key="cadence_breach_count", digest_key="cadence_breach_digest")}
+    if len(json.dumps(report, sort_keys=True)) > MAX_EVIDENCE_BYTES:
+        # Budget the complete evidence; count and digest still cover every breach in the chain.
+        report.pop("cadence_breaches", None)
+    return report
 
 
 def advance(directory: Path, state: str, evidence: dict, *, expect_head: str | None = None,
@@ -1175,6 +1179,8 @@ def _advance_locked(directory: Path, entries: list[dict], state: str, evidence: 
         # The window report is the ledger's own (SPEC A21); a clean history keeps the evidence as typed.
         evidence = _c14_report(summary, evidence, _CLOCK())
         _check_value_free(evidence)
+    if len(json.dumps(evidence, sort_keys=True)) > MAX_EVIDENCE_BYTES:
+        raise Refused("EVIDENCE_TOO_LARGE")
     return _append(directory, entries, {"type": "advance", "state": state, "evidence": evidence})
 
 

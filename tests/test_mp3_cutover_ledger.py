@@ -2651,6 +2651,70 @@ def test_a_breach_list_beyond_the_list_bound_degrades_to_count_and_digest():
     assert len(whole["cadence_breaches"]) == 64 and whole["cadence_breach_count"] == 64
 
 
+def _c14_after_many_breaches(directory, observer, count):
+    _at_c13(directory, observer)
+    for index in range(count):
+        healed = _breach(directory, observer, days=2, day=500 + index)
+    ledger.grant(directory, "GX2", "m-gx2")
+    exception = ledger.cadence_exception(directory)
+    drilled = _rested(directory, observer, healed, 30, base=1000)
+    evidence = {**GOOD["C14"], "restore_validated_manifest_sha256": drilled[0],
+                "cadence_exception_sha256": exception["hash"]}
+    return evidence, healed
+
+
+@pytest.mark.parametrize("count,inline", [(59, True), (60, False), (64, False), (65, False)])
+def test_c14_bounds_the_complete_report_and_keeps_the_full_breach_digest(directory, observer, count, inline):
+    evidence, healed = _c14_after_many_breaches(directory, observer, count)
+    before = _ledger_bytes(directory)
+    facts = ledger._closure_facts(ledger._summary(ledger.read_ledger(directory)), ledger._CLOCK())
+    records = ledger._breach_records(facts["frozen"])
+    assert len(records) == count
+    digest = hashlib.sha256(json.dumps(records, sort_keys=True, separators=(",", ":"),
+                                       ensure_ascii=True).encode("ascii")).hexdigest()
+    entry = ledger.advance(directory, "C14", evidence)
+    report = ledger.read_ledger(directory)[-1]["evidence"]
+    assert entry["state"] == "C14" and entry["evidence"] == report
+    assert len(json.dumps(report, sort_keys=True).encode("ascii")) <= 8192 == ledger.MAX_EVIDENCE_BYTES
+    assert ("cadence_breaches" in report) is inline
+    full = {**report, "cadence_breaches": records}
+    assert (len(json.dumps(full, sort_keys=True).encode("ascii")) <= 8192) is inline
+    if count == 64:
+        # The list alone fits; the complete evidence envelope does not.
+        assert len(json.dumps(records, sort_keys=True).encode("ascii")) <= 8192
+    if inline:
+        assert report["cadence_breaches"] == records
+    assert report["cadence_breach_count"] == count
+    assert report["cadence_breach_digest"] == digest
+    assert report["historical_classification"] == "NOT_COMPLIANT_HISTORICAL"
+    assert report["window_classification"] == "COMPLIANT_OBSERVED"
+    assert report["restitution_clean_since"] == ls._stamp(healed)
+    assert report["restitution_seconds"] == 30 * 24 * 3600 + 60
+    assert all(report[key] == value for key, value in evidence.items())
+    assert _ledger_bytes(directory).startswith(before)
+    authenticated = ledger._summary(ledger.read_ledger(directory))
+    assert ledger._breach_records(ledger._closure_facts(authenticated, ledger._CLOCK())["frozen"]) == records
+
+
+def test_c14_refuses_oversized_derived_evidence_before_appending(directory, observer, monkeypatch):
+    evidence, _healed = _c14_after_many_breaches(directory, observer, 64)
+    before = _ledger_bytes(directory)
+    derive = ledger._c14_report
+
+    def unbounded_report(summary, supplied, now):
+        report = derive(summary, supplied, now)
+        # Fault injection: even a report producer that forgets its byte budget cannot bypass the append guard.
+        report["cadence_breaches"] = ledger._breach_records(ledger._closure_facts(summary, now)["frozen"])
+        ledger._check_value_free(report)  # within the depth and 64-item bounds, but over the byte limit
+        assert len(json.dumps(report, sort_keys=True).encode("ascii")) > 8192
+        return report
+
+    monkeypatch.setattr(ledger, "_c14_report", unbounded_report)
+    assert _code(ledger.advance, directory, "C14", evidence) == "EVIDENCE_TOO_LARGE"
+    assert _ledger_bytes(directory) == before
+    assert ledger.status(directory)["state"] == "C13"
+
+
 def test_the_command_line_records_the_exception_and_binds_it_to_the_head(tmp_path, observer):
     directory = tmp_path / "cli-exception"
     ledger.init(directory)

@@ -1291,12 +1291,16 @@ Executor amendments (consequences of the above; not material beyond what the use
   `EXCEPTION_EVIDENCE_REQUIRED`, `EXCEPTION_NOT_THE_RECORDED_ONE`.
   (3) The C14 report is the ledger's own: on the exceptional path the entry additionally carries
   `historical_classification` NOT_COMPLIANT_HISTORICAL, `window_classification` COMPLIANT_OBSERVED, the
-  complete breach set (with its digest; count and digest beyond the list bound), `restitution_clean_since`
+  complete breach set (with its digest; count and digest beyond the list bound or when the complete C14
+  evidence would exceed the existing 8,192-byte serialized limit), `restitution_clean_since`
   and `restitution_seconds`; a typed copy of any of these is refused (`LEDGER_DERIVED_EVIDENCE`), and no
   output describes the breached span as held. A ledger whose cadence never broke follows the original
   path byte for byte: no report fields, an exception cannot be recorded, and a supplied exception hash is
   refused (`EXCEPTION_NOT_REQUIRED`). `status` shows the exception, the live breach count and the
   window's progress.
+  R3 M1 correction: the complete derived evidence is size-checked again before append; any remaining
+  oversize report is refused. Omitting the inline list preserves the full count and digest, and every
+  breach remains derivable from the hash-verified ledger. Classification and window validations are unchanged.
   (4) The automatic layer of A20 never substitutes: only governed Layer-2 generations recorded through
   the ledger's receipts (A16/A17) count for either cadence or the qualifying window; A20's receipts and
   the product page remain telemetry. MP-4 remains blocked until C14 is recorded through either path.
@@ -1425,7 +1429,7 @@ Graph confirmed the send) and the user confirmed the message arrived. Re-opening
 
 A21 evidence (exceptional window closure, 2026-10-15). `tools/cutover_ledger.py` implements the gate, the
 single exception, the rolling qualifying window and the ledger-derived C14 report; the focused ledger
-module runs 257 tests (the original 234 plus 23 A21 cases: the gate and the exception only after the PONR,
+module initially ran 257 tests (the original 234 plus 23 A21 cases: the gate and the exception only after the PONR,
 the breach computed from the chain (open gaps are not breaches until healed), the exception recorded once,
 a clean ledger byte for byte unchanged with an exception hash refused, repeated missed backups all
 reported and restarting the window, a later breach staling the earlier validation and closing again
@@ -1435,6 +1439,10 @@ copies, an object-cadence breach restarting the same window and reported as OBJE
 degradation, the status fields and the chain refusing a removed exception entry). The production ledger
 is untouched by this amendment: no exception is recorded there, no GX2 is granted, C14 is not advanced;
 C14 remains blocked (BACKUP_CADENCE_BROKEN) until the owner authorizes and executes the closure.
+
+R3 M1 regression evidence: five integrated cases exercise C14 with 59, 60, 64 and 65 recorded breaches,
+the complete serialized evidence budget, count/digest fallback with full history reconstructed from the
+verified chain, and an oversized derived report refused before append with the ledger unchanged.
 
 Pending: the cross-family R3 review verdict (the user runs it from the regenerated packet) and, optionally, GA2
 (a DEV Google client) for the OAuth callback rehearsal. GP0 is not authorized. The DEV database credential was repaired by the user and every database lane ran
