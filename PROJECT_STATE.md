@@ -55,17 +55,23 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
 - MP-3 production integration / cutover: IN PRODUCTION, **C13 PONR_RECORDED**
   (`docs/specs/MP-3-production-integration.md`; governed ledger outside the repository).
   Public admission is OPEN, with no write barrier or unresolved ledger act.
-  C14 is BLOCKED by a confirmed historical `BACKUP_CADENCE_BROKEN`,
-  independently of the 30-day calendar window. The operator verified the full
-  append-only ledger (109 entries, no hidden generations) and the actual C14
-  validator: seq 89 (2026-10-13T15:07:54Z) to seq 94
-  (2026-10-15T20:07:04Z) spans 52 h 59 m 10 s, exceeding C12's 24 h
-  governed cadence * 1.5 (36 h) by 16 h 59 m 10 s. Later backups cannot
-  repair this immutable gap; original C14 cannot pass at window maturity.
-  Object cadence and the post-C13 restore drill (seq 109) passed. Keep the
-  governed protection schedule running. A material R3 governance decision
-  and documented amendment are required before any alternative closure
-  contract; no backdating, ledger fork, silent waiver, or premature MP-4.
+  C14 remains UNRECORDED, with A21's exceptional restitution window ACTIVE
+  (the historical `BACKUP_CADENCE_BROKEN` is permanently preserved).
+  The historical seq 89 (2026-10-13T15:07:54Z) to seq 94
+  (2026-10-15T20:07:04Z) gap is 52 h 59 m 10 s, exceeding C12's 36 h
+  allowed interval. The owner authorized GX2; per the operator's verified
+  local-ledger execution report, grant seq 110 and the single
+  `cadence_exception` seq 111 are recorded with classification
+  `NOT_COMPLIANT_HISTORICAL`, 111 entries, chain OK and final head
+  `f90b62598491d9244030d529b817c9ffffb72f609331023d6d44813132526e25`.
+  C13 remains at seq 83 with no unresolved operations. The 30-day prospective
+  qualifying window is derived from the last healed breach at
+  2026-10-15T20:07:04Z; the earliest possible completion is
+  2026-11-14T20:07:04Z, conditional on uninterrupted governed cadence,
+  a post-window generation/restore drill and the separate C14 authorization.
+  The post-C13 prior drill (seq 109) passed but cannot substitute for a fresh
+  post-window drill. No GX2 grant or exception was created from this documentation
+  update. MP-4 remains blocked until an actual C14 entry.
 - A19 is deployed (operator-visible PostgreSQL backup posture and Microsoft integration).
   A20 hosted automation is in PROD: commit `ffa2749`, deployment
   `dpl_Att7FUkPuzyj63yk12kE3Zp79L3E`, smoke 11/11. Supabase Cron calls the
