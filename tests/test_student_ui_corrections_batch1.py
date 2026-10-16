@@ -7,12 +7,16 @@
 3. Empty upload feedback (the direct-upload list and its status line, both live
    regions) holds no form rows open: Comprovantes -> Observação is one row-gap,
    and while an upload is listed the feedback sits pulled up under its card.
-4. The Atividade select: where the native popup opens is decided by the
-   browser (a popup wider than the room to the right of the select is
-   right-aligned to it), so what is pinned here is the part the application
-   owns -- the select fills its card with no transformed or zoomed
-   ancestor, filtering by type and group, full-length names, keyboard selection
-   within the visible options, and the stored selection in edit mode.
+4. The Atividade select. A native popup is placed by the browser (one wider
+   than the room to the right of the select is right-aligned to it, far to
+   the left of the field). Where the customizable select exists, the same
+   <select> opens a CSS picker anchored to the field: measured OPEN, it spans
+   the card, opens next to it, wraps long names and stays in the viewport;
+   mouse, keyboard (Enter / arrows / Escape), focus, filtering, edit-mode
+   selection and submission are the native element's. With the feature
+   absent the @supports block is skipped and the native control renders with
+   the same geometry. Always pinned: the select fills its card with no
+   transformed or zoomed ancestor.
 5. Progress shows "Tempo padrão" (the version's ch_por_evento) between Grupo and
    Limite: catalogue rows read the matrix version, history-only rows read the
    frozen snapshot, an undefined value shows "-", and nothing it adds changes a
@@ -23,6 +27,7 @@ from __future__ import annotations
 import json
 import re
 from html.parser import HTMLParser
+from urllib.parse import parse_qs
 
 import pytest
 
@@ -359,11 +364,16 @@ def test_activity_select_fills_its_card_filters_and_keeps_full_names(env, width)
         assert LONG_NAME not in [o["text"] for o in aeu["visible"]]
         assert not session.evaluate("document.documentElement.scrollWidth > innerWidth")
 
-        # Keyboard: a focused select steps through the visible options only.
+        # Keyboard steps through the visible options only. The customizable
+        # select's model: an arrow opens the list on the current option, the
+        # next one moves, Enter commits (the native model is pinned by the
+        # fallback test below).
         start = aeu["value"]
         session.evaluate("document.getElementById('atividade_versao_id_select').focus(); true")
-        for kind in ("rawKeyDown", "keyUp"):
-            session.call("Input.dispatchKeyEvent", {"type": kind, "key": "ArrowDown", "code": "ArrowDown", "windowsVirtualKeyCode": 40})
+        _key(session, "ArrowDown", "ArrowDown", 40)
+        assert _picker(session)["open"] is True
+        _key(session, "ArrowDown", "ArrowDown", 40)
+        _key(session, "Enter", "Enter", 13, "\r")
         moved = json.loads(session.evaluate(ACTIVITY))
         ids = [o["id"] for o in aeu["visible"]]
         assert moved["value"] in ids and ids.index(moved["value"]) == ids.index(start) + 1, (start, moved["value"], ids)
@@ -382,6 +392,231 @@ def test_edit_mode_keeps_the_stored_activity_selected_and_visible(env):
         assert session.evaluate("document.getElementById('nome-evento-orientacao') !== null")
     finally:
         session.close()
+
+
+# ------------------------------------------------- 4b. the open picker (base-select)
+
+# Painted bounds of the OPEN picker: every point it covers hit-tests to the
+# select (the picker is its pseudo-element), so a scan outside the closed card
+# finds the box the student actually sees -- no pseudo-element API needed.
+PICKER = """JSON.stringify((() => {
+  const s = document.getElementById('atividade_versao_id_select');
+  const card = document.getElementById('atividade_card').getBoundingClientRect();
+  const hit = (x, y) => { const e = document.elementFromPoint(x, y); return !!e && (e === s || s.contains(e)); };
+  const cx = card.left + card.width / 2;
+  const below = hit(cx, card.bottom + 10), above = hit(cx, card.top - 10);
+  let t = null, b = null;
+  if (below) { for (let y = Math.ceil(card.bottom) + 1; y < innerHeight; y++) { if (hit(cx, y)) { if (t === null) t = y; b = y + 1; } else if (t !== null) break; } }
+  if (above) { for (let y = Math.floor(card.top) - 1; y >= 0; y--) { if (hit(cx, y)) { if (b === null) b = y + 1; t = y; } else if (b !== null) break; } }
+  let l = null, r = null;
+  if (t !== null) { const my = (t + b) / 2; for (let x = 0; x < innerWidth; x++) if (hit(x, my)) { if (l === null) l = x; r = x + 1; } }
+  const shown = Array.from(s.options).filter(o => getComputedStyle(o).display !== 'none');
+  const long = shown.find(o => o.text.length > 100);
+  const lr = long && long.getBoundingClientRect();
+  return {open: s.matches(':open'), value: s.value, below, above,
+          picker: t === null ? null : {l, r, t, b},
+          card: {l: card.left, r: card.right, t: card.top, b: card.bottom}, vw: innerWidth, vh: innerHeight,
+          shown: shown.filter(o => o.dataset.placeholder !== '1').map(o => ({id: o.value, tipo: o.dataset.tipo, grupo: o.dataset.grupo})),
+          long: long ? {l: lr.left, r: lr.right, lines: Math.round(lr.height / parseFloat(getComputedStyle(long).lineHeight))} : null,
+          active: document.activeElement === s ? 'select' : (s.contains(document.activeElement) ? 'option:' + document.activeElement.value : 'other')};
+})())"""
+
+
+def _key(session, key, code, vk, text=None):
+    down = {"type": "keyDown" if text else "rawKeyDown", "key": key, "code": code, "windowsVirtualKeyCode": vk}
+    if text:
+        down["text"] = text
+    session.call("Input.dispatchKeyEvent", down)
+    session.call("Input.dispatchKeyEvent", {"type": "keyUp", "key": key, "code": code, "windowsVirtualKeyCode": vk})
+    session.pump(0.25)
+
+
+def _picker(session):
+    return json.loads(session.evaluate(PICKER))
+
+
+def _open(session):
+    session.click("#atividade_versao_id_select")
+    session.pump(0.3)
+    state = _picker(session)
+    assert state["open"], state
+    return state
+
+
+def _long_activity(identity):
+    base = _sql("SELECT atividade_base_id FROM atividade_versao WHERE id=31")[0][0]
+    _sql("UPDATE atividade_base SET nome_conceito=? WHERE id=?", (LONG_NAME, base))
+    assert 31 in _matrix_versions(identity)
+
+
+def _neutralize_enhancement(session):
+    # Exactly what a browser without the customizable select does with this
+    # page: the @supports condition is false, so the whole block is skipped.
+    session.response_rewrites["/aluno/nova-requisicao"] = lambda body: body.replace(
+        b"@supports (appearance: base-select)", b"@supports (appearance: sgaa-unsupported-probe)")
+
+
+@browser
+@pytest.mark.parametrize("width,height", [(1440, 900), (768, 900), (640, 900), (1440, 460)])
+def test_open_picker_spans_the_field_wraps_long_names_and_stays_in_the_viewport(env, width, height):
+    identity = _as_student(env)
+    _long_activity(identity)
+    session = BrowserSession(env["client"], CHROMIUM)
+    session.call("Emulation.setDeviceMetricsOverride", {"width": width, "height": height, "deviceScaleFactor": 1, "mobile": False})
+    try:
+        session.goto("/aluno/nova-requisicao")
+        assert session.evaluate("getComputedStyle(document.getElementById('atividade_versao_id_select')).appearance") == "base-select"
+        _choose(session, "Acadêmica Complementar", "1")
+        session.evaluate("document.getElementById('atividade_versao_id_select').scrollIntoView({block: 'center'}); true")
+        state = _open(session)
+        card, box = state["card"], state["picker"]
+        assert box is not None, state
+        # Aligned with the field: same left and right edges as the card, not displaced.
+        assert abs(box["l"] - card["l"]) <= 1 and abs(box["r"] - card["r"]) <= 1, state
+        # Next to the field (below, or flipped above when there is no room) and fully on screen.
+        if state["below"]:
+            assert 0 <= box["t"] - card["b"] <= 8, state
+        else:
+            assert state["above"] and 0 <= card["t"] - box["b"] <= 8, state
+        assert box["t"] >= 0 and box["b"] <= state["vh"] and box["l"] >= 0 and box["r"] <= state["vw"], state
+        # The regulation-length name wraps inside the picker instead of widening it.
+        assert state["long"]["lines"] >= 2 and box["l"] <= state["long"]["l"] and state["long"]["r"] <= box["r"], state
+        assert state["shown"] and all(o["tipo"] == "Acadêmica Complementar" and o["grupo"].startswith("1 - ") for o in state["shown"])
+        _key(session, "Escape", "Escape", 27)
+        assert _picker(session)["open"] is False
+
+        # Filtering still drives what the picker lists.
+        _choose(session, "Extensão Universitária", "2")
+        state = _open(session)
+        assert state["shown"] and all(o["tipo"] == "Extensão Universitária" and o["grupo"].startswith("2 - ") for o in state["shown"])
+        assert state["long"] is None
+    finally:
+        session.close()
+
+
+@browser
+def test_picker_mouse_choice_fires_change_and_is_what_the_form_submits(env):
+    identity = _as_student(env)
+    session = _session(env)
+    try:
+        session.goto("/aluno/nova-requisicao")
+        _choose(session, "Acadêmica Complementar", "1")
+        _open(session)
+        target = session.evaluate(
+            "(() => { const s = document.getElementById('atividade_versao_id_select');"
+            " const o = Array.from(s.options).find(o => !o.hidden && o.dataset.defaultHours && o.value !== s.value);"
+            " o.scrollIntoView({block: 'nearest'}); return {id: o.value, hours: o.dataset.defaultHours}; })()")
+        session.pump(0.2)
+        session.click(f'#atividade_versao_id_select option[value="{target["id"]}"]')
+        session.pump(0.3)
+        state = _picker(session)
+        assert state["open"] is False and state["value"] == target["id"] and state["active"] == "select", state
+        # The page's own change handler ran: the suggested hours were applied.
+        assert session.evaluate("document.querySelector('[name=horas_solicitadas]').value") == target["hours"]
+
+        session.requests.clear()
+        session.evaluate(
+            "(() => { const f = document.getElementById('atividade_versao_id_select').form;"
+            " f.querySelector('[name=nome_evento]').value = 'Escolha pelo picker';"
+            " f.querySelector('[name=data_evento]').value = '2026-09-06'; f.requestSubmit(); return true; })()")
+        session.pump(1.5)
+        posts = [body for method, path, body in session.requests if method == "POST" and path == "/aluno/nova-requisicao"]
+        assert len(posts) == 1 and parse_qs(posts[0])["atividade_versao_id"] == [target["id"]]
+        stored = _sql("SELECT atividade_versao_id FROM requisicoes WHERE nome_evento='Escolha pelo picker' AND aluno_id=?",
+                      (identity["aluno_id"],))
+        assert [row[0] for row in stored] == [int(target["id"])]
+    finally:
+        session.close()
+
+
+@browser
+def test_picker_keyboard_enter_arrows_escape_and_focus(env):
+    _as_student(env)
+    session = _session(env)
+    try:
+        session.goto("/aluno/nova-requisicao")
+        _choose(session, "Acadêmica Complementar", "1")
+        visible = [o["id"] for o in json.loads(session.evaluate(ACTIVITY))["visible"]]
+        start = session.evaluate("document.getElementById('atividade_versao_id_select').value")
+        session.evaluate("document.getElementById('atividade_versao_id_select').focus(); true")
+
+        _key(session, "Enter", "Enter", 13, "\r")
+        state = _picker(session)
+        assert state["open"] and state["active"] == f"option:{start}", state
+        _key(session, "ArrowDown", "ArrowDown", 40)
+        assert _picker(session)["active"] == f"option:{visible[visible.index(start) + 1]}"
+        _key(session, "Escape", "Escape", 27)
+        state = _picker(session)
+        assert state["open"] is False and state["value"] == start and state["active"] == "select", state
+
+        _key(session, "Enter", "Enter", 13, "\r")
+        for _ in range(len(visible) + 3):  # past the end: focus never leaves the filtered options
+            _key(session, "ArrowDown", "ArrowDown", 40)
+            assert _picker(session)["active"].removeprefix("option:") in visible
+        _key(session, "ArrowUp", "ArrowUp", 38)
+        _key(session, "Enter", "Enter", 13, "\r")
+        state = _picker(session)
+        assert state["open"] is False and state["value"] == visible[-2] and state["active"] == "select", state
+    finally:
+        session.close()
+
+
+@browser
+def test_edit_mode_picker_opens_on_the_stored_activity(env):
+    request_id, version = _pending_with_files(env)
+    session = _session(env)
+    try:
+        session.goto(f"/aluno/requisicoes/{request_id}?edit=1")
+        state = _open(session)
+        assert state["value"] == str(version) and state["active"] == f"option:{version}", state
+        checked = session.evaluate(
+            "(() => { const o = document.querySelector('#atividade_versao_id_select option:checked');"
+            " const r = o.getBoundingClientRect(); return {id: o.value, h: r.height, x: r.left + 2, y: r.top + r.height / 2,"
+            " hit: document.elementFromPoint(r.left + 2, r.top + r.height / 2) === o}; })()")
+        assert checked["id"] == str(version) and checked["hit"] is True, checked
+    finally:
+        session.close()
+
+
+@browser
+def test_without_the_feature_the_native_select_keeps_its_geometry_and_behaviour(env):
+    _as_student(env)
+    geometry = {}
+    for mode in ("enhanced", "native"):
+        session = _session(env)
+        if mode == "native":
+            _neutralize_enhancement(session)
+        try:
+            session.goto("/aluno/nova-requisicao")
+            _choose(session, "Acadêmica Complementar", "1")
+            geometry[mode] = json.loads(session.evaluate(
+                "JSON.stringify((() => { const s = document.getElementById('atividade_versao_id_select');"
+                " const c = document.getElementById('atividade_card'); const r = e => { const b = e.getBoundingClientRect();"
+                " return [b.left, b.top, b.width, b.height]; }; return {appearance: getComputedStyle(s).appearance,"
+                " select: r(s), card: r(c)}; })())"))
+            if mode == "native":
+                visible = [o["id"] for o in json.loads(session.evaluate(ACTIVITY))["visible"]]
+                start = session.evaluate("document.getElementById('atividade_versao_id_select').value")
+                session.evaluate("document.getElementById('atividade_versao_id_select').focus(); true")
+                _key(session, "ArrowDown", "ArrowDown", 40)
+                assert session.evaluate("document.getElementById('atividade_versao_id_select').value") == visible[visible.index(start) + 1]
+        finally:
+            session.close()
+    assert geometry["enhanced"]["appearance"] == "base-select" and geometry["native"]["appearance"] == "auto"
+    assert geometry["enhanced"]["select"] == geometry["native"]["select"]
+    assert geometry["enhanced"]["card"] == geometry["native"]["card"]
+
+
+def test_both_shells_load_design_system_css_under_one_bumped_asset_version(env):
+    login_admin(env["client"])
+    admin = env["client"].get("/admin/dashboard").get_data(as_text=True)
+    _as_student(env)
+    aluno = env["client"].get("/aluno/nova-requisicao").get_data(as_text=True)
+    versions = {page: set(re.findall(r'/static/css/[\w/.-]+\.css\?v=([\w.-]+)', html)) for page, html in (("admin", admin), ("aluno", aluno))}
+    # One version for every stylesheet in both shells, and not the one that
+    # predates batch 1's CSS -- a returning browser must fetch the new files.
+    assert len(versions["admin"]) == 1 and versions["admin"] == versions["aluno"], versions
+    assert versions["aluno"] != {"20260516-tooltip-dark-v1"}
 
 
 # ---------------------------------------------------------------- 5. progress

@@ -883,19 +883,20 @@ review. These were recorded and deliberately left in the tree.
 
 **Student UI batch 1 — recorded, not actioned**
 
-* **Native select popup placement (Atividade, `/aluno/nova-requisicao`).**
-  Chromium sizes a `<select>` popup to its widest *visible* option and, when
-  that would clip at the screen's right edge, right-aligns the popup to the
-  select's right edge — so with regulation-length activity names (measured:
-  a 464px select, a 1046px option) the list opens far to the left of the
-  field. No application CSS or script positions it, and CSS cannot bound a
-  native popup's width; the app-owned anchor geometry is pinned by
-  `tests/test_student_ui_corrections_batch1.py`. Supported alternative, a
-  product/DS decision: progressive enhancement with the customizable select
-  (`appearance: base-select` with a `::picker(select)` sized to the anchor and
-  wrapping options) — still the native `<select>`, so keyboard, form value and
-  type/group filtering are unchanged, and browsers without it keep today's
-  popup. Not a custom dropdown.
+* ~~**Native select popup placement (Atividade, `/aluno/nova-requisicao`).**~~
+  **Resolved where supported** by a page-scoped progressive enhancement in
+  that template: under `@supports (appearance: base-select)` the same
+  `<select>` opens a `::picker(select)` anchored to the field card (card
+  width, long names wrap, flips above and shrinks to the room available).
+  Cause, for the record: Chromium sizes a native popup to its widest visible
+  option and right-aligns it to the select when it would clip, so
+  regulation-length names (a 464px select, a 1046px option) opened it far to
+  the left. The closed control keeps the native geometry (same 33px card, text
+  inset and clip, chevron position — measured against the native control).
+  Residual: browsers without the customizable select (non-Chromium at the
+  time of writing) keep the native popup; the keyboard model differs from
+  Windows' native one (an arrow opens the list instead of changing the value
+  while closed). Pinned by `tests/test_student_ui_corrections_batch1.py`.
 * **Direct-upload rows overflow their item.** `static/js/direct-upload.js`
   renders name / "Tentar novamente" / "Remover" (text, no leading icon) into
   the `.file-list-item` grid built for icon / name / icon-button, so the text
