@@ -1444,7 +1444,7 @@ R3 M1 regression evidence: five integrated cases exercise C14 with 59, 60, 64 an
 the complete serialized evidence budget, count/digest fallback with full history reconstructed from the
 verified chain, and an oversized derived report refused before append with the ledger unchanged.
 
-Pending: the cross-family R3 review verdict (the user runs it from the regenerated packet) and, optionally, GA2
+The scoped independent A21 R3 M1 rereview verdict is recorded below; any broader runtime/PG-dependent qualification remains outside that static review. Optionally, GA2
 (a DEV Google client) for the OAuth callback rehearsal. GP0 is not authorized. The DEV database credential was repaired by the user and every database lane ran
 (A14); DEV `public` was left empty and its Data API off.
 
