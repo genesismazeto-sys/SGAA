@@ -1346,12 +1346,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
               <div class="control file-name" data-file-name>Nenhum arquivo selecionado</div>
               <div class="field-chip chip-right" title="Anexar arquivos"><i class="lucide" data-lucide="upload"></i><span>Anexar</span></div>
             </div>
-            <div class="direct-upload-feedback">
-              <ul class="file-list" data-direct-upload-list aria-label="Comprovantes em envio" aria-live="polite"></ul>
-              <p class="form-note" data-direct-upload-status role="status"></p>
-              <noscript><p class="form-note" role="alert">Para anexar comprovantes é necessário habilitar o JavaScript: os arquivos são enviados diretamente ao armazenamento seguro. Sem JavaScript, a requisição só pode ser enviada sem comprovantes.</p></noscript>
-            </div>
           </div>
+          {#- Upload feedback follows the card's .form-row instead of living in
+              it: inside, every row it added re-centred the absolutely
+              positioned "Comprovantes" label (form.css FILE LIST contract).
+              Hidden together with the row outside Criar/Editar. -#}
+          <ul class="file-list" data-direct-upload-list data-upload-feedback aria-label="Comprovantes em envio" aria-live="polite"></ul>
+          <p class="form-note" data-direct-upload-status data-upload-feedback role="status"></p>
+          <noscript><p class="form-note" role="alert">Para anexar comprovantes é necessário habilitar o JavaScript: os arquivos são enviados diretamente ao armazenamento seguro. Sem JavaScript, a requisição só pode ser enviada sem comprovantes.</p></noscript>
 
           <div id="m_comprovantes_container"></div>
 
@@ -1854,7 +1856,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
       }
 
       // ── Editabilidade dos campos ─────────────────────────────────────────────
-      if (uploadRow) uploadRow.hidden = !(isCreate || isEdit);
+      if (uploadRow){
+        uploadRow.hidden = !(isCreate || isEdit);
+        form?.querySelectorAll('[data-upload-feedback]').forEach(el=>{ el.hidden = uploadRow.hidden; });
+      }
       if (form){
         form.querySelectorAll('input, select, textarea').forEach(el=>{
           if (el.type === 'hidden') return;

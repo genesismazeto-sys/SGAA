@@ -188,9 +188,11 @@
               <div class="control file-name" data-file-name>{% if edit_arquivo %}{{ edit_arquivo.original_filename }}{% else %}Nenhum arquivo selecionado{% endif %}</div>
               <div class="field-chip chip-right" title="{{ 'Substituir arquivo' if edit_arquivo else 'Anexar arquivo' }}"><i class="lucide" data-lucide="paperclip"></i><span>{{ 'Substituir' if edit_arquivo else 'Anexar' }}</span></div>
             </div>
-            <ul class="file-list" data-direct-upload-list aria-label="Arquivo em envio" aria-live="polite"></ul>
-            <p class="form-note" data-direct-upload-status role="status"></p>
           </div>
+          {#- After the card's .form-row, not in it: inside, the list re-centred
+              the absolutely positioned "Arquivo" label (form.css FILE LIST). -#}
+          <ul class="file-list" data-direct-upload-list aria-label="Arquivo em envio" aria-live="polite"></ul>
+          <p class="form-note" data-direct-upload-status role="status"></p>
 
           <div class="form-row">
             <label class="row-label">Nome do arquivo</label>

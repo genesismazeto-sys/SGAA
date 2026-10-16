@@ -906,13 +906,20 @@ review. These were recorded and deliberately left in the tree.
   ellipsing it. Verified on all four surfaces (Nova/Editar requisição, student
   request detail, Requisições modal, Arquivos modal); pinned by
   `tests/test_ui_corrections_batch2.py`.
-* **Upload row label centring (admin surfaces).** In the Requisições and
-  Arquivos modals the upload feedback list sits *inside* the card's
-  `.form-row`, so the absolutely positioned `.row-label` re-centres on card +
-  list once rows appear ("Comprovantes" / "Arquivo" drifts down beside the
-  list). Pre-existing, independent of the row controls; the student surfaces
-  keep the list outside the row. Recorded, not actioned (a `.form-row`
-  primitive change).
+* ~~**Upload row label centring (admin surfaces).**~~ **Resolved by UI
+  batch 3** without touching `.form-row` / `.row-label`: in the Requisições
+  and Arquivos modals the upload feedback (list + status) moved out of the
+  card's `.form-row` to be its next siblings in the form grid — the FILE LIST
+  contract in `form.css` that the student surfaces already follow. The label
+  stays centred on its card (stacked above it below 720px) whatever is
+  listed; the list spans the card 6px under it; the next field is one 12px
+  row-gap away. The Requisições modal hides the pair with its upload row
+  outside Criar/Editar (`.form-note[hidden]`, a rule `.file-list` already
+  had; no `.form-note` was ever rendered hidden before). Note: a modal
+  overlay centres its dialog (`place-items:center`), so a growing list still
+  shifts the *whole* dialog — label and field together — by half the
+  growth; that is the shared modal primitive, not label drift. Pinned by
+  `tests/test_ui_corrections_batch3.py`.
 
 **UI batch 2 — decision buttons**
 

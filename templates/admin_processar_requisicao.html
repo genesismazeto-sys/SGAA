@@ -113,10 +113,21 @@
       <button type="button" class="btn btn-action-ghost btn-indeferir" data-process-status="Indeferida" aria-pressed="false" onclick="selectStatus(this)"><i class="lucide" data-lucide="x"></i><span class="btn-label">Indeferir</span></button>
     </div>
 
-    <label id="horas-label" style="display:none;">
-      <div class="help">Horas Deferidas (obrigatório se "Deferida Parcialmente")</div>
-      <input class="input" type="number" step="0.01" min="0" name="horas_deferidas" id="horas-deferidas" />
-    </label>
+    {#- The Requisições modal's "Horas deferidas" field, in the shared DS
+        structure: label column, compact field card, timer chip. Shown only
+        for Deferida Parcialmente, where it is required (the DS marks the
+        label of a required control). In this page's plain flow it takes the
+        DS 12px row rhythm: no form top padding (the decision row above
+        already leaves 12px), 12px before Observação. -#}
+    <div class="form-cards-narrow" id="horas-label" style="display:none; padding-top:0; margin-bottom:12px;">
+      <div class="form-row">
+        <label class="row-label" for="horas-deferidas">Horas deferidas</label>
+        <div class="field-card is-compact">
+          <div class="field-chip"><i class="lucide" data-lucide="timer"></i></div>
+          <input class="control" type="number" step="0.01" min="0" name="horas_deferidas" id="horas-deferidas" placeholder="Informe as horas deferidas" />
+        </div>
+      </div>
+    </div>
 
     <label>
       <div class="help">Observação</div>

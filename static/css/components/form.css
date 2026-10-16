@@ -320,7 +320,10 @@
 .form-cards-narrow > .form-note:empty,
 .form-cards-narrow > .file-list:empty{ position:absolute; }
 .field-card.file-card + .file-list{ margin-top:6px; }
-.file-list[hidden]{ display:none; }
+/* Both set display, which beats the UA [hidden] rule; a feedback pair that
+   hides with its upload row (Requisições modal) must really disappear. */
+.file-list[hidden],
+.form-note[hidden]{ display:none; }
 .file-list-item{
   display:grid;
   grid-template-columns:auto minmax(0, 1fr) auto;

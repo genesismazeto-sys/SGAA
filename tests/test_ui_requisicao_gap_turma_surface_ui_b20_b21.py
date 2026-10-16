@@ -42,8 +42,11 @@ def test_empty_comprovantes_container_leaves_the_form_grid():
 def test_container_is_empty_markup_between_comprovantes_and_observacao():
     source = _read("templates/admin_requisicoes.html")
     # Literally empty (no whitespace), so :empty matches before any JS runs.
+    # (UI batch 3: the upload feedback list/status follow the upload row.)
     assert re.search(
-        r'id="m_upload_row">.*?</div>\s*</div>\s*'
+        r'id="m_upload_row">.*?</div>\s*</div>\s*(?:\{#.*?#\}\s*)?'
+        r'<ul class="file-list" data-direct-upload-list[^>]*></ul>\s*'
+        r'<p class="form-note" data-direct-upload-status[^>]*></p>\s*<noscript>.*?</noscript>\s*'
         r'<div id="m_comprovantes_container"></div>\s*'
         r'<div class="form-row">\s*<label class="row-label">Observação \(opcional\)</label>',
         source,
