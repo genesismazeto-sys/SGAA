@@ -204,7 +204,7 @@ def test_keyboard_reaches_and_opens_anexar_on_nova_requisicao(env, picks):
         assert session.active() == "Remover comprovante b.png"
         session.key("Enter", "Enter", 13, "\r")
         names = session.evaluate(
-            "JSON.stringify(Array.from(document.querySelectorAll('[data-direct-upload-list] li > span'))"
+            "JSON.stringify(Array.from(document.querySelectorAll('[data-direct-upload-list] li > .file-list-name'))"
             ".map(s => s.textContent.split(' \u2014 ')[0]))"
         )
         assert json.loads(names) == ["a.pdf"]

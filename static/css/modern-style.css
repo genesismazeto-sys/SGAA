@@ -332,6 +332,37 @@ body{
 .btn.danger{ color:var(--danger-text); border:1px solid #ef4444; background:var(--surface); }
 .btn.danger:hover{ background:#fee2e2; }
 
+/* Decision buttons — the Requisições processing choices (Indeferir / Deferir
+   Parcialmente / Deferir, and Encerrar / Devolver / Reabrir after a
+   decision), in the Requisições modal footer and on the standalone
+   Processar page. Owned here since UI batch 2; until then they lived in the
+   stylesheet admin_requisicoes.html injects at runtime, with their own
+   corner (6px), a padding (10px 20px) the fixed --btn-h could not hold, a
+   12px icon gap, and literal colours. They are now ordinary .btn geometry
+   (height, corner, padding, icon size and nudges) with the --status-*
+   families as colour:
+     idle      surface, outline in the family's dot, label in its text;
+     hover     the family's tint;
+     selected  aria-pressed="true": filled with the family's text colour,
+               white label -- the decision that Confirmar/Salvar will send;
+   so a chosen decision never reads as just "hovered", and the colour is
+   never the only signal (the label and the pressed state carry it). */
+.btn.btn-action-ghost{ font-weight:500; background:var(--surface); }
+.btn.btn-action-ghost:focus-visible{ outline:2px solid var(--focus-ring-color); outline-offset:2px; }
+.btn.btn-indeferir{ --decision-ink:var(--status-negative-text); --decision-edge:var(--status-negative-dot); --decision-tint:var(--status-negative-bg); }
+.btn.btn-parcial{ --decision-ink:var(--status-caution-text); --decision-edge:var(--status-caution-dot); --decision-tint:var(--status-caution-bg); }
+.btn.btn-deferir{ --decision-ink:var(--status-positive-text); --decision-edge:var(--status-positive-dot); --decision-tint:var(--status-positive-bg); }
+.btn.btn-action-ghost:is(.btn-indeferir, .btn-parcial, .btn-deferir){
+  border-color:var(--decision-edge);
+  color:var(--decision-ink);
+}
+.btn.btn-action-ghost:is(.btn-indeferir, .btn-parcial, .btn-deferir):hover{ background:var(--decision-tint); }
+.btn.btn-action-ghost:is(.btn-indeferir, .btn-parcial, .btn-deferir)[aria-pressed="true"]{
+  background:var(--decision-ink);
+  border-color:var(--decision-ink);
+  color:var(--text-on-brand);
+}
+
 /* Disabled — canonical Design System state for any .btn. Owned here with the
    rest of the button contract so a disabled primary keeps its primary identity
    while clearly reading as inactive (no hover shift, not-allowed cursor). */

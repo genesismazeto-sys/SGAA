@@ -344,7 +344,13 @@
   text-decoration:none;
 }
 a.file-list-name:hover{ color:var(--accent-blue); text-decoration:underline; }
-.file-list-remove{
+/* Row controls. .file-list-remove is the one every row has; .file-list-action
+   is any other per-file control (the direct-upload retry). Icon-only, 24px,
+   named for their file through aria-label; direct-upload.js groups them in
+   .file-list-actions so they share the row's third track. */
+.file-list-actions{ display:inline-flex; align-items:center; gap:2px; }
+.file-list-remove,
+.file-list-action{
   display:grid;
   place-items:center;
   width:24px;
@@ -356,9 +362,22 @@ a.file-list-name:hover{ color:var(--accent-blue); text-decoration:underline; }
   color:var(--text-secondary);
   cursor:pointer;
 }
-.file-list-remove:hover{ background:var(--field-chip-hover-bg); color:var(--text-primary); }
-.file-list-remove:focus-visible{ outline:2px solid var(--focus-ring-color); outline-offset:1px; }
-.file-list-remove .lucide{ width:14px; height:14px; }
+.file-list-action[hidden]{ display:none; }
+.file-list-remove:hover,
+.file-list-action:hover{ background:var(--field-chip-hover-bg); color:var(--text-primary); }
+.file-list-remove:focus-visible,
+.file-list-action:focus-visible{ outline:2px solid var(--focus-ring-color); outline-offset:1px; }
+.file-list-remove .lucide,
+.file-list-action .lucide{ width:14px; height:14px; }
+/* A failed upload says why in the row: its message wraps instead of being
+   cut off by the ellipsis, and the row takes the danger family. */
+.file-list-item[data-state="error"]{ border-color:var(--danger-border); }
+.file-list-item[data-state="error"] .file-list-name{
+  padding-block:4px;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  color:var(--danger-text);
+}
 
 /* =============================================================
    TRAILING CHIP ON A PLAIN FIELD CARD

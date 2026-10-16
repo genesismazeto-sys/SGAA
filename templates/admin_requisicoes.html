@@ -1393,14 +1393,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
     </div>
     <div class="modal-footer req-footer" id="m_footer_actions">
       <div class="req-footer-row req-footer-row-process" id="m_footer_process_row" hidden>
-        <button type="button" class="btn btn-action-ghost btn-indeferir" data-role="process-action" data-action="indeferir" title="Indeferir"><i class="lucide" data-lucide="x"></i><span class="btn-label">Indeferir</span></button>
-        <button type="button" class="btn btn-action-ghost btn-parcial" data-role="process-action" data-action="deferir_parte" title="Deferir parcialmente"><i class="lucide" data-lucide="divide-square"></i><span class="btn-label">Deferir Parcialmente</span></button>
-        <button type="button" class="btn btn-action-ghost btn-deferir" data-role="process-action" data-action="deferir" title="Deferir"><i class="lucide" data-lucide="check"></i><span class="btn-label">Deferir</span></button>
+        <button type="button" class="btn btn-action-ghost btn-indeferir" data-role="process-action" aria-pressed="false" data-action="indeferir" title="Indeferir"><i class="lucide" data-lucide="x"></i><span class="btn-label">Indeferir</span></button>
+        <button type="button" class="btn btn-action-ghost btn-parcial" data-role="process-action" aria-pressed="false" data-action="deferir_parte" title="Deferir parcialmente"><i class="lucide" data-lucide="divide-square"></i><span class="btn-label">Deferir Parcialmente</span></button>
+        <button type="button" class="btn btn-action-ghost btn-deferir" data-role="process-action" aria-pressed="false" data-action="deferir" title="Deferir"><i class="lucide" data-lucide="check"></i><span class="btn-label">Deferir</span></button>
       </div>
       <div class="req-footer-row req-footer-row-post" id="m_footer_post_row" hidden>
-        <button type="button" class="btn btn-action-ghost btn-indeferir" data-role="process-action" data-action="encerrar" title="Encerrar"><i class="lucide" data-lucide="circle-x"></i><span class="btn-label">Encerrar</span></button>
-        <button type="button" class="btn btn-action-ghost btn-parcial" data-role="process-action" data-action="devolver" title="Devolver para ajuste"><i class="lucide" data-lucide="undo-2"></i><span class="btn-label">Devolver</span></button>
-        <button type="button" class="btn btn-action-ghost btn-deferir" data-role="process-action" data-action="reabrir" title="Reabrir"><i class="lucide" data-lucide="rotate-ccw"></i><span class="btn-label">Reabrir</span></button>
+        <button type="button" class="btn btn-action-ghost btn-indeferir" data-role="process-action" aria-pressed="false" data-action="encerrar" title="Encerrar"><i class="lucide" data-lucide="circle-x"></i><span class="btn-label">Encerrar</span></button>
+        <button type="button" class="btn btn-action-ghost btn-parcial" data-role="process-action" aria-pressed="false" data-action="devolver" title="Devolver para ajuste"><i class="lucide" data-lucide="undo-2"></i><span class="btn-label">Devolver</span></button>
+        <button type="button" class="btn btn-action-ghost btn-deferir" data-role="process-action" aria-pressed="false" data-action="reabrir" title="Reabrir"><i class="lucide" data-lucide="rotate-ccw"></i><span class="btn-label">Reabrir</span></button>
       </div>
       <div class="req-footer-row req-footer-row-confirm" id="m_footer_confirm_row" hidden>
         <button type="button" class="btn" id="m_footer_cancel"><i class="lucide" data-lucide="x"></i><span class="btn-label">Cancelar</span></button>
@@ -1461,24 +1461,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
     /* Textareas: altura padrão e alinhamento do placeholder */
     textarea.control{ line-height: 1.2; padding-top: 8px; padding-bottom: 8px; }
     textarea.control.auto-grow{ height: var(--btn-h); min-height: var(--btn-h); }
-    .btn-action-ghost{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      padding:10px 20px;
-      border-radius:6px;
-      font-weight:500;
-      transition:all 0.2s ease;
-      background:transparent;
-      cursor:pointer;
-    }
-    .btn-action-ghost .lucide{ width:16px; height:16px; }
-    .btn-indeferir{ border:1px solid #B8534C; color:#B8534C; }
-    .btn-indeferir:hover{ background-color: rgba(184, 83, 76, 0.05); }
-    .btn-parcial{ border:1px solid #9C7132; color:#9C7132; }
-    .btn-parcial:hover{ background-color: rgba(156, 113, 50, 0.05); }
-    .btn-deferir{ border:1px solid #5C9A7F; color:#5C9A7F; }
-    .btn-deferir:hover{ background-color: rgba(92, 154, 127, 0.05); }
+    /* Decision buttons (.btn-action-ghost + .btn-indeferir/-parcial/-deferir):
+       owned by css/modern-style.css since UI batch 2. */
   /* Processamento: placeholders discretos */
   #m_proc_horas_row .control::placeholder, #m_proc_just_row .control::placeholder{ color: var(--text-tertiary); }
     `;
@@ -1814,6 +1798,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
     // Expõe setSaveButton para uso do segundo bloco de script
     window.__setSaveButton = function(label, action, targetId){ setSaveButton(label, action, targetId); };
 
+    // Every decision button visible again and none pressed (none chosen).
+    function restoreDecisionButtons(){
+      document.querySelectorAll('#m_footer_actions button[data-action]').forEach(btn=>{
+        btn.hidden = false;
+        btn.style.display = '';
+        btn.setAttribute('aria-pressed', 'false');
+      });
+    }
+
     // Única fonte de verdade para visibilidade do rodapé do modal.
     // statusHint: string com o status da requisição (ex.: 'Pendente', 'Deferida').
     // Quando omitido, lê overlay.dataset.reqStatus (que deve ser gravado antes desta chamada).
@@ -1826,6 +1819,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
       // Sempre reset do estado de confirmação ao trocar de modo
       setFooterRowVisibility(confirmRow, false);
+      // ...including the decision chosen before the modal was closed: without
+      // this, reopening showed only that one button, still pressed.
+      restoreDecisionButtons();
 
       // ── Rodapé ──────────────────────────────────────────────────────────────
       const resolvedStatus = statusHint != null ? String(statusHint) : (overlay.dataset.reqStatus || '');
@@ -1893,7 +1889,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
       const footer = document.getElementById('m_footer_actions');
       if (footer){
         footer.querySelectorAll('button[data-action]').forEach(btn=>{
-          if (btn.getAttribute('data-action') !== selectedAction){
+          const chosen = btn.getAttribute('data-action') === selectedAction;
+          // The one left visible is the decision Confirmar will send.
+          btn.setAttribute('aria-pressed', chosen ? 'true' : 'false');
+          if (!chosen){
             btn.hidden = true;
             btn.style.display = 'none';
           }
@@ -1905,13 +1904,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
     window.__exitProcessConfirm = function(statusHint){
       // Restaura todos os botões de ação
-      const footer = document.getElementById('m_footer_actions');
-      if (footer){
-        footer.querySelectorAll('button[data-action]').forEach(btn=>{
-          btn.hidden = false;
-          btn.style.display = '';
-        });
-      }
+      restoreDecisionButtons();
       setFooterRowVisibility(confirmRow, false);
       const overlay = document.getElementById('req-modal');
       const s = (statusHint || overlay?.dataset?.reqStatus || '').trim().toLowerCase();

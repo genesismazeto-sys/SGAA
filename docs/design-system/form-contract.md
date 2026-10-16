@@ -90,10 +90,11 @@ listed by `tools/ds_css.py`.
   `templates/admin_requisicoes.html`. It builds a `<style>` element and appends
   it to `<head>`, so it lands last in the cascade.
   DS-6 moved 8 declarations out of it — the ones that were provably shared —
-  and left the rest. Migrating the remainder means unpicking the requisição
-  form pack, the file-card styling and three action-button colour variants
-  (`.btn-indeferir`, `.btn-parcial`, `.btn-deferir`) that exist nowhere else.
-  That is its own slice.
+  and left the rest. UI batch 2 removed 20 more: the decision-button family
+  (`.btn-action-ghost`, `.btn-indeferir`, `.btn-parcial`, `.btn-deferir`),
+  now owned by the button contract in `modern-style.css` and also used by the
+  standalone Processar page. Migrating the remainder means unpicking the requisição
+  form pack and the file-card styling. That is its own slice.
 * **198 static `style=""` attributes** across all templates (ratcheted).
 
 ---

@@ -387,7 +387,9 @@ def test_guidance_is_rendered_with_the_fillable_form_and_tied_to_its_field(env, 
 def test_guidance_and_file_list_are_owned_by_form_css_with_tokens_only():
     css = (Path(__file__).resolve().parents[1] / "static/css/components/form.css").read_text(encoding="utf-8")
     block = css.split("FIELD GUIDANCE", 1)[1].split("TRAILING CHIP", 1)[0]
-    assert ".form-note.form-note--guide{" in block and ".file-list-remove{" in block
+    assert ".form-note.form-note--guide{" in block
+    # UI batch 2: the remove control shares its rule with the other row controls.
+    assert re.search(r"\.file-list-remove\s*(,[^{]*)?\{", block)
     assert re.findall(r"#[0-9a-fA-F]{3,8}\b|rgba?\(", block.split("*/", 1)[1]) == []
     assert "--field-invalid" not in block.split("*/", 1)[1]
 
@@ -432,7 +434,7 @@ DIRECT_STATE = """JSON.stringify((() => {
   return {
     enabled: !input.disabled,
     named: input.hasAttribute('name'),
-    listed: Array.from(form.querySelectorAll('[data-direct-upload-list] li > span')).map(s => s.textContent.split(' — ')[0]),
+    listed: Array.from(form.querySelectorAll('[data-direct-upload-list] li > .file-list-name')).map(s => s.textContent.split(' — ')[0]),
     submitDisabled: Array.from(form.querySelectorAll('button[type="submit"]')).every(b => b.disabled),
     intents: Array.from(form.querySelectorAll('input[name="comprovantes_intent_ids"]')).map(i => i.value),
   };

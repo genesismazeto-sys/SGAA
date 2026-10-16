@@ -897,11 +897,33 @@ review. These were recorded and deliberately left in the tree.
   time of writing) keep the native popup; the keyboard model differs from
   Windows' native one (an arrow opens the list instead of changing the value
   while closed). Pinned by `tests/test_student_ui_corrections_batch1.py`.
-* **Direct-upload rows overflow their item.** `static/js/direct-upload.js`
-  renders name / "Tentar novamente" / "Remover" (text, no leading icon) into
-  the `.file-list-item` grid built for icon / name / icon-button, so the text
-  buttons overflow their 24px boxes. Shared by four surfaces; independent of
-  the batch 1 spacing fix.
+* ~~**Direct-upload rows overflow their item.**~~ **Resolved by UI batch 2.**
+  `static/js/direct-upload.js` now renders the `.file-list-item` anatomy —
+  file icon / name / `.file-list-actions` — with "Tentar novamente"
+  (`.file-list-action`, rotate-cw) and "Remover" (`.file-list-remove`, x) as
+  24px Lucide icon buttons named for their file, the action shown by the DS
+  tooltip. An error row wraps its message in the danger family instead of
+  ellipsing it. Verified on all four surfaces (Nova/Editar requisição, student
+  request detail, Requisições modal, Arquivos modal); pinned by
+  `tests/test_ui_corrections_batch2.py`.
+* **Upload row label centring (admin surfaces).** In the Requisições and
+  Arquivos modals the upload feedback list sits *inside* the card's
+  `.form-row`, so the absolutely positioned `.row-label` re-centres on card +
+  list once rows appear ("Comprovantes" / "Arquivo" drifts down beside the
+  list). Pre-existing, independent of the row controls; the student surfaces
+  keep the list outside the row. Recorded, not actioned (a `.form-row`
+  primitive change).
+
+**UI batch 2 — decision buttons**
+
+* The Requisições decision family (`.btn-action-ghost` +
+  `.btn-indeferir` / `.btn-parcial` / `.btn-deferir`) moved from the
+  stylesheet `admin_requisicoes.html` injects at runtime into the button
+  contract in `modern-style.css`: plain `.btn` geometry and the `--status-*`
+  negative / caution / positive families, with `aria-pressed="true"` as the
+  selected state (filled with the family's text colour). The standalone
+  Processar page uses the same family instead of turning the choice
+  `.primary`. See `form-contract.md` §4.
 
 **Ownership / dead code**
 

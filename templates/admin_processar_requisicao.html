@@ -107,10 +107,10 @@
     <input type="hidden" name="status" id="status-hidden" required />
 
     <!-- Botões de seleção de ação (process-action-buttons) -->
-    <div class="process-action-buttons" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
-      <button type="button" class="btn" data-process-status="Deferida" onclick="selectStatus(this)">Deferir</button>
-      <button type="button" class="btn" data-process-status="Deferida Parcialmente" onclick="selectStatus(this)">Deferir Parcialmente</button>
-      <button type="button" class="btn" data-process-status="Indeferida" onclick="selectStatus(this)">Indeferir</button>
+    <div class="process-action-buttons" role="group" aria-label="Decisão" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+      <button type="button" class="btn btn-action-ghost btn-deferir" data-process-status="Deferida" aria-pressed="false" onclick="selectStatus(this)"><i class="lucide" data-lucide="check"></i><span class="btn-label">Deferir</span></button>
+      <button type="button" class="btn btn-action-ghost btn-parcial" data-process-status="Deferida Parcialmente" aria-pressed="false" onclick="selectStatus(this)"><i class="lucide" data-lucide="divide-square"></i><span class="btn-label">Deferir Parcialmente</span></button>
+      <button type="button" class="btn btn-action-ghost btn-indeferir" data-process-status="Indeferida" aria-pressed="false" onclick="selectStatus(this)"><i class="lucide" data-lucide="x"></i><span class="btn-label">Indeferir</span></button>
     </div>
 
     <label id="horas-label" style="display:none;">
@@ -135,8 +135,8 @@
   function selectStatus(btn) {
     const status = btn.getAttribute('data-process-status') || '';
     document.getElementById('status-hidden').value = status;
-    document.querySelectorAll('.process-action-buttons .btn').forEach(b => b.classList.remove('primary'));
-    btn.classList.add('primary');
+    // Selected decision = aria-pressed (styled by the decision-button family).
+    document.querySelectorAll('.process-action-buttons .btn').forEach(b => b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'));
     const parcial = status === 'Deferida Parcialmente';
     const horasLabel = document.getElementById('horas-label');
     const horasInput = document.getElementById('horas-deferidas');

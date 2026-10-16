@@ -79,6 +79,48 @@
     return value === null || value === '' ? fallback : value;
   }
 
+  // Lucide v0.544 geometry, inlined: the row must not depend on lucide.min.js
+  // having run (or re-running) to show its controls.
+  var ICON_PATHS = {
+    'file-text': ['M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z', 'M14 2v4a2 2 0 0 0 2 2h4',
+      'M10 9H8', 'M16 13H8', 'M16 17H8'],
+    'rotate-cw': ['M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8', 'M21 3v5h-5'],
+    'x': ['M18 6 6 18', 'm6 6 12 12']
+  };
+
+  function icon(name) {
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('class', 'lucide lucide-' + name);
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    ICON_PATHS[name].forEach(function (d) {
+      var path = document.createElementNS(ns, 'path');
+      path.setAttribute('d', d);
+      svg.appendChild(path);
+    });
+    return svg;
+  }
+
+  // A compact row control: the icon is the visible label, the accessible name
+  // carries the file, and the DS tooltip (static/js/ui-tooltips.js) shows the
+  // action on hover and on keyboard focus.
+  function rowButton(className, iconName, action, fileName) {
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = className;
+    button.setAttribute('aria-label', action + ' ' + fileName);
+    button.setAttribute('data-ui-tooltip', action);
+    button.appendChild(icon(iconName));
+    return button;
+  }
+
   function DirectUploadForm(form) {
     this.form = form;
     this.purpose = formAttr(form, 'data-direct-upload-purpose', 'comprovante');
@@ -235,9 +277,24 @@
     this.refresh();
   };
 
+  function viaKeyboard(element) {
+    try { return element.matches(':focus-visible'); } catch (e) { return true; }
+  }
+
   DirectUploadForm.prototype.remove = function (entry) {
+    var position = this.entries.indexOf(entry);
+    var hadFocus = document.activeElement === entry.removeButton;
+    var keyboard = hadFocus && viaKeyboard(entry.removeButton);
     this.entries = this.entries.filter(function (item) { return item !== entry; });
     this.refresh();
+    if (!hadFocus) return;
+    // The focused button just left the page: keep focus in the list, on the
+    // row that took its place (as comprovantes-picker.js does); a keyboard
+    // user whose list is now empty goes back to the upload control (a mouse
+    // user is not handed the card's focus ring).
+    var next = this.entries[Math.min(position, this.entries.length - 1)];
+    if (next && next.removeButton) next.removeButton.focus();
+    else if (keyboard && this.input) this.input.focus();
   };
 
   DirectUploadForm.prototype.retry = function (entry) {
@@ -247,7 +304,10 @@
       // Same file, same slot: the server replays the same intent and key.
       entry.intentId = null;
     }
+    var hadFocus = document.activeElement === entry.retryButton;
     this.start(entry);
+    // Retry hides itself until the next error; focus stays on the same row.
+    if (hadFocus && entry.state !== 'error' && entry.removeButton) entry.removeButton.focus();
   };
 
   DirectUploadForm.prototype.unresolved = function () {
@@ -303,26 +363,25 @@
     });
     this.entries.forEach(function (entry) {
       if (!entry.node) {
+        // Same anatomy as a comprovantes-picker.js row (icon | name | controls),
+        // so it lands on the .file-list-item grid's three tracks.
         entry.node = document.createElement('li');
         entry.node.className = 'file-list-item';
         entry.node.setAttribute('data-direct-upload-item', '');
+        entry.node.appendChild(icon('file-text'));
         entry.label = document.createElement('span');
         entry.label.className = 'file-list-name';
         entry.node.appendChild(entry.label);
-        entry.retryButton = document.createElement('button');
-        entry.retryButton.type = 'button';
-        entry.retryButton.className = 'btn btn-secondary btn-sm';
-        entry.retryButton.textContent = 'Tentar novamente';
-        entry.retryButton.setAttribute('aria-label', 'Tentar novamente ' + entry.file.name);
+        var actions = document.createElement('span');
+        actions.className = 'file-list-actions';
+        entry.retryButton = rowButton('file-list-action', 'rotate-cw', 'Tentar novamente', entry.file.name);
         entry.retryButton.addEventListener('click', function () { self.retry(entry); });
-        entry.node.appendChild(entry.retryButton);
-        var drop = document.createElement('button');
-        drop.type = 'button';
-        drop.className = 'file-list-remove';
-        drop.textContent = 'Remover';
-        drop.setAttribute('aria-label', (self.purpose === 'admin_arquivo' ? 'Remover arquivo ' : 'Remover comprovante ') + entry.file.name);
-        drop.addEventListener('click', function () { self.remove(entry); });
-        entry.node.appendChild(drop);
+        actions.appendChild(entry.retryButton);
+        entry.removeButton = rowButton('file-list-remove', 'x',
+          self.purpose === 'admin_arquivo' ? 'Remover arquivo' : 'Remover comprovante', entry.file.name);
+        entry.removeButton.addEventListener('click', function () { self.remove(entry); });
+        actions.appendChild(entry.removeButton);
+        entry.node.appendChild(actions);
         self.list.appendChild(entry.node);
       }
       var text = entry.file.name;
@@ -333,8 +392,7 @@
       else if (entry.state === 'error') text += ' — ' + (entry.message || 'erro');
       entry.label.textContent = text;
       entry.node.setAttribute('data-state', entry.state);
-      // display, not the hidden attribute: .btn sets display and would override [hidden].
-      entry.retryButton.style.display = entry.state === 'error' ? '' : 'none';
+      entry.retryButton.hidden = entry.state !== 'error';
     });
   };
 

@@ -431,10 +431,23 @@
       atvSel.disabled = !firstVisible;
     }
 
+    // A new activity's ch_por_evento replaces whatever the field holds. With
+    // no suggestion to offer, only the page's own previous suggestion is
+    // cleared (it belonged to the other activity); hours the student typed,
+    // or the stored request's hours in edit mode, are never erased with
+    // nothing put in their place.
+    let lastSuggestion = null;
     function applySuggestedHours(){
       if (!horasInput) return;
       const selected = atvSel.selectedOptions?.[0];
-      horasInput.value = selected?.getAttribute('data-default-hours') || '';
+      const suggestion = selected?.getAttribute('data-default-hours') || '';
+      if (suggestion){
+        horasInput.value = suggestion;
+        lastSuggestion = suggestion;
+        return;
+      }
+      if (lastSuggestion !== null && horasInput.value === lastSuggestion) horasInput.value = '';
+      lastSuggestion = null;
     }
 
     // Init básico (sem valores do modo edição)
