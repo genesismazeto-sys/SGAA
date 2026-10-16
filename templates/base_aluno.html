@@ -67,21 +67,21 @@
           </a>
 
           <a
-            class="sidebar-link {{ 'active' if request.endpoint and request.endpoint.endswith('aluno_progresso') else '' }}"
-            href="/aluno/progresso"
-            {% if request.endpoint and request.endpoint.endswith('aluno_progresso') %}aria-current="page"{% endif %}
-          >
-            <i class="lucide" data-lucide="chart-column" aria-hidden="true"></i>
-            <span>{{ user_message("Progresso") }}</span>
-          </a>
-
-          <a
             class="sidebar-link {{ 'active' if request.endpoint and request.endpoint.endswith('aluno_minhas_requisicoes') else '' }}"
             href="/aluno/requisicoes"
             {% if request.endpoint and request.endpoint.endswith('aluno_minhas_requisicoes') %}aria-current="page"{% endif %}
           >
             <i class="lucide" data-lucide="inbox" aria-hidden="true"></i>
             <span>{{ user_message("Requisições") }}</span>
+          </a>
+
+          <a
+            class="sidebar-link {{ 'active' if request.endpoint and request.endpoint.endswith('aluno_progresso') else '' }}"
+            href="/aluno/progresso"
+            {% if request.endpoint and request.endpoint.endswith('aluno_progresso') %}aria-current="page"{% endif %}
+          >
+            <i class="lucide" data-lucide="chart-column" aria-hidden="true"></i>
+            <span>{{ user_message("Progresso") }}</span>
           </a>
 
           <a

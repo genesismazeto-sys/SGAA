@@ -133,6 +133,7 @@
           <tr>
             <th>Atividade</th>
             <th>Grupo</th>
+            <th>Tempo padrão</th>
             <th>Limite</th>
             {% for semestre in semestres %}
             <th>{{ semestre|semestre_label }}</th>
@@ -155,6 +156,7 @@
               <span class="progresso-zero">-</span>
               {% endif %}
             </td>
+            <td>{{ atividade.tempo_padrao }}</td>
             <td>{{ atividade.limite }}</td>
             {% for semestre in semestres %}
             {% set horas = atividade.semestres.get(semestre, 0) %}

@@ -53,9 +53,10 @@ PNG_OTHER = (
 )
 
 NOME_GUIDANCE = (
-    "Informe o nome exatamente como consta no comprovante — não o nome genérico da atividade "
-    "no regulamento. Ex.: em uma palestra, informe o título da palestra; em horas de voo, o curso "
-    "ao qual as horas se referem. Divergências podem resultar em indeferimento sumário."
+    "Informe o nome exatamente como consta no comprovante — não o nome genérico da atividade como "
+    "aparece no Regulamento. Ex.: para uma requisição palestra, informe o título da palestra; para "
+    "horas de voo, o curso ao qual as horas se referem; para cursos, o nome do curso como consta no "
+    "certificado. Divergências podem resultar em indeferimento sumário."
 )
 DATA_GUIDANCE = (
     "Informe a data em que a atividade ocorreu, conforme o comprovante — não a data da solicitação. "

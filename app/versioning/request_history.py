@@ -32,6 +32,7 @@ class HistoricalRequestRead:
     eixo: str
     grupo: str
     nome: str
+    ch_por_evento: float | int | None
     limite_total: float | int | None
     limite_semestre: float | int | None
     data_evento: str | None
@@ -72,7 +73,8 @@ def read_historical_request(row) -> HistoricalRequestRead:
         request_id=request_id, aluno_id=_value(row, "aluno_id"), turma_id=_value(row, "turma_id"),
         atividade_base_id=rule.atividade_base_id, atividade_versao_id=rule.atividade_versao_id,
         authority=snapshot.authority, tipo_atividade=activity_type, eixo=rule.eixo,
-        grupo=group, nome=name, limite_total=rule.limite_total,
+        grupo=group, nome=name, ch_por_evento=rule.ch_por_evento,
+        limite_total=rule.limite_total,
         limite_semestre=rule.limite_semestre, data_evento=_value(row, "data_evento"),
         status=str(_value(row, "status") or ""), approved_hours=_approved_hours(row),
     )

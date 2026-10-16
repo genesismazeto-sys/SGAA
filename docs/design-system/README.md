@@ -344,6 +344,13 @@ the unrendered `admin_turma_form.html`).
   (a link when stored), and a real remove button named for its file. Behaviour
   (append, dedupe, remove, stored-file removal marks) is
   `static/js/comprovantes-picker.js`, enabled by `data-file-list` on the input.
+* **Upload feedback in the form grid** — the direct-upload list and its status
+  `.form-note` are always in the markup and are live regions. As direct
+  children of `.form-cards-narrow` they are pulled up under their card like the
+  guide, and while **empty** they are out of flow (`position:absolute`), so they
+  hold no grid row open yet stay in the accessibility tree; `display:none` would
+  drop the live region before its first announcement. Guide text is justified
+  (last line start-aligned).
 
 ### 2.7 Responsive contract
 
@@ -873,6 +880,27 @@ review. These were recorded and deliberately left in the tree.
   including the live user path and canonical evidence, is in
   `PROJECT_STATE.md`. This entry does not reopen DS-8 or any Design System
   phase.
+
+**Student UI batch 1 — recorded, not actioned**
+
+* **Native select popup placement (Atividade, `/aluno/nova-requisicao`).**
+  Chromium sizes a `<select>` popup to its widest *visible* option and, when
+  that would clip at the screen's right edge, right-aligns the popup to the
+  select's right edge — so with regulation-length activity names (measured:
+  a 464px select, a 1046px option) the list opens far to the left of the
+  field. No application CSS or script positions it, and CSS cannot bound a
+  native popup's width; the app-owned anchor geometry is pinned by
+  `tests/test_student_ui_corrections_batch1.py`. Supported alternative, a
+  product/DS decision: progressive enhancement with the customizable select
+  (`appearance: base-select` with a `::picker(select)` sized to the anchor and
+  wrapping options) — still the native `<select>`, so keyboard, form value and
+  type/group filtering are unchanged, and browsers without it keep today's
+  popup. Not a custom dropdown.
+* **Direct-upload rows overflow their item.** `static/js/direct-upload.js`
+  renders name / "Tentar novamente" / "Remover" (text, no leading icon) into
+  the `.file-list-item` grid built for icon / name / icon-button, so the text
+  buttons overflow their 24px boxes. Shared by four surfaces; independent of
+  the batch 1 spacing fix.
 
 **Ownership / dead code**
 

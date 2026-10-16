@@ -394,6 +394,12 @@ def _format_progresso_limite(row) -> str:
     return "; ".join(labels) or "-"
 
 
+def _format_progresso_tempo_padrao(value: Any) -> str:
+    # The version's standard hours per event (ch_por_evento), a suggestion for
+    # a request -- never a limit. An activity without one shows a neutral dash.
+    return "-" if value is None else _format_hours_label(value)
+
+
 def _build_progress_activity(row) -> dict[str, Any]:
     grupo_numero = _extract_grupo_numero(row["grupo"])
     limite_total = row["limite_horas_total"]
@@ -411,6 +417,7 @@ def _build_progress_activity(row) -> dict[str, Any]:
         "nome": row["nome"],
         "tipo_atividade": row["tipo_atividade"],
         "grupo": _format_progresso_grupo(row["tipo_atividade"], row["grupo"]),
+        "tempo_padrao": _format_progresso_tempo_padrao(row["ch_por_evento"]),
         "limite": _format_progresso_limite(row),
         "tem_limitacao": bool(row["tem_limitacao"]),
         "tipo_limitacao": row["tipo_limitacao"],
@@ -478,6 +485,7 @@ def _build_aluno_progresso_payload(conn, usuario_id: int) -> dict[str, Any] | No
                 "nome": row.nome,
                 "tipo_atividade": row.tipo_atividade,
                 "grupo": row.grupo,
+                "ch_por_evento": row.ch_por_evento,
                 "tem_limitacao": row.limite_total is not None
                 or row.limite_semestre is not None,
                 "tipo_limitacao": (
@@ -510,6 +518,7 @@ def _build_aluno_progresso_payload(conn, usuario_id: int) -> dict[str, Any] | No
                 "nome": row.nome,
                 "tipo_atividade": row.tipo_atividade,
                 "grupo": row.grupo,
+                "ch_por_evento": row.ch_por_evento,
                 "tem_limitacao": row.limite_total is not None
                 or row.limite_semestre is not None,
                 "tipo_limitacao": (

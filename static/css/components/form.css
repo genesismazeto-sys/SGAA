@@ -270,6 +270,10 @@
    re-centre the absolutely positioned .row-label), pulled up half the
    12px form row-gap so it reads as that field's and not the next one's.
    The control names it with aria-describedby.
+
+   Its text is justified: it is a short paragraph read as a block beside the
+   form's straight field edges. The last line stays start-aligned (the
+   text-align-last default), so a one-line note reads exactly as before.
    ============================================================= */
 .form-note.form-note--guide{
   align-items:flex-start;
@@ -281,6 +285,7 @@
   color:var(--text-primary);
 }
 .form-note.form-note--guide > .lucide{ margin-top:1px; color:var(--accent-blue); }
+.form-note.form-note--guide > span{ text-align:justify; }
 
 /* =============================================================
    FILE LIST  —  .file-list  (UI-B23)
@@ -289,7 +294,8 @@
    compact row per file -- icon, the readable filename (a link when the file
    is already stored), and, while the form is editable, a real remove button
    named for its file. No per-file card, no metadata. In a form grid it is
-   the item after the card's .form-row, pulled up like the guide above;
+   the item after the card's .form-row, pulled up like the guide above (so is
+   a .form-note upload status line there, without paragraph margins);
    directly after a bare .file-card it keeps a small gap.
    Behaviour: static/js/comprovantes-picker.js.
    ============================================================= */
@@ -300,8 +306,19 @@
   padding:0;
   list-style:none;
 }
-.form-cards-narrow > .form-note--guide,
-.form-cards-narrow > .file-list{ margin-top:-6px; }
+.form-cards-narrow > .form-note,
+.form-cards-narrow > .file-list{ margin:-6px 0 0; }
+/* Upload feedback that has nothing to show must not hold form rows open.
+   The direct-upload list and its status line are always in the markup and
+   are live regions (aria-live / role="status"): display:none would drop them
+   from the accessibility tree, and a live region must already be there when
+   its first message arrives. Left in flow, though, each empty one was a grid
+   item -- one more 12px row-gap apiece, plus the status <p>'s own paragraph
+   margins -- which opened a ~60px hole between Comprovantes and the next
+   field. Out of flow, an empty one creates no grid row and so no gap; the
+   moment it gets content it is back in flow, pulled up like the rest. */
+.form-cards-narrow > .form-note:empty,
+.form-cards-narrow > .file-list:empty{ position:absolute; }
 .field-card.file-card + .file-list{ margin-top:6px; }
 .file-list[hidden]{ display:none; }
 .file-list-item{
