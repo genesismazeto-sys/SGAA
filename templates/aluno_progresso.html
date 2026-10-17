@@ -71,6 +71,14 @@
     border-top:1px solid var(--border-strong);
     background:var(--bg-underpanel) !important;
   }
+  /* The DS .form-note under the section description. It wraps at narrow
+     widths, so the icon sits on the first line (the .form-note--guide
+     geometry) instead of centring on the whole block. */
+  .progresso-type-note {
+    align-items:flex-start;
+    margin-top:6px;
+  }
+  .progresso-type-note > .lucide { margin-top:1px; }
   .cfg-footer-note {
     margin:0;
     font-size:12px;
@@ -102,6 +110,9 @@
   <div class="cfg-card-head">
     <span class="cfg-section-label">Catalogo + uso + controle</span>
     <div class="cfg-chips" aria-label="Resumo por tipo de atividade">
+      {% if limites_aplicados_count %}
+      <span class="cfg-chip">{{ limites_aplicados_count }} limite{% if limites_aplicados_count != 1 %}s{% endif %} aplicado{% if limites_aplicados_count != 1 %}s{% endif %}</span>
+      {% endif %}
       <span class="cfg-chip is-active progresso-type-count">AAC: {{ aac_atividades_count }} atividade{% if aac_atividades_count != 1 %}s{% endif %}</span>
       <span class="cfg-chip is-active progresso-type-count">AEU: {{ aeu_atividades_count }} atividade{% if aeu_atividades_count != 1 %}s{% endif %}</span>
     </div>
@@ -123,6 +134,7 @@
         <h2 class="progresso-type-title">{{ tipo_progresso_titulo }}</h2>
         {% endif %}
         <p class="progresso-type-text">{{ tipo_progresso_descricao }}</p>
+        <div class="form-note progresso-type-note"><i class="lucide" data-lucide="info" aria-hidden="true"></i><span>Limites por semestre são contados pelo semestre da <strong>data do evento</strong>, não pela data de envio da requisição.</span></div>
       </div>
 
     </div>
