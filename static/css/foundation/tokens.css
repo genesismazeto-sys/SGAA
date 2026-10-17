@@ -70,6 +70,9 @@
   --focus-ring-color:rgba(37,99,235,.35);
   --field-bg:#ffffff;
   --field-border:#cbd5e1;
+  /* The browser's own select border (Chromium menulist), for components/select.css */
+  --control-native-border:light-dark(#767676, #858585);
+  --control-native-border-disabled:light-dark(rgba(118,118,118,.3), rgba(195,195,195,.3));
   --field-hover-bg:#f8fafc;
   --field-hover-border:var(--accent-blue);
   --field-focus-bg:#ffffff;

@@ -96,7 +96,6 @@
       padding-top:8px;
       padding-bottom:8px;
     }
-    .report-form .field-card select.control { appearance:none; }
     .report-form .file-name.control { min-height:var(--btn-h); }
     .report-form-hint { color:var(--text-secondary); font-size:12px; line-height:1.5; }
 
@@ -190,7 +189,7 @@
           <label class="rpt-form-label">Categoria</label>
           <div class="field-card">
             <div class="field-chip"><i class="lucide" data-lucide="tag"></i></div>
-            <select class="control" name="categoria" required>
+            <select class="control select--plain" name="categoria" required>
               {% for categoria in categoria_options %}
                 <option value="{{ categoria }}" {% if form_data.categoria == categoria %}selected{% endif %}>{{ categoria }}</option>
               {% endfor %}

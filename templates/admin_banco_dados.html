@@ -87,7 +87,7 @@
     .db-field label{ font-weight:600; color:#0f172a; font-size:12.5px; }
     .db-field input,
     .db-field select{
-      width:100%; min-height:var(--db-control-h); height:var(--db-control-h); padding:4px 10px;
+      width:100%; min-height:var(--db-control-h); height:var(--db-control-h); padding:4px calc(10px + var(--select-arrow-room, 0px)) 4px 10px;
       border:0.5px solid var(--border); border-radius:var(--radius);
       background:var(--bg); color:var(--text-primary); font-size:12.5px;
     }
@@ -118,7 +118,7 @@
     }
     .db-toggle-field span{ font-size:12.5px; font-weight:600; color:#0f172a; }
     .db-recovery-row{ display:grid; gap:12px; grid-template-columns:minmax(0, 1fr) auto; align-items:end; }
-    .db-select{ width:100%; min-height:var(--db-control-h); height:var(--db-control-h); padding:4px 10px; border:1px solid var(--border-strong); border-radius:var(--radius); font-size:12.5px; background:var(--bg); }
+    .db-select{ width:100%; min-height:var(--db-control-h); height:var(--db-control-h); padding:4px calc(10px + var(--select-arrow-room, 0px)) 4px 10px; border:1px solid var(--border-strong); border-radius:var(--radius); font-size:12.5px; background:var(--bg); }
     .db-path{ font-family:ui-monospace, SFMono-Regular, Consolas, monospace; font-size:12px; line-height:1.25; }
     .db-path-ellipsis{
       display:inline-block;

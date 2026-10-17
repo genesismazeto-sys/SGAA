@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="csrf-token" content="{{ csrf_token() }}" />
   <title>{% block title %}Sistema de Gerenciamento de Atividades Acadêmicas (SGAA){% endblock %}</title>
-    {% set static_asset_version = '20261016-ui-batch3-v1' %}
+    {% set static_asset_version = '20261017-ui-batch4-v1' %}
 
     <!-- Fontes + CSS global -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,6 +23,7 @@
     <!-- Ícones -->
     <script src="{{ url_for('static', filename='js/csrf-shim.js', v=static_asset_version) }}"></script>
     <script src="{{ url_for('static', filename='js/human-text.js', v=static_asset_version) }}"></script>
+    <script src="{{ url_for('static', filename='js/select-picker.js', v=static_asset_version) }}"></script>
     {# UI-B15: self-hosted, pinned Lucide. Same asset and same reasons as
        templates/base.html -- script-src no longer allows https://unpkg.com, so
        this must not go back to the CDN. #}

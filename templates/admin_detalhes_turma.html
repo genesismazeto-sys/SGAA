@@ -88,7 +88,6 @@
       max-width:220px;
     }
     .turma-select-shell select{
-      appearance:none;
       width:100%;
       height:calc(var(--btn-h) - 2px);
       border:1px solid var(--border-strong);
@@ -150,7 +149,7 @@
     Back names its destination, the Turmas list. -#}
 {% call detail_header('Turma', url_for('admin_turmas'), 'Turmas') %}
   <div class="turma-select-shell" title="Escolher outra turma cadastrada">
-    <select id="turma-global-select" aria-label="Escolher outra turma cadastrada">
+    <select id="turma-global-select" class="select--plain" aria-label="Escolher outra turma cadastrada">
       {% for turma_option in all_turmas %}
         <option value="{{ url_for('admin_detalhes_turma', turma_id=turma_option.id) }}" {% if turma_option.id == turma.id %}selected{% endif %}>
           {{ turma_option.codigo or ('Turma ' ~ (turma_option.numero or '—')) }}

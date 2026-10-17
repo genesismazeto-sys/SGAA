@@ -110,9 +110,6 @@
   <div class="cfg-card-head">
     <span class="cfg-section-label">Catalogo + uso + controle</span>
     <div class="cfg-chips" aria-label="Resumo por tipo de atividade">
-      {% if limites_aplicados_count %}
-      <span class="cfg-chip">{{ limites_aplicados_count }} limite{% if limites_aplicados_count != 1 %}s{% endif %} aplicado{% if limites_aplicados_count != 1 %}s{% endif %}</span>
-      {% endif %}
       <span class="cfg-chip is-active progresso-type-count">AAC: {{ aac_atividades_count }} atividade{% if aac_atividades_count != 1 %}s{% endif %}</span>
       <span class="cfg-chip is-active progresso-type-count">AEU: {{ aeu_atividades_count }} atividade{% if aeu_atividades_count != 1 %}s{% endif %}</span>
     </div>
@@ -124,7 +121,7 @@
         {% if mostrar_menu_tipos %}
         <form method="get" class="progresso-type-menu">
           <label class="sr-only-focusable progresso-type-menu-label" for="progresso-tipo">Filtrar tipo de atividade</label>
-          <select id="progresso-tipo" name="tipo" class="progresso-type-title progresso-type-select" onchange="this.form.submit()">
+          <select id="progresso-tipo" name="tipo" class="progresso-type-title progresso-type-select" data-select-native onchange="this.form.submit()">
             {% for opcao in tipo_progresso_opcoes %}
             <option value="{{ opcao.value }}" {% if opcao.tipo == tipo_progresso_atual %}selected{% endif %}>{{ opcao.label }}</option>
             {% endfor %}

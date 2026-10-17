@@ -70,7 +70,7 @@
     .access-form-field.full{ grid-column:1 / -1; }
     .access-form-field label{ font-size:12.5px; font-weight:700; color:#334155; letter-spacing:.01em; }
     .access-form-field input,
-    .access-form-field select{ width:100%; border:1px solid var(--field-border); border-radius:var(--radius); padding:0 12px; font:inherit; color:#0f172a; background:var(--field-bg); transition:border-color .16s ease, box-shadow .16s ease, background .16s ease; }
+    .access-form-field select{ width:100%; border:1px solid var(--field-border); border-radius:var(--radius); padding:0 calc(12px + var(--select-arrow-room, 0px)) 0 12px; font:inherit; color:#0f172a; background:var(--field-bg); transition:border-color .16s ease, box-shadow .16s ease, background .16s ease; }
     .access-form-field input{ height:36px; }
     .access-form-field select{ height:34px; }
     .access-form-field input:hover,
@@ -102,7 +102,7 @@
     .access-scope-card small{ color:#64748b; font-size:12px; line-height:1.45; }
     /* The effective-scope indicator has no page-local visual contract: it is
        the shared .badge.status-pill primitive from modern-style.css. */
-    .access-scope-card select{ width:100%; height:32px; border:1px solid var(--border-strong); border-radius:var(--radius); padding:0 10px; font:inherit; color:#0f172a; background:var(--field-bg); }
+    .access-scope-card select{ width:100%; height:32px; border:1px solid var(--border-strong); border-radius:var(--radius); padding:0 calc(10px + var(--select-arrow-room, 0px)) 0 10px; font:inherit; color:#0f172a; background:var(--field-bg); }
     .access-row-muted{ color:#64748b; font-size:13px; }
     .access-actions-float .act-btn.warn{ background:#fef3c7; color:#92400e; }
     .access-actions-float .act-btn.danger{ background:#fee2e2; color:var(--danger-text); }

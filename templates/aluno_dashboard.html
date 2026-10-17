@@ -188,6 +188,19 @@
     @media (max-width:520px){
       .dashboard-limit-row{ grid-template-columns:minmax(0, 1fr) 96px; gap:12px; }
     }
+    /* Title row: Painel on the left, the primary action at the far right,
+       centred on the title; on a narrow track the action wraps below it.
+       The row takes over the h1's own block margins (the UA .67em of its
+       24px above, .main-title's 48px below) so nothing after it moves. */
+    .aluno-dashboard-head{
+      display:flex;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px 16px;
+      margin:calc(24px * .67) 0 48px;
+    }
+    .aluno-dashboard-head > .main-title{ margin:0; }
   </style>
 {% endblock %}
 {% block content %}
@@ -203,7 +216,10 @@
     --
   {%- endif -%}
 {%- endmacro %}
-<h1 class="main-title">Painel</h1>
+<div class="aluno-dashboard-head">
+  <h1 class="main-title">Painel</h1>
+  <a class="btn primary" href="{{ route_url('aluno_nova_requisicao', 'aluno.aluno_nova_requisicao') }}"><i class="lucide" data-lucide="plus" aria-hidden="true"></i><span class="btn-label">Nova requisição</span></a>
+</div>
 
 {% if alertas_ativos %}
 <div class="aluno-alertas-stack">

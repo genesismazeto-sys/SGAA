@@ -629,18 +629,26 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
   margin-bottom:24px;
 }
 
+/* The heading takes every pixel the summary cards leave free, so the
+   subtitle wraps only when the whole sentence genuinely does not fit; the
+   cards keep their natural size instead of being squeezed. */
+.progresso-header > :first-child{
+  flex:1 1 auto;
+  min-width:0;
+}
+
 .progresso-title{
   margin-bottom:8px;
 }
 
 .progresso-subtitle{
   margin:0;
-  max-width:72ch;
   color:var(--text-secondary);
   line-height:1.5;
 }
 
 .progresso-summary{
+  flex:none;
   display:grid;
   grid-template-columns:repeat(2, minmax(140px, 1fr));
   gap:12px;
@@ -826,7 +834,7 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
 .field label{ font-size:12px; color:var(--text-secondary); }
 .field input,.field select,.field textarea{
   border:1px solid var(--border-strong); border-radius:var(--radius);
-  padding:8px 10px; background:var(--field-bg); font-size:var(--font-size-base);
+  padding:8px calc(10px + var(--select-arrow-room, 0px)) 8px 10px; background:var(--field-bg); font-size:var(--font-size-base);
 }
 
 .flash-stack{
@@ -1085,7 +1093,7 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
 }
 
 .app-main .toolbar .filters select{
-  height:var(--btn-h); padding:0 var(--cell-pad-x);
+  height:var(--btn-h); padding:0 calc(var(--cell-pad-x) + var(--select-arrow-room, 0px)) 0 var(--cell-pad-x);
   border:1px solid var(--border-strong); border-radius:var(--radius);
   background:var(--surface); font:inherit;
 }
@@ -1153,7 +1161,9 @@ form label{ white-space:nowrap; }
 
 .field-card .control{
   width:100%; border:0; outline:none; background:transparent;
-  padding:6px 10px; font-family:inherit; font-size:var(--font-size-base); color:var(--text-primary);
+  /* --select-arrow-room: components/select.css (0 for every other control). */
+  padding:6px calc(10px + var(--select-arrow-room, 0px)) 6px 10px;
+  font-family:inherit; font-size:var(--font-size-base); color:var(--text-primary);
 }
 .field-card .control::placeholder{
   color:var(--text-tertiary); font-family:inherit; font-size:inherit; font-style:normal; font-weight:400;

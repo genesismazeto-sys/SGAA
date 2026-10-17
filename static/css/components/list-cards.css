@@ -160,7 +160,7 @@
   padding:0 12px; color:var(--text-secondary); background:#f1f5f9; border-right:1px solid var(--border-strong);
 }
 .input-group > input, .input-group > select{
-  height:100%; border:0; outline:0; background:transparent; padding:0 12px; min-width:220px; font:inherit; font-size:13px;
+  height:100%; border:0; outline:0; background:transparent; padding:0 calc(12px + var(--select-arrow-room, 0px)) 0 12px; min-width:220px; font:inherit; font-size:13px;
 }
 
 /* Botões do toolbar: altura uniforme */

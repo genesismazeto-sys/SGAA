@@ -1,0 +1,182 @@
+/* =============================================================
+   components/select.css  —  THE SELECT PICKER
+   Owner of how a single-choice <select> opens. Loaded on every page by
+   templates/components/design_system_css.html, after form.css.
+
+   WHAT IT DOES
+     A native <select> popup is placed by the browser: Chromium sizes it to
+     its widest option and, when that would clip on the right, right-aligns
+     it to the select, so regulation-length names opened the list far to the
+     LEFT of the field. Where the customizable select exists, the same
+     <select> opens a CSS picker instead: anchored to its own field, at least
+     as wide as the field, long names wrap, it flips above the field when
+     there is no room below, and it carries the SGAA radius, border, shadow
+     and soft blue selection. Value, option.hidden filtering, keyboard, focus,
+     disabled and required state, validation and submission stay the native
+     element's. Without support the whole @supports block is skipped and
+     every select keeps the browser's own popup: that is the fallback.
+
+   ELIGIBLE
+     Every single-choice <select>, except `multiple`, a `size` list box, and
+     a control that opts out with `data-select-native` because script owns
+     its presentation (the turma status arrow, components/turma-alunos.css).
+
+   THE CLOSED CONTROL DOES NOT CHANGE
+     base-select is a different rendering mode with its own UA defaults
+     (padding, border, radius, transparent background, inherited font, a
+     24px minimum, wrapping). Each is reset below to the native menulist
+     value at ZERO specificity, so every family's own declarations still win
+     exactly as before. What the native menulist draws inside the box was
+     measured (Chromium 151) and is reproduced here: the label 4px in from
+     the content edge and 1px in on the block axis, a 10x6 chevron 3px
+     inside the right border whatever the padding, and the label clipped
+     16px before the content edge. That 16px is --select-arrow-room: a
+     family that sets its own padding adds it to padding-inline-end
+     (`calc(10px + var(--select-arrow-room, 0px))`), which is 0 natively, so
+     one declaration is right in both modes.
+     The chevron is positioned against its select (its implicit anchor) but
+     contained by the select's parent, so the label's clip never cuts it and
+     a scrolling ancestor still clips it with the field.
+
+   .select--plain
+     A select whose page draws no chevron, or its own (appearance:none in
+     the native fallback): no chevron and no menulist inset here either.
+
+   ANCHORING THE PICKER
+     A select that is the only control of a .field-card opens against the
+     whole card (chip included), as wide as the card. Any other select --
+     two controls sharing a card, toolbars, page selects -- opens against
+     itself, at least as wide as itself. Each card scopes its anchor name,
+     so adjacent cards never share an anchor.
+   ============================================================= */
+
+select.select--plain{ appearance:none; }
+
+@supports (appearance: base-select){
+  :where(select:not([multiple], [size], [hidden], [data-select-native])),
+  :where(select:not([multiple], [size], [hidden], [data-select-native]))::picker(select){
+    appearance:base-select;
+  }
+
+  /* Native menulist values for everything base-select changes. */
+  :where(select:not([multiple], [size], [hidden], [data-select-native])){
+    /* 16px, collapsing once the field is narrower than the room plus a
+       family's padding. As a percentage it is ignored when the browser
+       measures a select's minimum width -- natively the arrow area is
+       content and is ignored too -- so a squeezed select keeps the native
+       width instead of growing by the room. */
+    --select-arrow-room:clamp(0px, 100% - 32px, 16px);
+    --select-border-end:1px;
+    display:inline-flex;
+    align-items:center;
+    gap:0;
+    min-inline-size:0;
+    min-block-size:auto;
+    padding:0 var(--select-arrow-room) 0 0;
+    border:1px solid var(--control-native-border);
+    border-radius:0;
+    background-color:Field;
+    color:FieldText;
+    font:-webkit-small-control;
+    white-space:pre;
+    cursor:default;
+    overflow:clip;
+    overflow-clip-margin:content-box;
+  }
+  :where(select:not([multiple], [size], [hidden], [data-select-native])):disabled{
+    color:GrayText;
+    border-color:var(--control-native-border-disabled);
+    opacity:.7;
+  }
+  .field-card select.control{ --select-border-end:0px; }
+
+  /* The menulist's own inset: 4px before the label, 1px above and below it. */
+  :where(select:not([multiple], [size], [hidden], [data-select-native]))::before{
+    content:"";
+    flex:none;
+    inline-size:4px;
+    block-size:calc(1lh + 2px);
+  }
+
+  /* The chevron's containing block: the select's parent, so a scrolling
+     ancestor clips it together with the field. Never the modal scroller
+     itself (components/modal.css .modal-body): positioning a scroll
+     container changes how Chromium composites it, and the modal footer
+     loses its subpixel text. A select placed directly in .modal-body takes
+     the modal card as its containing block instead. */
+  :where(:has(> select:not([multiple], [size], [hidden], [data-select-native])):not(.modal-body)){ position:relative; }
+  :where(select:not([multiple], [size], [hidden], [data-select-native]))::picker-icon{
+    content:"";
+    position:absolute;
+    position-area:center;
+    justify-self:end;
+    align-self:start;
+    margin:0;
+    /* Native rounding: the chevron's offset from the top is floored. */
+    margin-block-start:round(down, calc((anchor-size(height) - 6px) / 2), 1px);
+    margin-inline-end:calc(3px + var(--select-border-end));
+    width:10px;
+    height:6px;
+    background-color:currentColor;
+    mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1 5 5 9 1' fill='none' stroke='%23000' stroke-width='2'/%3E%3C/svg%3E") center / contain no-repeat;
+  }
+
+  select.select--plain{ appearance:base-select; --select-arrow-room:0px; }
+  select.select--plain::before,
+  select.select--plain::picker-icon{ display:none; }
+
+  /* ---- the picker ---- */
+  :where(select:not([multiple], [size], [hidden], [data-select-native]))::picker(select){
+    position-area:block-end span-inline-end;
+    position-try-fallbacks:flip-block, flip-inline, flip-block flip-inline;
+    position-try-order:most-block-size;
+    box-sizing:border-box;
+    min-inline-size:anchor-size(width);
+    max-inline-size:calc(100vw - 16px);
+    /* 100% is the room between the field and the viewport edge on the
+       chosen side, so a short viewport shrinks the list instead of letting
+       it cover the field or leave the screen. */
+    max-block-size:min(320px, calc(100% - 8px));
+    margin:4px 0;
+    padding:4px 0;
+    overflow-y:auto;
+    border:1px solid var(--border-strong);
+    border-radius:var(--radius);
+    background:var(--surface);
+    box-shadow:var(--shadow-md);
+  }
+
+  .field-card:has(> select:not([multiple], [size], [hidden], [data-select-native])):not(:has(> .control ~ .control)){
+    anchor-name:--select-field;
+    anchor-scope:--select-field;
+  }
+  .field-card:not(:has(> .control ~ .control)) > select:not([multiple], [size], [hidden], [data-select-native])::picker(select){
+    position-anchor:--select-field;
+    inline-size:anchor-size(width);
+  }
+
+  :where(select:not([multiple], [size], [hidden], [data-select-native])) option{
+    padding:6px 10px;
+    white-space:normal;
+    overflow-wrap:anywhere;
+    font-family:var(--font-sans);
+    font-size:var(--font-size-base);
+    font-weight:400;
+    line-height:1.35;
+    color:var(--text-primary);
+  }
+  :where(select:not([multiple], [size], [hidden], [data-select-native])) option:not(:disabled):hover{
+    background:var(--field-hover-bg);
+  }
+  :where(select:not([multiple], [size], [hidden], [data-select-native])) option:focus-visible{
+    outline:2px solid var(--focus-ring-color);
+    outline-offset:-2px;
+  }
+  :where(select:not([multiple], [size], [hidden], [data-select-native])) option:checked{
+    background:var(--info-bg);
+    color:var(--accent-blue);
+  }
+  :where(select:not([multiple], [size], [hidden], [data-select-native])) option:disabled{
+    color:var(--text-tertiary);
+  }
+}

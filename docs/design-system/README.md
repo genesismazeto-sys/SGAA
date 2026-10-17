@@ -27,6 +27,8 @@ static/css/
                           body/footer). Size and placement stay per page.
     form.css            ← shared form compositions. See form-contract.md.
     detail-header.css   ← canonical detail title/supporting text/Back layout.
+    select.css          ← the select picker: how every single-choice <select>
+                          opens (customizable select), §2.6e. Loaded globally.
     actions-float.css   ← the floating actions bar (#pedido-actions-float).
     turma-alunos.css    ← the Turma student list ("Alunos da turma") shared by
                           Adicionar turma and Editar turma. Component tokens
@@ -351,6 +353,83 @@ the unrendered `admin_turma_form.html`).
   hold no grid row open yet stay in the accessibility tree; `display:none` would
   drop the live region before its first announcement. Guide text is justified
   (last line start-aligned).
+
+### 2.6e Select picker contract (UI batch 4)
+
+Owner: `static/css/components/select.css`, loaded on every page by the
+load-order macro (last). Key guard: `static/js/select-picker.js`, loaded by
+both shells. Enforced by `tests/test_ds_select_picker.py`.
+
+**What a select does.** Where the customizable select exists
+(`@supports (appearance: base-select)`), every eligible `<select>` opens an
+in-page picker instead of the browser popup: anchored to its own field, at
+least as wide as that field, long options wrap, it flips above the field when
+the viewport has no room below (and inline when it has none to the right),
+max 320px tall and never past the viewport, with `--radius`,
+`--border-strong`, `--shadow-md`, `--surface`, hover `--field-hover-bg`, the
+selected option on `--info-bg` / `--accent-blue`, a 2px `--focus-ring-color`
+ring on the keyboard-focused option and `--text-tertiary` for disabled
+options. Value, `option.hidden` filtering, keyboard, focus, `disabled`,
+`required`, validation and submission are the native element's; no script
+draws the list. Without the feature the `@supports` block is skipped and the
+browser popup is the fallback.
+
+**Anchoring.** A select that is the only `.control` of its `.field-card` opens
+against the whole card (chip included) and exactly as wide as the card; any
+other select (two controls sharing a split card, toolbars, page selects) opens
+against itself and at least as wide as itself. Each card scopes its anchor
+name (`anchor-scope`), so adjacent cards never share an anchor.
+
+**Eligible.** Every `<select>` except `multiple`, a `size` list box,
+`[hidden]` data carriers and `data-select-native` (a control whose
+presentation script owns). Current exceptions:
+
+| Control | Why it keeps the native popup |
+|---|---|
+| Turma status arrow (`.status-arrow`, Adicionar/Editar turma) | `data-select-native`: a 24px arrow trigger whose visible state is a script-synced status badge, not the select's label. |
+| Substitution lists (`select[hidden][data-substitution-options]`, catalogue version detail) | Never rendered: option stores that script copies into the visible substitute select (which is enhanced). |
+| Progress type selector (`#progresso-tipo`, the section title) | `data-select-native`: sized by its content once the header stacks (below ~1000px). A native select measures its widest option; a closed base-select measures its *selected* label, so the title would change width with the choice ("Acadêmicas Complementares" vs "Extensão Universitária"). No CSS can size a closed base-select to its widest option, so it keeps the native control. |
+
+**The closed control does not change.** base-select is a different rendering
+mode with its own UA defaults; each is reset to the native menulist value at
+zero specificity (`:where()`), so every family's own declarations still win.
+What the native menulist draws inside the box was measured in Chromium 151
+and is reproduced: the label 4px in from the content edge and 1px in on the
+block axis, a 10×6 chevron 3px inside the right border with its top offset
+floored like the native arrow, and the label clipped 16px before the content
+edge. That room is **`--select-arrow-room`**: a family that sets its own padding
+adds it to its end padding — `padding:6px calc(10px + var(--select-arrow-room, 0px)) 6px 10px`
+— which is 0 natively, so one declaration is right in both modes. It is
+`clamp(0px, 100% - 32px, 16px)`: a percentage, so it is ignored when the
+browser measures a select's minimum width (natively the arrow area is content
+and ignored too) and a select squeezed to its minimum keeps the native width
+(the Turma *Início* semester select, 20px at 768/640); 16px wherever the field
+has room. The test
+fails for any select padding rule that forgets it. The chevron is
+anchor-positioned against its select but contained by the select's parent, so
+the label's clip never cuts it while a scrolling ancestor still clips it with
+the field (never by `.modal-body` itself: positioning the modal scroller
+changes how Chromium composites it and costs the footer its subpixel text).
+
+* `.select--plain` — a select whose page draws no chevron or its own
+  (`appearance:none` natively): no chevron, no menulist inset, no arrow room.
+  Turma switcher, Novo reporte, aluno Reportar.
+
+**Keys.** A native popup swallows its keys; the in-page picker would let the
+Escape that closes it reach the modal/menu handlers on the document and close
+the surface too. `select-picker.js` stops key events whose target is inside an
+open picker in the capture phase; the browser's own handling still runs. Once
+the picker is closed, keys reach the page exactly as before.
+
+**Measured deviation (accepted).** The chevron is a CSS mask, so a few
+anti-aliasing pixels per chevron differ from the painted native arrow; boxes,
+label position and clip are identical.
+
+**Verification.** Every page with a select was rendered enhanced and with the
+`@supports` block neutralised (native) at 1440/1366/1280/768/640: identical
+boxes everywhere, ≤ 4 differing pixels per select (the chevron), no page-level
+difference. The neutralised run is also the fallback proof; the committed test
+repeats it on representative pages at 1440 and 640.
 
 ### 2.7 Responsive contract
 
@@ -787,6 +866,7 @@ Ownership phases (DS) moved CSS and proved equivalence. Responsive phases
 | **F-6B2 ✅** | `.content-block-body` wraps instead of running past the card edge. | Playwright 83/83 |
 | **F-7 ✅** | Popover reachability on both axes, dismissal on viewport change, measure-after-reveal instead of the hidden-width fallback, and a visible `:focus-visible` ring on the sort controls. Reopened the F-6A2 vertical deferral on new evidence: the popover does **not** scroll with `.app-main`. **R1 independent review: ACCEPT, zero MATERIAL findings**; F1–F5 carried forward in §8. | Playwright 87/87 + 7 container-contract + 38 popover-contract, cross-engine PASS on Chromium / Firefox / WebKit |
 | **DS-8 ✅** | Dead CSS removal with two-method consumer evidence (static class-token scan + live-DOM query across every route/viewport). 108 selectors deleted across 113 (context, selector) keys, plus the `--btn-primary-light` token and `templates/components/content_block.html`. `admin_turma_form.html` was authorized for deletion but proven **not** dead — it is scanned by `utils/messages.py`'s directory glob and contributes 3 message-catalog entries — so it was withheld and reclassified `UNROUTED_BUT_REFERENCED`. `modern-style.css` 1623→1281 lines (−21.1%); total DS CSS 2683→2333 (−13.0%). **R1 independent review: ACCEPT, zero MATERIAL findings.** | Playwright 87/87, zero baseline regeneration; cascade equivalence 0 ORDER VIOLATED / 0 RESOLUTION CHANGED / 0 RESOLUTION ADDED; cross-engine PASS on Chromium / Firefox / WebKit |
+| **UI batch 4 ✅** | Select picker (§2.6e): the Atividade picker generalised into `components/select.css` for every single-choice select (73 `<select>` tags in 26 templates; 3 documented exceptions), closed controls native-equivalent, `select-picker.js` key guard, `.select--plain`. | 20 browser + static tests; enhanced-vs-native page diff at 5 widths |
 
 The F-5/F-6 chain closed as the **responsive milestone**: R1 independent
 adversarial review ACCEPT with zero material findings, and cross-engine

@@ -144,7 +144,7 @@
                         {% set s = (al.status or 'Ativo') %}
                         <input type="hidden" name="aluno_situacao[]" value="{{ 'ATIVO' if s == 'Ativo' else 'TRANCADO' }}">
                         <span class="badge status-badge status-pill {{ 'success status-positive' if s=='Ativo' else 'warning status-neutral' }}" data-status-badge>{{ 'Ativo' if s=='Ativo' else 'Trancado' }}</span>
-                        <select class="status-arrow" title="Alterar status" data-status-arrow>
+                        <select class="status-arrow" title="Alterar status" data-status-arrow data-select-native>
                           <option value="ATIVO" {{ 'selected' if s=='Ativo' else '' }}>Ativo</option>
                           <option value="TRANCADO" {{ 'selected' if s!='Ativo' else '' }}>Trancado</option>
                           <option value="CONCLUIDO">Concluido</option>
@@ -202,7 +202,7 @@
               <div class="status-cell">
                 <input type="hidden" name="aluno_situacao[]" value="ATIVO">
                 <span class="badge status-badge status-pill success status-positive" data-status-badge>Ativo</span>
-                <select class="status-arrow" title="Alterar status" data-status-arrow>
+                <select class="status-arrow" title="Alterar status" data-status-arrow data-select-native>
                   <option value="ATIVO">Ativo</option>
                   <option value="TRANCADO">Trancado</option>
                   <option value="CONCLUIDO">Concluído</option>

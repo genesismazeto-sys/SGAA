@@ -856,16 +856,6 @@ def aluno_progresso():
     aeu_atividades_count = sum(
         1 for atividade in atividades if atividade["tipo_atividade"] == EXT_ACTIVITY_TYPE
     )
-    # Limits configured on the activities counted above (the same rows as the
-    # AAC/AEU chips): one per semester limit and one per total limit -- the
-    # entries of each row's "Limite" column. A configured rule, never a count
-    # of limits reached.
-    limites_aplicados_count = sum(
-        (atividade["limite_horas_semestral"] is not None)
-        + (atividade["limite_horas_total"] is not None)
-        for atividade in atividades
-        if atividade["tem_limitacao"]
-    )
     mostrar_menu_tipos = bool(
         payload["has_extensao_na_matriz"]
         and payload["has_aac_visivel"]
@@ -895,7 +885,6 @@ def aluno_progresso():
         tipo_progresso_opcoes=tipo_options,
         aac_atividades_count=aac_atividades_count,
         aeu_atividades_count=aeu_atividades_count,
-        limites_aplicados_count=limites_aplicados_count,
     )
 
 

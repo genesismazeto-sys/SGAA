@@ -1,10 +1,9 @@
-"""Student Progress: limit badge and event-date note (final review, items 2-3).
+"""Student Progress: the event-date note, and no "limites aplicados" badge.
 
-* Badge -- "N limites aplicados" beside the AAC/AEU chips counts the limits
-  CONFIGURED on the activities those chips count: one per semester limit and
-  one per total limit, i.e. the entries of each row's "Limite" column. It is
-  never a count of limits reached; it is hidden when no listed activity has a
-  limit. It reuses the card's existing neutral `.cfg-chip`.
+* The "N limites aplicados" chip (final review) is withdrawn (UI batch 4): a
+  count of CONFIGURED limits beside the AAC/AEU chips reads as a count of
+  limits REACHED. Nothing replaces it; the AAC/AEU chips, the Limite column,
+  the red cells and every limit calculation are untouched.
 * Note -- the DS `.form-note` with the Lucide `info` icon under the section
   description, stating that semester limits follow the event date.
 Neither changes a progress calculation, the red cells or the JSON payload.
@@ -30,7 +29,7 @@ browser = pytest.mark.skipif(CHROMIUM is None, reason="no headless Chromium avai
 
 @pytest.fixture()
 def env(tmp_path):
-    with isolated_versioned_app_env(tmp_path, "progress-badge.db") as value:
+    with isolated_versioned_app_env(tmp_path, "progress-note.db") as value:
         yield value
 
 
@@ -75,61 +74,40 @@ def _page(client, query=""):
     return client.get(f"/aluno/progresso{query}").get_data(as_text=True)
 
 
-def test_badge_counts_configured_limits_with_singular_and_plural(env):
+def test_no_limits_badge_whatever_the_configured_limits(env):
     client = env["client"]
     identity = _as_student(client)
     versions = _versions(identity)
-
-    _limits()
-    assert [text for _, text in _chips(_page(client))] == ["AAC: 26 atividades", "AEU: 5 atividades"]
-
-    _limits((versions[0], 20, None))
-    assert _chips(_page(client))[0] == ("cfg-chip", "1 limite aplicado")
-
-    # One activity with both a semester and a total limit is two limits.
-    _limits((versions[0], 10, 40))
-    assert _chips(_page(client))[0] == ("cfg-chip", "2 limites aplicados")
-
-    _limits((versions[0], 20, None), (versions[1], None, 100), (versions[2], 10, 40))
-    chips = _chips(_page(client))
-    assert chips[0] == ("cfg-chip", "4 limites aplicados")
-    # Same chip owner as the neighbours, neutral variant: no new visual system.
-    assert [cls for cls, _ in chips[1:]] == ["cfg-chip is-active progresso-type-count"] * 2
+    for rules in ((), ((versions[0], 20, None),), ((versions[0], 10, 40), (versions[1], None, 100))):
+        _limits(*rules)
+        for query in ("", "?tipo=extensao"):
+            html = _page(client, query)
+            # The AAC/AEU counts stay exactly as they were, and nothing joins them.
+            assert _chips(html) == [("cfg-chip is-active progresso-type-count", "AAC: 26 atividades"),
+                                    ("cfg-chip is-active progresso-type-count", "AEU: 5 atividades")]
+            assert "limite aplicado" not in html and "limites aplicados" not in html
 
 
-def test_badge_is_the_limite_column_not_the_limits_reached(env):
+def test_reached_limit_keeps_its_red_cell_and_adds_no_indicator(env):
     client = env["client"]
     identity = _as_student(client)
     versions = _versions(identity)
     _limits((versions[0], 2, None), (versions[1], None, 100))
-    before = _chips(_page(client))[0]
-
     login_admin(client)
-    _, row = create_admin_request(client, "Badge reached", version_id=versions[0])
+    _, row = create_admin_request(client, "Limit reached", version_id=versions[0])
     client.post(f"/admin/processar_requisicao/{row['id']}", data={"status": "Deferida Parcialmente",
                                                                   "horas_deferidas": "2", "observacao": "ok"})
     _as_student(client)
     html = _page(client)
-    assert "progresso-limitado" in html  # the limit is now reached (red cell)...
-    assert _chips(html)[0] == before == ("cfg-chip", "2 limites aplicados")  # ...the count is not
-
-    payload = client.get("/aluno/progresso?format=json").get_json()
-    configured = sum((a["limite_horas_semestral"] is not None) + (a["limite_horas_total"] is not None)
-                     for a in payload["atividades"] if a["tem_limitacao"])
-    limite_cells = sum(len([part for part in a["limite"].split("; ") if part != "-"]) for a in payload["atividades"])
-    assert configured == limite_cells == 2
+    assert "progresso-limitado" in html  # the red cell still marks the reached limit
+    assert [text for _, text in _chips(html)] == ["AAC: 26 atividades", "AEU: 5 atividades"]
+    assert "limites aplicados" not in html and "limite aplicado" not in html
 
 
-def test_badge_spans_both_types_like_the_counts_beside_it(env):
-    client = env["client"]
-    identity = _as_student(client)
-    aeu = [row[0] for row in _sql(
-        "SELECT v.id FROM atividade_versao v WHERE v.eixo<>'AAC' AND v.id IN (%s)"
-        % ",".join(str(v) for v in _versions(identity)))]
-    aac = [v for v in _versions(identity) if v not in aeu]
-    _limits((aac[0], 20, None), (aeu[0], None, 30))
-    for query in ("", "?tipo=extensao"):
-        assert _chips(_page(client, query))[0] == ("cfg-chip", "2 limites aplicados")
+def test_progress_view_no_longer_computes_a_limits_count():
+    source = open("app/views/aluno.py", encoding="utf-8").read()
+    template = open("templates/aluno_progresso.html", encoding="utf-8").read()
+    assert "limites_aplicados" not in source and "limites_aplicados" not in template
 
 
 def test_progress_json_payload_gains_no_field(env):
@@ -166,10 +144,7 @@ def _session(client, width):
 
 GEOMETRY = """JSON.stringify((() => {
   const box = el => el.getBoundingClientRect();
-  const lines = el => { const r = document.createRange(); r.selectNodeContents(el);
-    return new Set(Array.from(r.getClientRects()).map(x => Math.round(x.top))).size; };
   const card = box(document.querySelector('.progresso-block'));
-  const badge = document.querySelector('.cfg-chips .cfg-chip');
   const note = document.querySelector('.progresso-type-note');
   const desc = document.querySelector('.progresso-type-text');
   const icon = note.querySelector('svg');
@@ -177,8 +152,7 @@ GEOMETRY = """JSON.stringify((() => {
   const withNote = cols();
   note.style.display = 'none'; const withoutNote = cols(); note.style.display = '';
   const ns = getComputedStyle(note), ds = getComputedStyle(desc);
-  return {badge: badge.textContent.trim(), badgeLines: lines(badge), badgeClipped: badge.scrollWidth > badge.clientWidth + 1,
-    badgeInside: box(badge).right <= card.right + 0.5,
+  return {chips: Array.from(document.querySelectorAll('.cfg-chips .cfg-chip')).map(c => c.textContent.trim()),
     noteInside: box(note).left >= card.left && box(note).right <= card.right + 0.5,
     gap: box(note).top - box(desc).bottom, iconTop: box(icon).top - box(note).top, iconW: box(icon).width,
     noteFont: parseFloat(ns.fontSize), descFont: parseFloat(ds.fontSize), noteWeight: ns.fontWeight,
@@ -189,7 +163,7 @@ GEOMETRY = """JSON.stringify((() => {
 
 @browser
 @pytest.mark.parametrize("width", [1440, 768, 640])
-def test_badge_and_note_fit_and_leave_the_table_alone(env, width):
+def test_note_fits_and_leaves_the_table_alone(env, width):
     client = env["client"]
     identity = _as_student(client)
     versions = _versions(identity)
@@ -200,8 +174,7 @@ def test_badge_and_note_fit_and_leave_the_table_alone(env, width):
         geometry = json.loads(session.evaluate(GEOMETRY))
     finally:
         session.close()
-    assert geometry["badge"] == "4 limites aplicados"
-    assert geometry["badgeLines"] == 1 and not geometry["badgeClipped"] and geometry["badgeInside"]
+    assert geometry["chips"] == ["AAC: 26 atividades", "AEU: 5 atividades"]
     assert geometry["noteInside"] and not geometry["docOverflow"]
     assert abs(geometry["gap"] - 6) < 0.5
     assert abs(geometry["iconTop"] - 1) < 0.5 and geometry["iconW"] == 16  # icon on the first line

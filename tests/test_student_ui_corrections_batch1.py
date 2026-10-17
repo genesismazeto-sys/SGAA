@@ -451,8 +451,9 @@ def _long_activity(identity):
 
 def _neutralize_enhancement(session):
     # Exactly what a browser without the customizable select does with this
-    # page: the @supports condition is false, so the whole block is skipped.
-    session.response_rewrites["/aluno/nova-requisicao"] = lambda body: body.replace(
+    # page: the @supports condition of the shared picker (UI batch 4 moved it
+    # to components/select.css) is false, so the whole block is skipped.
+    session.response_rewrites["/static/css/components/select.css"] = lambda body: body.replace(
         b"@supports (appearance: base-select)", b"@supports (appearance: sgaa-unsupported-probe)")
 
 

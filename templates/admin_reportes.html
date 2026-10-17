@@ -53,7 +53,6 @@
     .novo-reporte-form .form-row.align-top > label{ padding-top:9px; }
     .novo-reporte-form label{ font-size:13px; font-weight:500; text-align:right; color:var(--text-primary); }
     .novo-reporte-form textarea.control{ min-height:110px; resize:vertical; padding:10px 12px; line-height:1.45; }
-    .novo-reporte-form select.control{ appearance:none; }
     .novo-reporte-form .file-name.control{ min-height:var(--btn-h); }
     .novo-reporte-form .form-hint{ color:var(--text-secondary); font-size:12px; line-height:1.45; margin-top:7px; }
     /* Meta: 4 colunas (label/valor x2) para aproveitar a largura horizontal */
@@ -83,7 +82,7 @@
     .reporte-modal-status-block .status-label-wrap small{ color:var(--text-secondary); font-size:12px; }
     .reporte-modal-status-block .reporte-modal-section-label{ margin:0; }
     .reporte-modal-status-form{ display:flex; align-items:center; gap:8px; flex-shrink:0; }
-    .reporte-modal-status-form select{ height:var(--btn-h); padding:0 10px; border:1px solid var(--border-strong); border-radius:var(--radius); background:var(--surface); font:inherit; min-width:200px; }
+    .reporte-modal-status-form select{ height:var(--btn-h); padding:0 calc(10px + var(--select-arrow-room, 0px)) 0 10px; border:1px solid var(--border-strong); border-radius:var(--radius); background:var(--surface); font:inherit; min-width:200px; }
     /* Footer: divisor vertical sutil entre Fechar e Salvar */
     .modal-footer-actions .footer-sep{ width:1px; height:20px; background:var(--border-strong); margin:0 2px; }
     @media (max-width: 640px){
@@ -312,7 +311,7 @@
           <label for="novo-reporte-aluno">Aluno</label>
           <div class="field-card">
             <div class="field-chip"><i class="lucide" data-lucide="user-round"></i></div>
-            <select class="control" id="novo-reporte-aluno" name="aluno_id" required>
+            <select class="control select--plain" id="novo-reporte-aluno" name="aluno_id" required>
               <option value="" selected disabled>Selecione um aluno</option>
               {% for aluno in alunos %}
                 <option value="{{ aluno.id }}">{{ aluno.nome or 'Sem nome' }} — {{ aluno.matricula or 'Sem matrícula' }}</option>
@@ -325,7 +324,7 @@
           <label for="novo-reporte-categoria">Categoria</label>
           <div class="field-card">
             <div class="field-chip"><i class="lucide" data-lucide="tag"></i></div>
-            <select class="control" id="novo-reporte-categoria" name="categoria" required>
+            <select class="control select--plain" id="novo-reporte-categoria" name="categoria" required>
               <option value="" selected disabled>Selecione uma categoria</option>
               {% for categoria in categoria_options %}
                 <option value="{{ categoria }}">{{ categoria }}</option>
