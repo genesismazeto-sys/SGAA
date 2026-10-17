@@ -14,6 +14,10 @@ the database.  ``storage_objects.drive_account_key`` and
 ``cloud_accounts.provider_account_key`` both hold this value; the mirror
 binds to the logical account, never to a credential row.
 
+A OneDrive account is keyed the same way, namespaced ``onedrive``, from the
+Microsoft Graph user ``id`` the signed-in token reports (``/me``): equally
+stable for the account and independent of the e-mail address.
+
 Canonicalization: the ``sub`` is used exactly as Google returns it --
 case-sensitive, no trimming.  A value that would need normalization
 (surrounding or embedded whitespace, non-ASCII, empty, oversized) is
@@ -38,7 +42,8 @@ import time
 
 PROVIDER_ACCOUNT_KEY_LENGTH = 64
 GOOGLE_PROVIDER = "google"
-_PROVIDERS = frozenset({GOOGLE_PROVIDER})
+ONEDRIVE_PROVIDER = "onedrive"
+_PROVIDERS = frozenset({GOOGLE_PROVIDER, ONEDRIVE_PROVIDER})
 _SUBJECT_RE = re.compile(r"^[\x21-\x7e]{1,255}$")
 _KEY_RE = re.compile(r"^[0-9a-f]{64}$")
 _GOOGLE_ISSUERS = frozenset({"accounts.google.com", "https://accounts.google.com"})
@@ -65,6 +70,10 @@ def provider_account_key(provider: str, subject) -> str:
 
 def google_account_key(subject) -> str:
     return provider_account_key(GOOGLE_PROVIDER, subject)
+
+
+def onedrive_account_key(subject) -> str:
+    return provider_account_key(ONEDRIVE_PROVIDER, subject)
 
 
 def is_provider_account_key(value) -> bool:
@@ -129,10 +138,12 @@ def google_subject_from_id_token(id_token, *, audience: str, now: float | None =
 __all__ = [
     "AccountIdentityError",
     "GOOGLE_PROVIDER",
+    "ONEDRIVE_PROVIDER",
     "PROVIDER_ACCOUNT_KEY_LENGTH",
     "google_account_key",
     "google_subject_from_id_token",
     "is_provider_account_key",
+    "onedrive_account_key",
     "provider_account_key",
     "require_provider_account_key",
 ]

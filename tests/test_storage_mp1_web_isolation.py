@@ -27,6 +27,8 @@ BACKGROUND = frozenset({
     "app.storage.legacy_convergence",
     "app.storage.object_backup",
     "app.storage.scheduler",
+    # deletes Supabase staging copies once the drive copies are proven: scheduler / CLI only
+    "app.storage.staging_release",
     "app.storage.storage_audit",
 })
 

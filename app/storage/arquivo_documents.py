@@ -54,11 +54,11 @@ from app.db import lock_admin_arquivo, write_transaction
 from app.prod1_document_custody_ddl import LEGACY_LOCAL_LOCATOR_MAX_LENGTH
 from app.prod1_storage_ddl import BUSINESS_DOCUMENT_MAX_BYTES, BUSINESS_DOCUMENT_MIME_TYPES
 from app.storage import custody_common
+from app.storage import document_copies
 from app.storage import mirror_outbox
 from app.storage import request_documents as documents
 from app.storage import upload_intents as intents
 from app.storage.custody_common import CustodyError
-from app.storage.object_store import STORAGE_OBJECT_MISSING, CanonicalStoreError
 from app.storage.supabase_store import (
     configured_bucket,
     configured_project_url,
@@ -541,29 +541,21 @@ def is_canonical(row) -> bool:
     return row is not None and row["storage_object_id"] is not None
 
 
-def canonical_download_url(conn, row, *, download: bool) -> str:
-    """A 60-second signed private URL for a canonical row's ACTIVE object (caller authorized)."""
-    obj = conn.execute(
-        "SELECT storage_bucket,storage_key,lifecycle_state FROM storage_objects WHERE id=?",
-        (int(row["storage_object_id"]),),
-    ).fetchone()
-    if obj is None or obj["lifecycle_state"] != "active":
-        raise ArquivoError(NOT_FOUND_MESSAGE, code="NOT_FOUND")
-    download_name = None
-    if download:
-        download_name = (secure_filename(str(row["original_filename"] or ""))
-                         or secure_filename(str(row["filename"] or "")) or "arquivo")
+def canonical_document(conn, row, *, download: bool) -> document_copies.DocumentRead:
+    """How to serve a canonical row's ACTIVE object (caller authorized): a 60-second signed
+    private URL, or a verified Google Drive / OneDrive copy (``document_copies``)."""
+    filename = (secure_filename(str(row["original_filename"] or ""))
+                or secure_filename(str(row["filename"] or "")) or "arquivo")
     try:
-        signed = documents.canonical_store().create_signed_download(
-            obj["storage_bucket"], obj["storage_key"],
-            expires_in=SIGNED_DOWNLOAD_TTL_SECONDS, download_name=download_name,
+        return document_copies.open_document(
+            conn, int(row["storage_object_id"]), store_factory=documents.canonical_store,
+            ttl_seconds=SIGNED_DOWNLOAD_TTL_SECONDS, filename=filename, download=download,
         )
-    except CanonicalStoreError as exc:
-        if exc.code == STORAGE_OBJECT_MISSING:
-            raise ArquivoError(NOT_FOUND_MESSAGE, code="NOT_FOUND") from None
+    except document_copies.DocumentNotFound:
+        raise ArquivoError(NOT_FOUND_MESSAGE, code="NOT_FOUND") from None
+    except document_copies.DocumentUnavailable:
         raise ArquivoError(documents.STORAGE_UNAVAILABLE_MESSAGE, code="STORAGE_UNAVAILABLE",
                            retryable=True) from None
-    return signed.url
 
 
 def lock_for_delete(conn, arquivo_id: int):
@@ -612,7 +604,7 @@ __all__ = [
     "PURPOSE",
     "SUBMISSION_FIELD",
     "TARGET_FIELD",
-    "canonical_download_url",
+    "canonical_document",
     "create_arquivo_from_intent",
     "custody_fingerprint",
     "delete_canonical_arquivo",

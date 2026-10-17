@@ -456,7 +456,7 @@ def test_connection(conn, provider: str) -> dict[str, str]:
         raise CloudConnectionError("Nao foi possivel validar a conexao com o provedor.") from exc
     account = get_active_cloud_account(conn, normalized)
     if account and normalized == "google" and observed_key is not None:
-        _bind_or_check_google_identity(conn, account, observed_key)
+        bind_or_check_account_identity(conn, account, observed_key)
     if account and account_email and account_email != str(account.get("account_email") or ""):
         update_cloud_account_token(
             conn,
@@ -476,7 +476,7 @@ def _google_key_from_userinfo(identity) -> str | None:
         return None
 
 
-def _bind_or_check_google_identity(conn, account, observed_key: str) -> None:
+def bind_or_check_account_identity(conn, account, observed_key: str) -> None:
     """Backfill a NULL logical key from a trusted response; refuse a different account."""
     recorded = account.get("provider_account_key")
     if recorded is None:
@@ -487,10 +487,12 @@ def _bind_or_check_google_identity(conn, account, observed_key: str) -> None:
         conn.commit()
         return
     if recorded != observed_key:
-        raise CloudConnectionError(
-            "A conta Google autorizada nao corresponde a conta registrada. Reconecte o Google Drive.",
-            debug_code="ACCOUNT_IDENTITY_MISMATCH",
+        message = (
+            "A conta Google autorizada nao corresponde a conta registrada. Reconecte o Google Drive."
+            if account.get("provider") == "google"
+            else "A conta OneDrive autorizada nao corresponde a conta registrada. Reconecte o OneDrive."
         )
+        raise CloudConnectionError(message, debug_code="ACCOUNT_IDENTITY_MISMATCH")
 
 
 def disconnect_cloud_account(conn, provider: str) -> None:

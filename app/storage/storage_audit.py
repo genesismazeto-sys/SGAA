@@ -63,6 +63,7 @@ from app.prod1_storage_ddl import (
     LIFECYCLE_STATES,
     STORAGE_ORIGINS,
 )
+from app.storage import copy_registry
 from app.storage import custody_common
 from app.storage import drive_mirror
 from app.storage import legacy_convergence as convergence
@@ -320,8 +321,12 @@ def cross_check(
         if listing:
             listed = _listing(store, {str(row[1]) for row in objects} | set(buckets))
         storage = _Findings(STORAGE_CLASSES, show_ids)
-        _storage_findings(store, objects, listed, deep, storage)
-        report["storage"] = storage.counts | {"checked": len(objects), "deep": bool(deep)}
+        # A released staging copy is absent by design: its custody is the verified drive copies.
+        released = copy_registry.released_object_ids(conn)
+        staged = [row for row in objects if int(row[0]) not in released]
+        _storage_findings(store, staged, listed, deep, storage)
+        report["storage"] = storage.counts | {"checked": len(staged), "deep": bool(deep)} | (
+            {"released": len(released)} if released else {})
         verdict["storage_consistent"] = storage.clean
         ids.update(storage.ids)
         if listed is not None:

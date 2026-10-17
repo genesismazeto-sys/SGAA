@@ -105,6 +105,7 @@ from app.sql_dialect import (
     format_date_ptbr as sql_format_date_ptbr,
 )
 from app.storage import arquivo_documents
+from app.storage import document_copies
 from app.storage import request_documents as documents
 from app.storage.contracts import StorageError
 from app.views.images import reporte_captura_url
@@ -1175,17 +1176,13 @@ def aluno_visualizar_arquivo(arquivo_id: int):
         flash("Arquivo não encontrado.", "error")
         return redirect(_aluno_url("aluno_arquivos"))
     if arquivo_documents.is_canonical(arquivo):
-        # STORAGE S3-B: canonical custody -> 60-second signed private URL (inline).
+        # Canonical custody -> 60-second signed private URL or verified drive copy (inline).
         try:
-            signed_url = arquivo_documents.canonical_download_url(conn, arquivo, download=False)
+            document = arquivo_documents.canonical_document(conn, arquivo, download=False)
         except ArquivoError as exc:
             flash(exc.user_message, "error")
             return redirect(_aluno_url("aluno_arquivos"))
-        response = redirect(signed_url, code=302)
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["Cache-Control"] = "private, no-store"
-        response.headers["Referrer-Policy"] = "no-referrer"
-        return response
+        return document_copies.response(document, download=False)
     try:
         content, mime_type, download_name = read_arquivo_content(
             conn,
@@ -1218,17 +1215,13 @@ def aluno_baixar_arquivo(arquivo_id: int):
         return redirect(_aluno_url("aluno_arquivos"))
 
     if arquivo_documents.is_canonical(arquivo):
-        # STORAGE S3-B: canonical custody -> 60-second signed private URL (named download).
+        # Canonical custody -> 60-second signed private URL or verified drive copy (named download).
         try:
-            signed_url = arquivo_documents.canonical_download_url(conn, arquivo, download=True)
+            document = arquivo_documents.canonical_document(conn, arquivo, download=True)
         except ArquivoError as exc:
             flash(exc.user_message, "error")
             return redirect(_aluno_url("aluno_arquivos"))
-        resp = redirect(signed_url, code=302)
-        resp.headers["X-Content-Type-Options"] = "nosniff"
-        resp.headers["Cache-Control"] = "private, no-store"
-        resp.headers["Referrer-Policy"] = "no-referrer"
-        return resp
+        return document_copies.response(document, download=True)
     try:
         content, mime_type, download_name = read_arquivo_content(
             conn,

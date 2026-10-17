@@ -3,8 +3,13 @@
 Subcommands (each prints ONE value-free JSON report on stdout; logs go to
 stderr; no secret, URL, locator, file name or person data is ever printed):
 
-    mirror-run       run bounded Drive mirror passes (``app.storage.drive_mirror``)
+    mirror-run       run bounded Drive mirror passes (``app.storage.drive_mirror``),
+                     Google Drive or (``--provider onedrive``) OneDrive
     mirror-requeue   operator recovery: ``reconciliation_required`` -> ``pending``
+    release-run      release the Supabase staging copies whose drive copies are
+                     proven (``app.storage.staging_release``)
+    staging-backfill the controlled backfill: report (dry run) or, with ``--apply``,
+                     enroll a bounded batch of older documents for drive custody
     census           custody-class counts (``app.storage.storage_audit``)
     verify           the convergence cross-check of database references,
                      canonical objects, the bucket and (``--drive``) Drive mirrors
@@ -28,7 +33,8 @@ Exit codes:
     0  done (including "nothing to do")
     1  runtime failure after the application started
     2  usage error or application startup failure
-    3  not runnable: the canonical store or the Drive connection is unavailable
+    3  not runnable: the canonical store, the Drive connection or (PostgreSQL only)
+       the copy registry is unavailable
     4  verify: a check failed (not converged, unclean bucket or unverified mirrors);
        converge: some row did not converge (its outcome class says why);
        backup-objects: an object was unreadable, the space or object bound was
@@ -82,6 +88,18 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--lease-seconds", type=_bounded_int(2 * drive_mirror.LEASE_SAFETY_SECONDS,
                                                           mirror_outbox.MAX_LEASE_SECONDS),
                      default=mirror_outbox.DEFAULT_LEASE_SECONDS)
+    run.add_argument("--provider", choices=drive_mirror.PROVIDERS, default="google")
+
+    from app.storage import copy_registry, staging_release
+
+    release = commands.add_parser("release-run", help="release proven Supabase staging copies")
+    release.add_argument("--limit", type=_bounded_int(1, staging_release.MAX_BATCH),
+                         default=staging_release.DEFAULT_BATCH, help="staged objects examined")
+
+    backfill = commands.add_parser("staging-backfill", help="enroll older documents (dry run by default)")
+    backfill.add_argument("--apply", action="store_true", help="write: enroll the batch")
+    backfill.add_argument("--limit", type=_bounded_int(1, copy_registry.MAX_ENROLL_BATCH), default=50,
+                          help="documents enrolled in this run")
 
     requeue = commands.add_parser("mirror-requeue", help="requeue reconciliation_required objects")
     requeue.add_argument("--code", default=None, help="only objects whose last error has this code")
@@ -132,7 +150,8 @@ def _mirror_run(conn, args) -> tuple[int, dict]:
 
     passes = []
     for _ in range(args.passes):
-        result = drive_mirror.run_mirror_pass(conn, limit=args.limit, lease_seconds=args.lease_seconds)
+        result = drive_mirror.run_mirror_pass(conn, provider=args.provider, limit=args.limit,
+                                              lease_seconds=args.lease_seconds)
         passes.append(result.as_dict())
         if result.result_code != drive_mirror.RESULT_OK:
             return EXIT_NOT_RUNNABLE, {"passes": passes}
@@ -153,6 +172,21 @@ def _mirror_requeue(conn, args) -> tuple[int, dict]:
             conn, now=custody_common.utc_now_text(), limit=args.limit, error_code=args.code
         )
     return EXIT_OK, {"requeued": count}
+
+
+def _release_run(conn, args) -> tuple[int, dict]:
+    from app.storage import staging_release
+
+    result = staging_release.run_release_pass(conn, limit=args.limit)
+    code = EXIT_OK if result.result_code == staging_release.RESULT_OK else EXIT_NOT_RUNNABLE
+    return code, result.as_dict()
+
+
+def _staging_backfill(conn, args) -> tuple[int, dict]:
+    from app.storage import staging_release
+
+    report = staging_release.enroll_existing(conn, limit=args.limit, apply=args.apply)
+    return (EXIT_OK if report["result_code"] == staging_release.RESULT_OK else EXIT_NOT_RUNNABLE), report
 
 
 def _census(conn, args) -> tuple[int, dict]:
@@ -285,6 +319,8 @@ _COMMANDS = {
     "restore-objects": _restore_objects,
     "mirror-run": _mirror_run,
     "mirror-requeue": _mirror_requeue,
+    "release-run": _release_run,
+    "staging-backfill": _staging_backfill,
     "census": _census,
     "verify": _verify,
     "converge": _converge,

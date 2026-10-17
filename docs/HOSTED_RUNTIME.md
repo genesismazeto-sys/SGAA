@@ -210,8 +210,8 @@ that only work on a file: the local-backup and destination-folder cards, the
 operations, retention and snapshot cards, the automatic-backup chip, the folder
 picker with its Google scripts, and each provider's destination and "send backup"
 controls. What remains is the schema state, the protection card, and the Google
-Drive and OneDrive account cards (connect, test, disconnect): the Drive mirror uses the
-connected Google account and every SGAA e-mail is sent by the connected Microsoft account.
+Drive and OneDrive account cards (connect, test, disconnect): the document copies use the
+connected Google and Microsoft accounts and every SGAA e-mail is sent by the connected Microsoft account.
 Nothing is listed from the local disk and the Windows task is not queried.
 
 The PostgreSQL backup surface (SPEC MP-3 A19, owner `app.backup.pg_posture`) keeps the page's
@@ -255,7 +255,7 @@ worker and the web route, RBAC and CSRF inventories do not grow.
 
 | Request | Effect |
 |---|---|
-| `GET` or `POST /internal/scheduler/mirror` with `Authorization: Bearer <CRON_SECRET>` | one bounded mirror pass |
+| `GET` or `POST /internal/scheduler/mirror` with `Authorization: Bearer <CRON_SECRET>` | one bounded Google Drive mirror pass, then one bounded OneDrive pass and one Supabase staging-release pass (reported under `onedrive` and `release`; `200` when at least one drive ran). A staging copy is deleted only after every connected drive's copy was read back and proven |
 | `GET` or `POST /internal/scheduler/backup` with `Authorization: Bearer <CRON_SECRET>` | one policy-driven backup pass (MP-3 A20): a verified database snapshot, the readable registers and, when the object cadence is due, a sealed object set of every canonical object, to every connected drive; retention prunes each kind to the policy |
 
 Answers are value-free JSON: `200` the pass ran (including "nothing due"; the backup pass
@@ -325,8 +325,10 @@ database's own receipts name — rotating complete generations and partial runs 
   duplicate and overlapping invocations safe: a claimed object is owned by one pass, and
   a pass that loses its lease ends as `lost` and is adopted by the next one rather than
   uploading a second copy.
-- Only the mirror pass and the backup pass are scheduled. Convergence, requeue and the
-  operator object set (section 10) remain operator decisions (`python -m app.storage.cli`).
+- Only the mirror pass and the backup pass are scheduled. Convergence, requeue, the
+  backfill of documents uploaded before the drive copies were activated (`staging-backfill`,
+  a dry run unless `--apply`) and the operator object set (section 10) remain operator
+  decisions (`python -m app.storage.cli`).
 - Any caller works: Vercel Cron, `pg_cron` with `pg_net`, a CI job, `curl`. A database
   trigger never carries the bearer in its job text: the user stores it in Supabase Vault
   (dashboard, or typed into the SQL editor) and the job reads it from

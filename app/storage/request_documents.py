@@ -51,6 +51,7 @@ from app.comprovantes import ComprovanteError, _authorize_comprovante_upload
 from app.db import write_transaction
 from app.prod1_storage_ddl import BUSINESS_DOCUMENT_MAX_BYTES, BUSINESS_DOCUMENT_MIME_TYPES
 from app.storage import custody_common
+from app.storage import document_copies
 from app.storage import upload_intents as intents
 from app.storage.custody_common import CustodyError
 from app.storage.object_store import (
@@ -602,35 +603,27 @@ def find_completed_submission(conn, *, actor_user_id: int, intent_ids) -> int | 
 # ---------------------------------------------------------------------------
 
 
-def canonical_download_url(conn, attachment, *, download: bool) -> str:
-    """A short-lived signed URL for an ACTIVE canonical attachment (caller authorized)."""
+def canonical_document(conn, attachment, *, download: bool) -> document_copies.DocumentRead:
+    """How to serve an ACTIVE canonical attachment (caller authorized): a 60-second
+    signed URL, or -- once the staging copy is released or unavailable -- a
+    verified Google Drive / OneDrive copy (``document_copies``)."""
     if attachment["storage_status"] not in ("active", "legacy_active"):
         raise RequestDocumentError("ATTACHMENT_NOT_FOUND", "Comprovante não encontrado.", 404)
-    obj = conn.execute(
-        "SELECT storage_bucket,storage_key,lifecycle_state FROM storage_objects WHERE id=?",
-        (int(attachment["storage_object_id"]),),
-    ).fetchone()
-    if obj is None or obj["lifecycle_state"] != "active":
-        raise RequestDocumentError("ATTACHMENT_NOT_FOUND", "Comprovante não encontrado.", 404)
-    download_name = None
-    if download:
-        from werkzeug.utils import secure_filename
+    from werkzeug.utils import secure_filename
 
-        download_name = secure_filename(str(attachment["original_filename"] or "")) or None
-        if download_name is None:
-            download_name = secure_filename(str(attachment["filename"] or "")) or "comprovante"
+    filename = (secure_filename(str(attachment["original_filename"] or ""))
+                or secure_filename(str(attachment["filename"] or "")) or "comprovante")
     try:
-        signed = canonical_store().create_signed_download(
-            obj["storage_bucket"], obj["storage_key"],
-            expires_in=SIGNED_DOWNLOAD_TTL_SECONDS, download_name=download_name,
+        return document_copies.open_document(
+            conn, int(attachment["storage_object_id"]), store_factory=canonical_store,
+            ttl_seconds=SIGNED_DOWNLOAD_TTL_SECONDS, filename=filename, download=download,
         )
-    except CanonicalStoreError as exc:
-        if exc.code in (STORAGE_OBJECT_MISSING,):
-            raise RequestDocumentError("ATTACHMENT_NOT_FOUND", "Comprovante não encontrado.", 404) from None
+    except document_copies.DocumentNotFound:
+        raise RequestDocumentError("ATTACHMENT_NOT_FOUND", "Comprovante não encontrado.", 404) from None
+    except document_copies.DocumentUnavailable:
         raise RequestDocumentError(
             "STORAGE_UNAVAILABLE", "Não foi possível abrir o comprovante com segurança.", 503
         ) from None
-    return signed.url
 
 
 __all__ = [
@@ -645,7 +638,7 @@ __all__ = [
     "SUBMISSION_FIELD",
     "UploadCapability",
     "attach_request_documents",
-    "canonical_download_url",
+    "canonical_document",
     "canonical_store",
     "finalize_intent",
     "finalize_request_document",

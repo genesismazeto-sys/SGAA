@@ -34,6 +34,7 @@ from app.db import get_db_connection
 from app.db_maintenance import ensure_admin_arquivos_table
 from app.sql_dialect import ascii_ci_like, format_date_ptbr, human_text_order
 from app.storage import arquivo_documents
+from app.storage import document_copies
 from app.text import human_text_contains, human_text_key
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
 from app.web.filters import (
@@ -298,17 +299,13 @@ def admin_visualizar_arquivo(arquivo_id):
         flash("Arquivo não encontrado.", "error")
         return redirect(url_for("admin_arquivos"))
     if arquivo_documents.is_canonical(arquivo):
-        # Canonical custody: a 60-second signed private URL, never proxied bytes.
+        # Canonical custody: a 60-second signed private URL, or the verified Drive / OneDrive copy.
         try:
-            signed_url = arquivo_documents.canonical_download_url(conn, arquivo, download=False)
+            document = arquivo_documents.canonical_document(conn, arquivo, download=False)
         except ArquivoError as exc:
             flash(exc.user_message, "error")
             return redirect(url_for("admin_arquivos"))
-        response = redirect(signed_url, code=302)
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["Cache-Control"] = "private, no-store"
-        response.headers["Referrer-Policy"] = "no-referrer"
-        return response
+        return document_copies.response(document, download=False)
     try:
         content, mime_type, download_name = read_arquivo_content(
             conn,

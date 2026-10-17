@@ -79,8 +79,10 @@ def test_subjects_needing_normalization_are_refused_not_repaired(subject):
 
 def test_only_supported_providers_have_keys():
     with pytest.raises(AccountIdentityError) as caught:
-        provider_account_key("onedrive", SUB_A)
+        provider_account_key("dropbox", SUB_A)
     assert caught.value.code == "ACCOUNT_IDENTITY_PROVIDER_UNSUPPORTED"
+    # Namespaced: one subject never yields the same key under two providers.
+    assert provider_account_key("onedrive", SUB_A) != provider_account_key("google", SUB_A)
 
 
 # --- B. ID token -----------------------------------------------------------------------

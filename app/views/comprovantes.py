@@ -14,6 +14,7 @@ from app.comprovantes import (
 )
 from app.db import get_db_connection
 from app.storage import arquivo_documents
+from app.storage import document_copies
 from app.storage import request_documents as documents
 from app.storage.contracts import StorageError
 from app.storage.object_store import STORAGE_CONFIG_MISSING, CanonicalStoreError
@@ -56,19 +57,16 @@ def open_comprovante(attachment_id: int):
     if row["storage_status"] not in {"active", "legacy_active"}:
         abort(404)
     if row["storage_object_id"] is not None:
-        # Canonical custody wins whenever a canonical reference exists: the
-        # browser is sent to a 60-second signed private URL; no body here.
+        # Canonical custody wins whenever a canonical reference exists: a
+        # 60-second signed private URL, or the verified Drive / OneDrive copy.
+        download = (request.args.get("download") or "").strip() == "1"
         try:
-            url = documents.canonical_download_url(
-                conn, row, download=(request.args.get("download") or "").strip() == "1"
-            )
+            document = documents.canonical_document(conn, row, download=download)
         except documents.RequestDocumentError as exc:
             if exc.status == 404:
                 abort(404)
             return _secure_headers(current_app.response_class(exc.user_message, status=503))
-        response = redirect(url, code=302)
-        response.headers["Referrer-Policy"] = "no-referrer"
-        return _secure_headers(response)
+        return document_copies.response(document, download=download)
     stored_name = os.path.basename(str(row["filename"] or "comprovante"))
     if row["provider"] == "google":
         try:

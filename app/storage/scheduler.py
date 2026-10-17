@@ -10,14 +10,16 @@ route, RBAC and CSRF inventories do not grow.
 
 CONTRACT
     ``GET`` or ``POST`` ``/internal/scheduler/mirror`` with
-    ``Authorization: Bearer <CRON_SECRET>`` runs ONE bounded mirror pass
-    (``drive_mirror.run_mirror_pass``); ``/internal/scheduler/backup`` runs ONE
+    ``Authorization: Bearer <CRON_SECRET>`` runs ONE bounded Google Drive mirror
+    pass (``drive_mirror.run_mirror_pass``) and, on PostgreSQL, ONE bounded
+    OneDrive pass and ONE staging-release pass (``staging_release``), reported
+    under ``onedrive`` and ``release``; ``/internal/scheduler/backup`` runs ONE
     policy-driven backup pass (``hosted_backup.run_backup_pass``: the database
     cadence and the object cadence decide, so the wake interval is not contract).
     Both answer a value-free JSON report:
 
-        200  the pass ran (including "nothing due")
-        503  not runnable: canonical store or Drive unavailable (``result_code``)
+        200  the pass ran (including "nothing due") on at least one drive
+        503  not runnable: canonical store or every drive unavailable (``result_code``)
         500  unexpected failure (a fixed code, never exception text)
         401  missing / wrong credential
         405  other method
@@ -105,6 +107,17 @@ def _authorized(header: str, secret: str) -> bool:
     return hmac.compare_digest(presented, expected)
 
 
+def _run_copies(conn, *, batch: int, lease: int) -> dict:
+    """The OneDrive pass and the staging release: PostgreSQL only (the copy registry's home)."""
+    from app.storage import custody_common, drive_mirror, staging_release
+
+    if not custody_common.is_postgres(conn):
+        return {}
+    onedrive = drive_mirror.run_mirror_pass(conn, provider="onedrive", limit=batch, lease_seconds=lease)
+    release = staging_release.run_release_pass(conn, limit=batch)
+    return {"onedrive": onedrive.as_dict(), "release": release.as_dict()}
+
+
 def _run_mirror() -> tuple[int, dict]:
     from app.db import close_db_connection, get_db_connection
     from app.storage import drive_mirror
@@ -121,15 +134,19 @@ def _run_mirror() -> tuple[int, dict]:
     try:
         with flask_app.app_context():
             try:
-                result = drive_mirror.run_mirror_pass(get_db_connection(), limit=batch, lease_seconds=lease)
+                conn = get_db_connection()
+                result = drive_mirror.run_mirror_pass(conn, limit=batch, lease_seconds=lease)
+                copies = _run_copies(conn, batch=batch, lease=lease)
             finally:
                 close_db_connection(None)
     except Exception as exc:
         # Exception text may carry a locator or a provider message: only the class is logged.
         logger.error("scheduler job mirror failed (%s)", type(exc).__name__)
         return 500, {"result_code": SCHEDULER_JOB_FAILED}
-    status = 200 if result.result_code == drive_mirror.RESULT_OK else 503
-    return status, result.as_dict()
+    ran = result.result_code == drive_mirror.RESULT_OK or (
+        copies.get("onedrive", {}).get("result_code") == drive_mirror.RESULT_OK
+    )
+    return (200 if ran else 503), {**result.as_dict(), **copies}
 
 
 def _run_backup() -> tuple[int, dict]:

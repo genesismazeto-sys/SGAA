@@ -1,18 +1,22 @@
-"""Google Drive mirror worker: copy active canonical objects to Drive, post-commit.
+"""Drive mirror worker: copy active canonical objects to Google Drive and OneDrive, post-commit.
 
-Supabase Storage is the canonical store; Drive is the required asynchronous
-secondary mirror / archive.  This module drives the ``storage_objects`` outbox
-(``app.storage.mirror_outbox``) for ONE bounded pass; an operator or, later, a
-scheduler invokes it (``python -m app.storage.cli mirror-run``).  No web route,
-view or request hook reaches it, so Drive availability never blocks a
-canonical operation.
+Supabase Storage receives every upload; Google Drive and OneDrive hold the
+permanent copies.  This module drives ONE bounded pass for ONE provider, each
+independently: Google over the ``storage_objects`` outbox
+(``app.storage.mirror_outbox``), OneDrive over the same state machine in
+``app.storage.copy_registry`` (PostgreSQL only).  An operator or the scheduler
+invokes it (``python -m app.storage.cli mirror-run``); no web route, view or
+request hook reaches it, so drive availability never blocks a canonical
+operation.  Once ``app.storage.staging_release`` has released an object's
+Supabase copy, the bytes come from another verified drive copy instead.
 
 ONE PASS
     1. record the start in the worker-health row;
-    2. resolve the canonical store and the ACTIVE Drive (the single active
-       Google connection and its logical account key).  Without them nothing
-       is claimed: an unreachable Drive leaves every object ``pending``
-       instead of burning attempts;
+    2. resolve the canonical store and the ACTIVE drive (the provider's single
+       active connection and its logical account key; a OneDrive key is bound
+       from Graph ``/me`` on first use).  Without them nothing is claimed: an
+       unreachable drive leaves every object ``pending`` instead of burning
+       attempts;
     3. turn expired leases into due retries, claim a bounded batch under a
        fresh lease token;
     4. per object: read its lifecycle, its one business owner and (for a
@@ -71,8 +75,11 @@ from app.comprovante_hierarchy import ComprovanteHierarchyError, ensure_request_
 from app.comprovantes import ComprovanteError, _request_context
 from app.db import classify_database_error, write_transaction
 from app.prod1_storage_ddl import BUSINESS_DOCUMENT_MAX_BYTES
+from app.storage import copy_registry
 from app.storage import custody_common
+from app.storage import document_copies
 from app.storage import mirror_outbox as outbox
+from app.storage import onedrive
 from app.storage import request_documents
 from app.storage.contracts import (
     StorageAuthorizationError,
@@ -98,7 +105,8 @@ logger = logging.getLogger(__name__)
 
 #: ``app.extensions`` key of an injected Drive storage (tests); production
 #: resolves the active Google connection.
-DRIVE_STORAGE_EXTENSION = "drive_mirror_storage"
+DRIVE_STORAGE_EXTENSION = document_copies.GOOGLE_STORAGE_EXTENSION
+PROVIDERS = ("google", "onedrive")
 
 DEFAULT_BATCH = 25
 MAX_ATTEMPTS = 10
@@ -138,14 +146,36 @@ class DriveUnavailable(RuntimeError):
 
 @dataclass(frozen=True)
 class ActiveDrive:
-    """The active Google connection: its managed storage, credential row and LOGICAL account key."""
+    """A provider's active connection: its managed storage, credential row and LOGICAL account key."""
 
     storage: object
     account_key: str
     account_id: int
+    provider: str = "google"
 
     def __repr__(self) -> str:
-        return "ActiveDrive(account_key=<bound>)"
+        return f"ActiveDrive(provider={self.provider!r}, account_key=<bound>)"
+
+
+@dataclass(frozen=True)
+class _Lane:
+    """What differs per provider: the outbox, the storage resolution and the item-id alphabet."""
+
+    provider: str
+    outbox: object
+    resolve: object
+    is_item_id: object
+    records_health: bool
+
+
+def _lane(provider: str) -> _Lane:
+    if provider == "google":
+        return _Lane("google", outbox,
+                     lambda conn: resolve_google_managed_storage(conn, extension_key=DRIVE_STORAGE_EXTENSION),
+                     custody_common.is_drive_id, True)
+    if provider == copy_registry.PROVIDER:
+        return _Lane(provider, copy_registry, onedrive.resolve_onedrive_managed_storage, onedrive.is_item_id, False)
+    raise ValueError("unknown drive provider")
 
 
 def _now() -> str:
@@ -153,38 +183,59 @@ def _now() -> str:
     return custody_common.utc_now_text()
 
 
-def _account(conn) -> tuple[int, str | None] | None:
-    account = cloud_connections.get_active_cloud_account(conn, "google")
+def _account(conn, provider: str = "google") -> tuple[int, str | None] | None:
+    account = cloud_connections.get_active_cloud_account(conn, provider)
     if account is None:
         return None
     return int(account["id"]), account.get("provider_account_key")
 
 
-def active_drive(conn) -> ActiveDrive:
-    """The single active Google connection, for the storage background tools.
+def _bind_identity(conn, provider: str, before: tuple[int, str | None], storage) -> tuple[int, str]:
+    """Bind a connection whose logical key was never established to the account the provider reports."""
+    try:
+        observed = storage.account_key()
+    except StorageError as exc:
+        raise DriveUnavailable(exc.code) from None
+    account = cloud_connections.get_active_cloud_account(conn, provider)
+    if account is None or int(account["id"]) != before[0]:
+        raise DriveUnavailable(DRIVE_ACCOUNT_CHANGED)
+    try:
+        cloud_connections.bind_or_check_account_identity(conn, account, observed)
+    except cloud_connections.CloudConnectionError as exc:
+        raise DriveUnavailable(exc.debug_code or DRIVE_ACCOUNT_UNKNOWN) from None
+    return before[0], observed
+
+
+def active_drive(conn, provider: str = "google") -> ActiveDrive:
+    """The provider's single active connection, for the storage background tools.
 
     The active account row is read before and after the credential is
     resolved: a connection replaced in between could otherwise bind objects to
-    the wrong logical account.  Raises :class:`DriveUnavailable`.
+    the wrong logical account.  A Google key comes from the connect flow; a
+    OneDrive key is bound here, once, from the account Graph reports.  Raises
+    :class:`DriveUnavailable`.
     """
-    before = _account(conn)
+    lane = _lane(provider)
+    before = _account(conn, provider)
     if before is None:
         raise DriveUnavailable(outbox.DRIVE_NOT_CONNECTED)
-    if not before[1]:
+    if not before[1] and provider == "google":
         raise DriveUnavailable(DRIVE_ACCOUNT_UNKNOWN)
     try:
-        storage = resolve_google_managed_storage(conn, extension_key=DRIVE_STORAGE_EXTENSION)
+        storage = lane.resolve(conn)
     except StorageError as exc:
         raise DriveUnavailable(exc.code) from None
-    if _account(conn) != before:
+    if not before[1]:
+        before = _bind_identity(conn, provider, before, storage)
+    if _account(conn, provider) != before:
         raise DriveUnavailable(DRIVE_ACCOUNT_CHANGED)
-    return ActiveDrive(storage=storage, account_key=str(before[1]), account_id=before[0])
+    return ActiveDrive(storage=storage, account_key=str(before[1]), account_id=before[0], provider=provider)
 
 
 def still_active(conn, drive: ActiveDrive) -> bool:
     """Whether ``drive`` is still THE active connection (a credential refresh
     after a 401 resolves whatever account is active NOW)."""
-    return _account(conn) == (drive.account_id, drive.account_key)
+    return _account(conn, drive.provider) == (drive.account_id, drive.account_key)
 
 
 # ---------------------------------------------------------------------------
@@ -259,10 +310,12 @@ class _Resolved:
     kind: str
     row: object
     request_context: tuple | None
+    #: The other providers' verified copies when the Supabase copy is released (the byte source).
+    sources: tuple | None = None
 
 
-def _resolve(conn, work: outbox.MirrorWork) -> _Resolved | None:
-    """Lifecycle, owner and Drive context in ONE short transaction; ``None`` if retired.
+def _resolve(conn, work: outbox.MirrorWork, provider: str) -> _Resolved | None:
+    """Lifecycle, owner, Drive context and source in ONE short transaction; ``None`` if retired.
 
     No provider call may run while a transaction (and its locks) is open, so
     every database read an item needs happens here.  The first Drive
@@ -278,7 +331,11 @@ def _resolve(conn, work: outbox.MirrorWork) -> _Resolved | None:
             return None
         kind, row = _owner(conn, work.object_id)
         context = _request_context(conn, int(row["requisicao_id"])) if kind == "comprovante" else None
-    return _Resolved(kind, row, context)
+        sources = None
+        if copy_registry.supabase_released(conn, work.object_id):
+            sources = tuple(copy for copy in document_copies.verified_copies(conn, work.object_id)
+                            if copy.provider != provider)
+    return _Resolved(kind, row, context, sources)
 
 
 def _place(folders, resolved: _Resolved, work: outbox.MirrorWork) -> Placement:
@@ -335,6 +392,8 @@ def _classify(exc: BaseException) -> tuple[str, str]:
         return _RECONCILE, exc.code
     if isinstance(exc, DriveUnavailable):
         return _DEFER, exc.code
+    if isinstance(exc, document_copies.CopyUnavailable):
+        return _RETRY, exc.code
     if isinstance(exc, CanonicalStoreError):
         if exc.code == STORAGE_OBJECT_MISSING:
             return _RECONCILE, CANONICAL_OBJECT_MISSING
@@ -358,24 +417,24 @@ def _fence(work: outbox.MirrorWork) -> dict:
     return dict(object_id=work.object_id, lease_token=work.lease_token, generation=work.generation)
 
 
-def _record(conn, result: MirrorPassResult, work: outbox.MirrorWork, outcome: str, code: str,
+def _record(conn, lane: _Lane, result: MirrorPassResult, work: outbox.MirrorWork, outcome: str, code: str,
             *, delay: int = UNAVAILABLE_DELAY_SECONDS, counter: str = "deferred") -> None:
     now = _now()
     try:
         with write_transaction(conn):
             if outcome == _RETRY and work.attempts < MAX_ATTEMPTS:
-                outbox.mark_retry(
+                lane.outbox.mark_retry(
                     conn, **_fence(work), error_code=code,
                     next_attempt_at=custody_common.add_seconds(now, backoff_seconds(work.attempts)), now=now,
                 )
                 result.retried += 1
             elif outcome in (_RETRY, _RECONCILE):
-                outbox.mark_reconciliation_required(
+                lane.outbox.mark_reconciliation_required(
                     conn, **_fence(work), error_code=MIRROR_RETRY_EXHAUSTED if outcome == _RETRY else code, now=now,
                 )
                 result.reconciliation += 1
             else:
-                outbox.mark_pending_disconnected(
+                lane.outbox.mark_pending_disconnected(
                     conn, **_fence(work), code=code,
                     next_attempt_at=custody_common.add_seconds(now, delay), now=now,
                 )
@@ -388,38 +447,57 @@ def _record(conn, result: MirrorPassResult, work: outbox.MirrorWork, outcome: st
 
 def _verified_remote(work: outbox.MirrorWork, placement: Placement, remote) -> None:
     if (
-        not custody_common.is_drive_id(remote.file_id)
-        or remote.parent_id != placement.parent_id
+        remote.parent_id != placement.parent_id
         or int(remote.size) != work.size_bytes
         or str(remote.sha256 or "").lower() != work.sha256
     ):
         raise _Refusal(MIRROR_INTEGRITY_MISMATCH)
 
 
-def _mirror_one(conn, store, drive: ActiveDrive, folders, work: outbox.MirrorWork, result: MirrorPassResult) -> None:
+def _source_bytes(conn, lane: _Lane, store, work: outbox.MirrorWork, resolved: _Resolved) -> bytes:
+    """The bytes the drive receives: the canonical bytes, proven against the verified
+    record -- never trusted from provider metadata -- read from the Supabase staging
+    copy, or from another provider's verified copy once that one was released."""
+    if resolved.sources is None:
+        try:
+            content, _stat = read_verified(
+                store, work.storage_bucket, work.storage_key, expected_size=work.size_bytes,
+                expected_sha256=work.sha256, max_bytes=BUSINESS_DOCUMENT_MAX_BYTES,
+            )
+            return content
+        except CanonicalStoreError as exc:
+            # Released between the resolve and this read: the drive copies are the source now.
+            if exc.code != STORAGE_OBJECT_MISSING or not copy_registry.supabase_released(conn, work.object_id):
+                raise
+            sources = [copy for copy in document_copies.verified_copies(conn, work.object_id)
+                       if copy.provider != lane.provider]
+    else:
+        sources = list(resolved.sources)
+    return document_copies.read_from_copies(conn, sources, sha256=work.sha256, size_bytes=work.size_bytes)
+
+
+def _mirror_one(conn, lane: _Lane, store, drive: ActiveDrive, folders, work: outbox.MirrorWork,
+                result: MirrorPassResult) -> None:
     if work.lease_expires_at <= custody_common.add_seconds(_now(), LEASE_SAFETY_SECONDS):
         # Never start provider work on a nearly lost lease: hand the object back now.
-        _record(conn, result, work, _DEFER, LEASE_SAFETY_MARGIN, delay=0, counter="skipped")
+        _record(conn, lane, result, work, _DEFER, LEASE_SAFETY_MARGIN, delay=0, counter="skipped")
         return
     if work.drive_account_key is not None and work.drive_account_key != drive.account_key:
-        _record(conn, result, work, _DEFER, DRIVE_ACCOUNT_UNAVAILABLE)
+        _record(conn, lane, result, work, _DEFER, DRIVE_ACCOUNT_UNAVAILABLE)
         return
-    resolved = _resolve(conn, work)
+    resolved = _resolve(conn, work, lane.provider)
     if resolved is None:
-        _record(conn, result, work, _DEFER, OBJECT_RETIRED)
+        _record(conn, lane, result, work, _DEFER, OBJECT_RETIRED)
         return
     placement = _place(folders, resolved, work)
-    # The bytes Drive receives are the canonical bytes, proven against the
-    # verified record -- never trusted from provider metadata.
-    content, _stat = read_verified(
-        store, work.storage_bucket, work.storage_key, expected_size=work.size_bytes,
-        expected_sha256=work.sha256, max_bytes=BUSINESS_DOCUMENT_MAX_BYTES,
-    )
+    content = _source_bytes(conn, lane, store, work, resolved)
     remote = drive.storage.upload(
         parent_id=placement.parent_id, stored_filename=placement.filename, content=content,
         mime_type=work.mime_type, operation_key=placement.operation_key,
         object_kind=placement.object_kind, semantic_properties=placement.semantic_properties,
     )
+    if not lane.is_item_id(remote.file_id):
+        raise _Refusal(MIRROR_INTEGRITY_MISMATCH)
     _verified_remote(work, placement, remote)
     if not still_active(conn, drive):
         # A refresh may have written the copy into whichever account is
@@ -428,14 +506,14 @@ def _mirror_one(conn, store, drive: ActiveDrive, folders, work: outbox.MirrorWor
         raise DriveUnavailable(DRIVE_ACCOUNT_CHANGED)
     try:
         with write_transaction(conn):
-            outbox.complete_synced(
+            lane.outbox.complete_synced(
                 conn, **_fence(work), drive_file_id=str(remote.file_id), drive_parent_id=placement.parent_id,
                 drive_account_key=drive.account_key, now=_now(),
             )
     except CustodyError as exc:
         if exc.code == outbox.DRIVE_ACCOUNT_MISMATCH:
             # Bound to another account meanwhile: the lease is still ours -- hand it back.
-            _record(conn, result, work, _DEFER, DRIVE_ACCOUNT_UNAVAILABLE)
+            _record(conn, lane, result, work, _DEFER, DRIVE_ACCOUNT_UNAVAILABLE)
             return
         if exc.code != outbox.MIRROR_LEASE_LOST:
             raise
@@ -447,46 +525,54 @@ def _mirror_one(conn, store, drive: ActiveDrive, folders, work: outbox.MirrorWor
 def run_mirror_pass(
     conn,
     *,
+    provider: str = "google",
     limit: int = DEFAULT_BATCH,
     lease_seconds: int = outbox.DEFAULT_LEASE_SECONDS,
 ) -> MirrorPassResult:
-    """Run ONE bounded mirror pass; see the module docstring.
+    """Run ONE bounded mirror pass for ``provider``; see the module docstring.
 
     An item failure is classified and recorded, never raised.  A database
     failure propagates and leaves the health row started-but-unfinished --
-    the durable trace of an interrupted pass.
+    the durable trace of an interrupted pass.  The singleton health row
+    describes the Google pass; a OneDrive pass reports its result only.
     """
+    lane = _lane(provider)
     custody_common.positive_limit(limit, outbox.MAX_CLAIM_BATCH)
     if not LEASE_SAFETY_SECONDS < lease_seconds <= outbox.MAX_LEASE_SECONDS:
         raise ValueError(f"lease_seconds must be {LEASE_SAFETY_SECONDS + 1}..{outbox.MAX_LEASE_SECONDS}")
-    with write_transaction(conn):
-        outbox.record_worker_started(conn, now=_now())
-    result = _pass(conn, limit=limit, lease_seconds=lease_seconds)
-    with write_transaction(conn):
-        outbox.record_worker_finished(
-            conn, now=_now(), result_code=result.result_code, claimed=result.claimed,
-            synced=result.synced, retried=result.retried,
-        )
-    logger.info("drive mirror pass: %s", result.as_dict())
+    if lane.records_health:
+        with write_transaction(conn):
+            outbox.record_worker_started(conn, now=_now())
+    result = _pass(conn, lane, limit=limit, lease_seconds=lease_seconds)
+    if lane.records_health:
+        with write_transaction(conn):
+            outbox.record_worker_finished(
+                conn, now=_now(), result_code=result.result_code, claimed=result.claimed,
+                synced=result.synced, retried=result.retried,
+            )
+    logger.info("drive mirror pass (%s): %s", provider, result.as_dict())
     return result
 
 
-def _pass(conn, *, limit: int, lease_seconds: int) -> MirrorPassResult:
+def _pass(conn, lane: _Lane, *, limit: int, lease_seconds: int) -> MirrorPassResult:
     result = MirrorPassResult()
+    if lane.outbox is copy_registry and not copy_registry.prepare(conn, now=_now()):
+        result.result_code = copy_registry.REGISTRY_UNAVAILABLE
+        return result
     try:
         store = request_documents.canonical_store()
     except CanonicalStoreError as exc:
         result.result_code = exc.code
         return result
     try:
-        drive = active_drive(conn)
+        drive = active_drive(conn, lane.provider)
     except DriveUnavailable as exc:
         result.result_code = exc.code
         return result
     with write_transaction(conn):
         now = _now()
-        result.released = outbox.release_expired_leases(conn, now=now, limit=outbox.MAX_CLAIM_BATCH)
-        claimed = outbox.claim_due_mirror_work(
+        result.released = lane.outbox.release_expired_leases(conn, now=now, limit=outbox.MAX_CLAIM_BATCH)
+        claimed = lane.outbox.claim_due_mirror_work(
             conn, limit=limit, worker_token=custody_common.new_lease_token(), now=now,
             lease_seconds=lease_seconds,
         )
@@ -494,7 +580,7 @@ def _pass(conn, *, limit: int, lease_seconds: int) -> MirrorPassResult:
     folders = _FolderMemo(drive.storage)
     for index, work in enumerate(claimed):
         try:
-            _mirror_one(conn, store, drive, folders, work, result)
+            _mirror_one(conn, lane, store, drive, folders, work, result)
             continue
         except Exception as exc:  # per-item isolation: classified and recorded below
             if classify_database_error(exc) is not None:
@@ -502,11 +588,11 @@ def _pass(conn, *, limit: int, lease_seconds: int) -> MirrorPassResult:
             outcome, code = _classify(exc)
             if code == MIRROR_UNEXPECTED_ERROR:
                 logger.error("drive mirror: object %s failed (%s)", work.object_id, type(exc).__name__)
-        _record(conn, result, work, outcome, code)
+        _record(conn, lane, result, work, outcome, code)
         if outcome == _DEFER:
             # The credential is unusable for every remaining object too.
             for remaining in claimed[index + 1:]:
-                _record(conn, result, remaining, _DEFER, code)
+                _record(conn, lane, result, remaining, _DEFER, code)
             result.result_code = code
             break
     return result
@@ -518,6 +604,7 @@ __all__ = [
     "DriveUnavailable",
     "MAX_ATTEMPTS",
     "MirrorPassResult",
+    "PROVIDERS",
     "Placement",
     "active_drive",
     "backoff_seconds",

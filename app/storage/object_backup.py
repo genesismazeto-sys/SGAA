@@ -20,9 +20,11 @@ the set's confidentiality and tamper-resistance are the storage's job.
 
 GUARANTEES
     * ``backup`` only READS: every object is read back through the verified read
-      (size and SHA-256 against the database row), each from its recorded bucket.
-      Any unreadable object aborts the backup and no set is promoted, so a
-      promoted set is always complete.
+      (size and SHA-256 against the database row), each from its recorded bucket
+      -- or, once its Supabase staging copy was released (``copy_registry``), from
+      a verified Google Drive / OneDrive copy (``document_copies``).  Any
+      unreadable object aborts the backup and no set is promoted, so a promoted
+      set is always complete.
     * A set is written to a staging directory and promoted by rename only when
       complete; an existing destination is never replaced; a destination inside
       the repository -- by its path or through a link or junction -- is refused.
@@ -58,7 +60,9 @@ from app.prod1_storage_ddl import (
     BUSINESS_DOCUMENT_MIME_TYPES,
     LIFECYCLE_STATES,
 )
+from app.storage import copy_registry
 from app.storage import custody_common
+from app.storage import document_copies
 from app.storage.object_store import (
     STORAGE_ALREADY_EXISTS,
     STORAGE_INTEGRITY_MISMATCH,
@@ -342,6 +346,8 @@ def backup(
     target = _resolve_destination(destination, repo_root or _REPO_ROOT)
     source = backup_source(conn, store)
     rows = current_rows(conn)
+    released = {object_id: document_copies.verified_copies(conn, object_id)
+                for object_id in copy_registry.released_object_ids(conn)}
     # The rows are a read-only snapshot: end the read transaction now so a long copy never
     # holds a lock on ``storage_objects`` (PostgreSQL keeps ACCESS SHARE until it ends).
     conn.rollback()
@@ -366,11 +372,17 @@ def backup(
         failures: dict[str, list[int]] = {}
         for row in rows:
             try:
-                content, _stat = read_verified(
-                    store, row["bucket"], row["key"], expected_size=row["size"],
-                    expected_sha256=row["sha256"], max_bytes=BUSINESS_DOCUMENT_MAX_BYTES,
-                )
-            except CanonicalStoreError as exc:
+                if row["id"] in released:
+                    content = document_copies.read_from_copies(
+                        conn, released[row["id"]], sha256=row["sha256"], size_bytes=row["size"]
+                    )
+                    conn.rollback()  # the credential reads end here too: no transaction spans the copy
+                else:
+                    content, _stat = read_verified(
+                        store, row["bucket"], row["key"], expected_size=row["size"],
+                        expected_sha256=row["sha256"], max_bytes=BUSINESS_DOCUMENT_MAX_BYTES,
+                    )
+            except (CanonicalStoreError, document_copies.CopyUnavailable) as exc:
                 failures.setdefault(exc.code, []).append(row["id"])
                 continue
             if row["sha256"] not in written:

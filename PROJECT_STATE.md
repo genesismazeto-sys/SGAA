@@ -30,11 +30,17 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
     Readiness: `python -m app.hosting_cli check [--database]`.
 - Storage:
   - images live in the database;
-  - Supabase Storage is canonical for new request documents and admin ARQUIVOS
-    (direct signed TUS);
-  - Google Drive is the asynchronous mirror, run by the operator CLI
-    `python -m app.storage.cli` (`mirror-run`, `mirror-requeue`) or by the
-    deployed authenticated scheduler front `app.storage.scheduler:application`.
+  - Supabase Storage receives new request documents and admin ARQUIVOS
+    (direct signed TUS) and is their staging copy and durable fallback;
+  - Google Drive and OneDrive hold the permanent copies, each mirrored
+    independently by the operator CLI `python -m app.storage.cli`
+    (`mirror-run [--provider onedrive]`, `mirror-requeue`) or by the deployed
+    authenticated scheduler front `app.storage.scheduler:application`, which
+    also releases a staging copy once every connected drive's copy is read back
+    and proven (`release-run`); reads then come from a verified drive copy.
+    The OneDrive copy and staging state live in `sgaa_ops` (PostgreSQL only);
+    documents uploaded before the activation keep their Supabase copy until the
+    operator's bounded `staging-backfill --apply` enrolls them.
     The backup endpoint is also called by Supabase Cron every 15 minutes;
     Vercel Hobby supplies the daily mirror and backup fallback.
   - the same CLI provides `census`, `verify` (cross-check of references,
