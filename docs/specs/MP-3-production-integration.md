@@ -407,8 +407,17 @@ Inputs the user supplies at gates (not decisions): hostname and DNS, the window 
 
 ### 10.2 Gates
 
-Gates. One explicit user message naming the gate id grants it; silence grants nothing. "P" touches
-PROD, "R" real data, "D" deployment, "G" Google, "B" backup of real data, "X" destructive.
+Gates. One explicit owner instruction authorizing a clearly identified gated
+operation is sufficient. An affirmative reply such as "autorizo" to a request
+that already identifies the gate and target is explicit authorization in that
+conversation context; the owner does not have to restate the technical gate id,
+commit SHA, or reference in a second message. A handoff may carry that request
+and reply to the executor. Never ask the owner to confirm the same authorized
+operation again merely because it crossed assistant sessions. Silence and
+ambiguous assent grant nothing. The executor still records the appropriate
+single-use grant and follows all ledger, backup and deployment checks.
+"P" touches PROD, "R" real data, "D" deployment, "G" Google,
+"B" backup of real data, "X" destructive.
 
 | Gate | Action | Reversal |
 |---|---|---|
