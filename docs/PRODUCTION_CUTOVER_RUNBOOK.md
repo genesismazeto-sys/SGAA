@@ -11,9 +11,19 @@ that would cost money is not performed; stop and say so.
 
 ## 0. Ground rules
 
-- **Gates.** A gate is one explicit user message naming its id. Record it with
-  `cutover_ledger grant` only after that message exists. A gate covers its state and its
-  resumptions, nothing else. After the point of no return, one further act has its own gate:
+- **Gates: one authorization, never a duplicate confirmation.** An explicit owner
+  instruction authorizing a specifically identified gated action is sufficient.
+  An affirmative reply (for example, "autorizo") to an immediately preceding
+  request that unambiguously names the gate, target commit and action is itself
+  the authorization: the owner does not need to repeat "GF1", a SHA or a reference
+  code. A handoff between assistants may carry the request and reply as evidence;
+  inability to see the earlier turn is not grounds to demand the same authorization
+  again when that evidence is provided. Never infer consent from silence or an
+  ambiguous request. Record the authorized gate with `cutover_ledger grant` once,
+  preserving the ledger's one-grant/one-deployment rule. A gate covers its state
+  and its resumptions, nothing else. This post-C13 clarification does not rewrite
+  the historical C0 runbook digest recorded in the ledger.
+  After the point of no return, one further act has its own gate:
   `GX2` (one message, granted once) authorizes the single cadence exception of A21 -- the
   exceptional C14 closure when a recorded cadence breach makes the plain contract unsatisfiable.
 - **Ledger.** Every transition goes through `python tools/cutover_ledger.py` in a directory
