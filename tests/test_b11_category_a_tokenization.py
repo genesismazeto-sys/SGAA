@@ -50,7 +50,9 @@ ROOT = Path(__file__).resolve().parents[1]
 TOKENS = (ROOT / "static/css/foundation/tokens.css").read_text(encoding="utf-8")
 
 # Measured after the third cohort (audit baseline was 498; cohorts: 459, 430).
-MAX_RAW_COLOURS = 291
+# RECT1: the student dashboard's days-bar ramp and inline colours became the
+# shared .progress.is-deadline meter and token classes, 291 -> 273.
+MAX_RAW_COLOURS = 273
 
 _HEX = r"#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b"
 _COLOUR = re.compile(rf"({_HEX}|(?:rgba?|hsla?)\([^)]*\))")

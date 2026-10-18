@@ -1,0 +1,27 @@
+{#- The Indeferir decision: return the request for correction (Devolvida) or
+    reject it for good (Indeferida). One dialog for the Requisições modal and
+    the processing page; static/js/rejection-decision.js opens it and reports
+    the choice, and each page then sends its own processing request with the
+    justification it already collected. Needs components/modal.css.
+    return_days is the configured return deadline (0: no deadline). -#}
+{% macro rejection_decision_dialog(return_days) %}
+<div id="rejection-decision-dialog" class="modal-overlay rejection-decision" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="rejection-decision-title" aria-describedby="rejection-decision-text">
+    <div class="modal-header">
+      <h3 id="rejection-decision-title"><i class="lucide" data-lucide="file-x" aria-hidden="true"></i> Indeferir requisição</h3>
+    </div>
+    <div class="modal-body" id="rejection-decision-text">
+      <p>Como esta requisição deve ser encerrada? A justificativa informada fica registrada nos dois casos.</p>
+      <ul>
+        <li><strong>Enviar para retificação:</strong> o aluno corrige e reenvia a requisição para nova análise{% if return_days and return_days > 0 %}, em até {{ return_days }} {{ 'dia' if return_days == 1 else 'dias' }}{% endif %}.</li>
+        <li><strong>Indeferir definitivamente:</strong> decisão final; o aluno não poderá mais alterar a requisição.</li>
+      </ul>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn" data-rejection-choice="">Cancelar</button>
+      <button type="button" class="btn btn-action-ghost btn-parcial" data-rejection-choice="Devolvida"><i class="lucide" data-lucide="undo-2" aria-hidden="true"></i><span class="btn-label">Enviar para retificação</span></button>
+      <button type="button" class="btn btn-action-ghost btn-indeferir" data-rejection-choice="Indeferida"><i class="lucide" data-lucide="x" aria-hidden="true"></i><span class="btn-label">Indeferir definitivamente</span></button>
+    </div>
+  </div>
+</div>
+{% endmacro %}

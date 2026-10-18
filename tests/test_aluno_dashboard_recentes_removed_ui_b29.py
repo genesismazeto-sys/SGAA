@@ -76,7 +76,7 @@ def _seed_one_of_each(client):
     with main.app.app_context():
         conn = main.get_db_connection()
         conn.execute(
-            "UPDATE requisicoes SET status='Indeferida', data_processamento=? WHERE nome_evento='B29 AEU'",
+            "UPDATE requisicoes SET status='Devolvida', data_processamento=? WHERE nome_evento='B29 AEU'",
             (datetime.date.today().strftime("%Y-%m-%d"),),
         )
         conn.commit()
@@ -122,14 +122,16 @@ def test_every_surviving_card_and_count_is_unchanged(env):
             html,
         )
     )
-    assert summary == {"Total de requisições": 2, "Deferidas": 0, "Indeferidas": 1, "Pendentes": 1, "Corrigíveis": 1}
+    # The AEU request is returned for correction (a Devolvida inside the
+    # deadline is what Corrigíveis counts; an Indeferida is final).
+    assert summary == {"Total de requisições": 2, "Deferidas": 0, "Indeferidas": 0, "Pendentes": 1, "Corrigíveis": 1}
     for heading in (
         "Para Retificar - Acadêmicas Complementares", "Para Retificar - Extensão Universitária",
         "Limitações - Acadêmicas Complementares", "Limitações - Extensão Universitária",
     ):
         assert heading in html, heading
     extension = html.split("Para Retificar - Extensão Universitária", 1)[1].split("</section>", 1)[0]
-    assert extension.count('class="corrigir-right-item"') == 1
+    assert extension.count('class="retificar-item"') == 1
     assert 'href="/aluno/requisicoes"' in html
     listing = client.get("/aluno/requisicoes")
     assert listing.status_code == 200

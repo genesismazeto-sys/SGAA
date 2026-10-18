@@ -73,12 +73,21 @@
 {% endblock %}
 {% block content %}
 {% set page_mode = mode or 'create' %}
-<h1 class="main-title">{{ 'Visualizar Requisição' if page_mode == 'view_readonly' else ('Editar Requisição' if page_mode == 'edit' else 'Nova Requisição') }}</h1>
+{#- A returned request inside its deadline: editing it is a rectification,
+    and saving resubmits it for analysis (app.student_request_edit). -#}
+{% set retificando = page_mode == 'edit' and retificacao %}
+<h1 class="main-title">{{ 'Visualizar Requisição' if page_mode == 'view_readonly' else ('Retificar Requisição' if retificando else ('Editar Requisição' if page_mode == 'edit' else 'Nova Requisição')) }}</h1>
 
 <form method="post" data-direct-upload{% if requisicao_id %} data-requisicao-id="{{ requisicao_id }}"{% endif %}>
   <input type="hidden" name="comprovantes_operation_id" value="{{ comprovantes_operation_id }}">
   <input type="hidden" name="comprovantes_submission_id" value="{{ comprovantes_submission_id }}">
   <div class="form-cards-narrow form-cards-narrow--gutter-wide">
+    {% if retificando %}
+    <div class="form-note form-note--guide" id="retificacao-orientacao" role="note">
+      <i class="lucide" data-lucide="undo-2" aria-hidden="true"></i>
+      <span><strong>Requisição devolvida para retificação.</strong> Motivo: {{ retificacao.motivo or '—' }}{% if retificacao.prazo %} Reenvie até {{ retificacao.prazo }}.{% endif %} Corrija o que for necessário; ao reenviar, a requisição volta para análise.</span>
+    </div>
+    {% endif %}
     {% set t = (tipo_atual or 'Acadêmica Complementar') %}
     <!-- Tipo da Atividade (topo) -->
     <div class="form-row">
@@ -223,17 +232,21 @@
 
     <!-- Observação no final, auto-grow com altura padrão -->
     <div class="form-row">
-      <label class="row-label">Observação (opcional)</label>
+      <label class="row-label">{{ 'Resposta (opcional)' if retificando else 'Observação (opcional)' }}</label>
       <div class="field-card">
         <div class="field-chip"><i class="lucide" data-lucide="message-square"></i></div>
-  <textarea class="control auto-grow" name="observacao" rows="1" placeholder="Digite uma observação se necessário" style="height: var(--btn-h);" {% if mode == 'view_readonly' %}readonly aria-readonly="true"{% endif %}>{{ (init.observacao if init and init.observacao is not none else '') }}</textarea>
+  <textarea class="control auto-grow" name="observacao" rows="1" placeholder="{{ 'Explique o que foi corrigido, se necessário' if retificando else 'Digite uma observação se necessário' }}" style="height: var(--btn-h);" {% if mode == 'view_readonly' %}readonly aria-readonly="true"{% endif %}>{{ (init.observacao if init and init.observacao is not none else '') }}</textarea>
       </div>
     </div>
 
     <div class="form-actions center">
   <a class="btn" href="{{ route_url('aluno_minhas_requisicoes', 'aluno.aluno_minhas_requisicoes') }}">Voltar</a>
   {% if page_mode != 'view_readonly' %}
+  {% if retificando %}
+  <button class="btn primary" type="submit"><i class="lucide" data-lucide="send"></i> Reenviar para análise</button>
+  {% else %}
   <button class="btn primary" type="submit"><i class="lucide" data-lucide="{{ 'save' if page_mode == 'edit' else 'send' }}"></i> {{ 'Atualizar' if page_mode == 'edit' else 'Enviar' }}</button>
+  {% endif %}
   {% endif %}
     </div>
   </div>

@@ -90,7 +90,7 @@ def test_requisition_processing_datetime_formats(raw, expected):
     assert requisition_policy._parse_optional_processing_datetime(raw) == expected
 
 
-def test_requisition_policy_status_and_fourteen_day_boundary(monkeypatch):
+def test_requisition_policy_status_and_configured_deadline_boundary(monkeypatch):
     class FrozenDateTime(datetime.datetime):
         current = datetime.datetime(2026, 7, 24, 12, 0, 0)
 
@@ -101,19 +101,30 @@ def test_requisition_policy_status_and_fourteen_day_boundary(monkeypatch):
 
     monkeypatch.setattr(requisition_policy.datetime, "datetime", FrozenDateTime)
 
+    # The window closes when now reaches processed + configured days -- the
+    # same boundary at which auto_indefer_devolvidas expires the request.
     cases = [
-        ("Pendente", None, True),
-        (" Pendente ", "malformed", True),
-        ("Devolvida", "2026-07-10 12:00:00", True),
-        ("Devolvida", "2026-07-10 11:59:59", False),
-        ("Devolvida", None, False),
-        ("Devolvida", "malformed", False),
-        ("Deferida", "2026-07-24 12:00:00", False),
-        (None, "2026-07-24 12:00:00", False),
+        ("Pendente", None, 14, True),
+        (" Pendente ", "malformed", 14, True),
+        ("Devolvida", "2026-07-10 12:00:01", 14, True),
+        ("Devolvida", "2026-07-10 12:00:00", 14, False),
+        ("Devolvida", "2026-07-10 11:59:59", 14, False),
+        ("Devolvida", "2026-07-21 12:00:01", 3, True),
+        ("Devolvida", "2026-07-21 12:00:00", 3, False),
+        ("Devolvida", "2020-01-01 00:00:00", 0, True),
+        ("Devolvida", None, 14, False),
+        ("Devolvida", "malformed", 0, False),
+        ("Indeferida", "2026-07-24 11:00:00", 14, False),
+        ("Deferida", "2026-07-24 12:00:00", 14, False),
+        (None, "2026-07-24 12:00:00", 14, False),
     ]
-    for status, processed_at, expected in cases:
-        assert requisition_policy.can_student_edit_requisition(status, processed_at) is expected
-        assert requisition_policy.can_student_delete_requisition(status, processed_at) is expected
+    for status, processed_at, days, expected in cases:
+        assert requisition_policy.can_student_edit_requisition(
+            status, processed_at, return_days=days
+        ) is expected
+        assert requisition_policy.can_student_delete_requisition(
+            status, processed_at, return_days=days
+        ) is expected
 
 
 def test_academic_defaults_and_turma_code_contract():

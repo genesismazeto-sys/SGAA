@@ -1,8 +1,10 @@
 """UI-B25: the student dashboard says "Para Retificar", not "Para Corrigir".
 
-Copy only: the two card headings over the retifiable requests (Indeferida,
-processed less than 30 days ago). Which requests appear, their count, the
-days-remaining bars and the link to Minhas requisições are unchanged.
+Copy only: the two card headings over the retifiable requests. Which requests
+appear is no longer UI-B25's 30-day Indeferida rule: they are the Devolvida
+requests inside the configured return deadline (default 7 days), each with its
+Retificar action; an Indeferida request is final and never listed
+(tests/test_request_rectification_flow.py owns that contract).
 """
 from __future__ import annotations
 
@@ -38,15 +40,20 @@ def test_dashboard_headings_say_para_retificar(client):
     assert "Para Corrigir" not in html and "para corrigir" not in html.lower()
 
 
-def test_retifiable_request_count_list_and_link_are_unchanged(client):
+def test_retifiable_request_count_list_and_link(client):
     login_admin(client)
     _response, created = create_admin_request(client, name="Retificar B25")
-    today = datetime.date.today().strftime("%Y-%m-%d")
+    _response, rejected = create_admin_request(client, name="Indeferida B25")
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with main.app.app_context():
         conn = main.get_db_connection()
         conn.execute(
+            "UPDATE requisicoes SET status='Devolvida', data_processamento=? WHERE id=?",
+            (now, created["id"]),
+        )
+        conn.execute(
             "UPDATE requisicoes SET status='Indeferida', data_processamento=? WHERE id=?",
-            (today, created["id"]),
+            (now, rejected["id"]),
         )
         conn.commit()
     with client.session_transaction() as session:
@@ -58,8 +65,10 @@ def test_retifiable_request_count_list_and_link_are_unchanged(client):
     assert kpi and kpi.group(1) == "1"
     academic = _block(html, "Para Retificar - Acadêmicas Complementares")
     extension = _block(html, "Para Retificar - Extensão Universitária")
-    assert academic.count('class="corrigir-right-item"') == 1
-    assert ">30/30<" in academic
+    assert academic.count('class="retificar-item"') == 1
+    assert ">7/7<" in academic
+    assert f'href="/aluno/requisicoes/{created["id"]}?edit=1"' in academic
+    assert f'/aluno/requisicoes/{rejected["id"]}?edit=1' not in html
     assert "Nenhuma requisição corrigível de extensão." in extension
     for block in (academic, extension):
         assert 'href="/aluno/requisicoes"' in block

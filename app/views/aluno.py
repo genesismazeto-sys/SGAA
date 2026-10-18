@@ -66,7 +66,17 @@ from app.versioning.request_limits import (
 )
 from app.presentation import _format_bytes_label, format_date_ptbr, format_semester_label
 from app.reporting import REPORTE_CATEGORY_OPTIONS
-from app.requisition_policy import can_student_delete_requisition, can_student_edit_requisition
+from app.requisition_policy import (
+    can_student_delete_requisition,
+    can_student_edit_requisition,
+    open_return_window,
+)
+from app.settings import get_return_response_days
+from app.student_request_edit import (
+    StudentEditConflict,
+    StudentRequestEdit,
+    save_student_request_edit,
+)
 from app.security.passwords import hash_password
 from app.user_accounts import (
     CREDENTIAL_STATE_PERSONAL,
@@ -687,37 +697,22 @@ def aluno_dashboard():
     pendentes_ext = sum(1 for req in requisicoes if req["status"] == "Pendente" and req["tipo_atividade"] == "Extensão Universitária")
 
     hoje = datetime.date.today()
+    # Para Retificar lists exactly the requests the edit route accepts: a
+    # Devolvida request inside its return window (app.requisition_policy).
+    return_days = get_return_response_days(conn)
     corrigiveis_lista = []
     for req in requisicoes:
-        if req["status"] != "Indeferida":
+        janela = open_return_window(req["status"], req["data_processamento"], return_days)
+        if janela is None:
             continue
-        dp_raw = req["data_processamento"]
-        if not dp_raw:
-            continue
-        try:
-            if len(dp_raw) > 10:
-                dp_date = datetime.datetime.strptime(dp_raw[:19], "%Y-%m-%d %H:%M:%S").date()
-            else:
-                dp_date = datetime.datetime.strptime(dp_raw, "%Y-%m-%d").date()
-        except Exception:
-            try:
-                dp_date = datetime.datetime.strptime(dp_raw[:10], "%Y-%m-%d").date()
-            except Exception:
-                dp_date = None
-        if not dp_date:
-            continue
-        dias_passados = (hoje - dp_date).days
-        dias_restantes = 30 - dias_passados
-        if dias_restantes <= 0:
-            continue
-        data_expira = (dp_date + datetime.timedelta(days=30)).strftime("%d/%m/%Y")
         corrigiveis_lista.append(
             {
                 "id": req["id"],
                 "nome": req["atividade_nome"],
                 "tipo_atividade": req["tipo_atividade"],
-                "dias_restantes": dias_restantes,
-                "data_expira": data_expira,
+                "dias_restantes": janela.remaining_days,
+                "dias_total": janela.total_days,
+                "data_expira": janela.deadline.strftime("%d/%m/%Y") if janela.deadline else None,
             }
         )
 
@@ -728,13 +723,17 @@ def aluno_dashboard():
     aprov_pct = (deferidas / total_reqs * 100.0) if total_reqs else 0.0
     pend_pct = (pendentes / total_reqs * 100.0) if total_reqs else 0.0
 
+    # Most urgent first; requests without a deadline (0 days configured) last.
+    def _urgencia(item):
+        return (item["dias_restantes"] is None, item["dias_restantes"] or 0)
+
     corrigiveis_acad = sorted(
         [item for item in corrigiveis_lista if item["tipo_atividade"] == "Acadêmica Complementar"],
-        key=lambda item: item["dias_restantes"],
+        key=_urgencia,
     )
     corrigiveis_ext = sorted(
         [item for item in corrigiveis_lista if item["tipo_atividade"] == "Extensão Universitária"],
-        key=lambda item: item["dias_restantes"],
+        key=_urgencia,
     )
 
     # Canonical limitation authority: one line per Activity rule, never per
@@ -1474,6 +1473,7 @@ def aluno_minhas_requisicoes():
     if apply_limit:
         selected_rows = selected_rows[offset : offset + per_page]
 
+    return_days = get_return_response_days(conn)
     requisicoes = []
     for r, history in selected_rows:
         versao_row = None
@@ -1501,8 +1501,12 @@ def aluno_minhas_requisicoes():
                 "tipo_atividade": history.tipo_atividade,
                 "grupo": history.grupo,
                 "snapshot": snapshot_display,
-                "can_edit": can_student_edit_requisition(r["status"], r["data_processamento"]),
-                "can_delete": can_student_delete_requisition(r["status"], r["data_processamento"]),
+                "can_edit": can_student_edit_requisition(
+                    r["status"], r["data_processamento"], return_days=return_days
+                ),
+                "can_delete": can_student_delete_requisition(
+                    r["status"], r["data_processamento"], return_days=return_days
+                ),
             }
         )
 
@@ -1815,6 +1819,14 @@ def aluno_nova_requisicao():
     ), response_status
 
 
+def _flash_edit_closed() -> None:
+    flash(
+        "Esta requisição não pode ser editada: a edição só é permitida enquanto "
+        "ela está pendente ou devolvida para retificação, dentro do prazo.",
+        "error",
+    )
+
+
 @bp_aluno.route("/aluno/requisicoes/<int:req_id>", methods=["GET", "POST"])
 @aluno_required
 def aluno_requisicao_detalhe(req_id: int):
@@ -1826,6 +1838,7 @@ def aluno_requisicao_detalhe(req_id: int):
         return redirect(_aluno_url("aluno_dashboard"))
     aluno_id = arow["id"]
 
+    return_days = get_return_response_days(conn)
     delete_flag = (request.args.get("delete") or "").strip() == "1"
     if request.method == "POST" and delete_flag:
         row = conn.execute(
@@ -1835,7 +1848,9 @@ def aluno_requisicao_detalhe(req_id: int):
         if not row:
             flash("Requisição não encontrada ou não pertence ao aluno.", "error")
             return redirect(_aluno_url("aluno_minhas_requisicoes"))
-        if not can_student_delete_requisition(row["status"], row["data_processamento"]):
+        if not can_student_delete_requisition(
+            row["status"], row["data_processamento"], return_days=return_days
+        ):
             flash("Essa requisição não pode ser excluída. Apenas visualização disponível.", "error")
             return redirect(_aluno_url("aluno_requisicao_detalhe", req_id=req_id, view=1))
 
@@ -1851,19 +1866,17 @@ def aluno_requisicao_detalhe(req_id: int):
 
     if request.method == "POST" and not delete_flag:
         rec = conn.execute(
-            "SELECT status, data_processamento, atividade_versao_id, regra_snapshot_json "
+            "SELECT status, data_processamento, observacao, atividade_versao_id, regra_snapshot_json "
             "FROM requisicoes WHERE id=? AND aluno_id=?",
             (req_id, aluno_id),
         ).fetchone()
         if not rec:
             flash("Requisição não encontrada.", "error")
             return redirect(_aluno_url("aluno_minhas_requisicoes"))
-        can_edit = can_student_edit_requisition(rec["status"], rec["data_processamento"])
-        if not can_edit:
-            flash(
-                "Edição só permitida enquanto Pendente ou Devolvida (até 14 dias).",
-                "error",
-            )
+        if not can_student_edit_requisition(
+            rec["status"], rec["data_processamento"], return_days=return_days
+        ):
+            _flash_edit_closed()
             return redirect(_aluno_url("aluno_requisicao_detalhe", req_id=req_id))
 
         nome_evento = request.form.get("nome_evento")
@@ -1920,26 +1933,11 @@ def aluno_requisicao_detalhe(req_id: int):
 
         # UI-C09 (student sibling): an omitted `observacao` keeps the stored
         # one; only a submitted field is written (submitted empty clears it).
-        if "observacao" in request.form:
-            set_parts = ["observacao = ?"]
-            params: list[Any] = [observacao]
-        else:
-            set_parts = ["observacao = observacao"]
-            params = []
-        if nome_evento is not None:
-            set_parts.append("nome_evento = ?")
-            params.append(nome_evento)
-        if horas_solicitadas is not None:
-            set_parts.append("horas_solicitadas = ?")
-            params.append(horas_solicitadas)
-        if data_evento_norm:
-            set_parts.append("data_evento = ?")
-            params.append(data_evento_norm)
-        params.extend([req_id, aluno_id])
-        sql = (
-            "UPDATE requisicoes SET "
-            + ", ".join(set_parts)
-            + " WHERE id = ? AND aluno_id = ?"
+        edit = StudentRequestEdit(
+            nome_evento=nome_evento,
+            horas_solicitadas=horas_solicitadas,
+            data_evento=data_evento_norm,
+            observacao=observacao if "observacao" in request.form else None,
         )
         if documents.has_file_parts(request.files):
             flash(DIRECT_UPLOAD_REQUIRED_MESSAGE, "error")
@@ -1961,9 +1959,18 @@ def aluno_requisicao_detalhe(req_id: int):
                 raise documents.RequestDocumentError(
                     "SUBMISSION_INVALID", DIRECT_UPLOAD_REQUIRED_MESSAGE, 403
                 )
-            # The field update and every canonical attachment commit together.
+            # The field update (or resubmission) and every canonical
+            # attachment commit together.
             with write_transaction(conn):
-                conn.execute(sql, tuple(params))
+                resubmitted = save_student_request_edit(
+                    conn,
+                    request_id=req_id,
+                    aluno_id=aluno_id,
+                    status=rec["status"],
+                    data_processamento=rec["data_processamento"],
+                    stored_observacao=rec["observacao"],
+                    edit=edit,
+                )
                 documents.attach_request_documents(
                     conn,
                     actor_user_id=actor_id,
@@ -1972,7 +1979,10 @@ def aluno_requisicao_detalhe(req_id: int):
                     intent_ids=intent_ids,
                     create=False,
                 )
-            flash("Requisição atualizada.", "success")
+            if resubmitted:
+                flash("Requisição reenviada para análise.", "success")
+            else:
+                flash("Requisição atualizada.", "success")
             # Removal runs after the committed edit: a failed LEGACY Drive
             # removal keeps those files and never undoes the edit above.
             try:
@@ -1984,6 +1994,9 @@ def aluno_requisicao_detalhe(req_id: int):
                 )
             except ComprovanteError as exc:
                 flash(exc.user_message, "error")
+        except StudentEditConflict:
+            conn.rollback()
+            _flash_edit_closed()
         except (ComprovanteError, documents.RequestDocumentError) as exc:
             conn.rollback()
             flash(exc.user_message, "error")
@@ -2048,6 +2061,19 @@ def aluno_requisicao_detalhe(req_id: int):
 
     edit_flag = (request.args.get("edit") or "").strip().lower() in {"1", "true", "yes", "y"}
     view_flag = (request.args.get("view") or "").strip().lower() in {"1", "true", "yes", "y"}
+    # The edit form is offered only where the POST would accept it.
+    if edit_flag and not view_flag and not can_student_edit_requisition(
+        row["status"], row["data_processamento"], return_days=return_days
+    ):
+        _flash_edit_closed()
+        return redirect(_aluno_url("aluno_requisicao_detalhe", req_id=req_id, view=1))
+    janela = open_return_window(row["status"], row["data_processamento"], return_days)
+    retificacao = None
+    if janela is not None:
+        retificacao = {
+            "motivo": row["observacao"] or "",
+            "prazo": janela.deadline.strftime("%d/%m/%Y às %H:%M") if janela.deadline else None,
+        }
     if edit_flag or view_flag:
         tipo_filtro = detalhe["tipo_atividade"] or "Acadêmica Complementar"
         _, _, atividades = _list_atividades_for_usuario(
@@ -2083,7 +2109,9 @@ def aluno_requisicao_detalhe(req_id: int):
             "nome_evento": row["nome_evento"],
             "horas_solicitadas": detalhe["horas_solicitadas"],
             "data_evento": data_iso10,
-            "observacao": detalhe["observacao"],
+            # Rectifying, the field is the student's reply: the stored text is
+            # the administrator's reason, shown above the form and kept on save.
+            "observacao": "" if retificacao and not view_flag else detalhe["observacao"],
         }
         return render_template(
             "aluno_nova_requisicao.html",
@@ -2092,6 +2120,7 @@ def aluno_requisicao_detalhe(req_id: int):
             mode=("view_readonly" if view_flag else "edit"),
             init=init,
             anexos=anexos,
+            retificacao=(None if view_flag else retificacao),
             comprovantes_operation_id=new_comprovante_operation_id(),
             comprovantes_submission_id=documents.issue_submission(session, user_id),
             requisicao_id=(req_id if edit_flag else None),
@@ -2100,6 +2129,7 @@ def aluno_requisicao_detalhe(req_id: int):
     return render_template(
         "aluno_requisicao_detalhe.html",
         r=detalhe,
+        retificacao=retificacao,
         anexos=anexos,
         comprovantes_operation_id=new_comprovante_operation_id(),
         comprovantes_submission_id=documents.issue_submission(session, user_id),

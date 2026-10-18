@@ -411,6 +411,13 @@ def test_standalone_partial_needs_its_hours_and_the_other_decisions_still_submit
             session.requests.clear()
             session.click(".process-form-actions [type=submit]")
             session.pump(1.0)
+            if status == "Indeferida":
+                # Indeferir first asks: correction or definitive rejection
+                # (tests/test_request_rectification_flow.py); nothing is sent yet.
+                assert [p for m, p, _b in session.requests if m == "POST"] == []
+                session.wait_for("!document.getElementById('rejection-decision-dialog').hidden")
+                session.click("#rejection-decision-dialog [data-rejection-choice='Indeferida']")
+                session.pump(1.0)
             posts = [parse_qs(b) for m, p, b in session.requests if m == "POST"]
             assert len(posts) == 1 and posts[0]["status"] == [status] and "horas_deferidas" not in posts[0], posts
             assert _sql("SELECT status FROM requisicoes WHERE id=?", (row["id"],))[0][0] == status

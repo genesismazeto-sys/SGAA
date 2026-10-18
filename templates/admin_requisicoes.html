@@ -1,4 +1,5 @@
 {% from 'components/pagination.html' import paginate %}
+{% from 'components/rejection_decision_dialog.html' import rejection_decision_dialog %}
 {% import 'components/card_list.html' as cl %}
 {% extends "base.html" %}
 {% block title %}Requisições{% endblock %}
@@ -918,6 +919,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 <script src="{{ url_for('static', filename='js/toolbar-filters.js') }}"></script>
 <script src="{{ url_for('static', filename='vendor/tus-js-client-4.3.1.min.js', v=static_asset_version) }}" defer></script>
 <script src="{{ url_for('static', filename='js/direct-upload.js', v=static_asset_version) }}" defer></script>
+<script src="{{ url_for('static', filename='js/rejection-decision.js', v=static_asset_version) }}" defer></script>
 <script>
   (function(){
     const canRequisicoesEdit = {{ 'true' if can_requisicoes_edit else 'false' }};
@@ -1415,6 +1417,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     </div>
   </div>
 </div>
+{{ rejection_decision_dialog(return_response_days) }}
 
 <script>
   // NOTE: this block injects a stylesheet at runtime. The shared modal core it
@@ -2407,6 +2410,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
       }
       if (status === 'Devolvida' && !j){ preparePanelFor('indeferir'); return; }
       if (j) params.set('observacao', j);
+      if (pendingAction === 'indeferir'){
+        // Indeferir always asks: back to the student for correction, or a
+        // definitive rejection. Cancelled (or no dialog), nothing is sent.
+        const outcome = await window.chooseRejectionOutcome?.();
+        if (outcome !== 'Devolvida' && outcome !== 'Indeferida') return;
+        params.set('status', outcome);
+      }
       try{
         const headers = { 'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8' };
         const csrfToken = window.getCsrfToken?.() || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';

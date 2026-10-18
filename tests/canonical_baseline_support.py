@@ -243,6 +243,19 @@ CATALOG_LEDGER: tuple[tuple[str, int], ...] = (
         "de conferir os dados atuais.' (msg_4ac08965a1fb60d7). 9 additions, 0 retirements",
         9,
     ),
+    (
+        "RECT1 return for correction vs. definitive rejection: Indeferir now "
+        "requires a justification for both outcomes, 'Informe a justificativa "
+        "para indeferir ou devolver a requisição.' (msg_577eecb81332c912); a "
+        "returned request is resubmitted by the student, 'Requisição reenviada "
+        "para análise.' (msg_df5db57d051a2ba2); and the edit refusal no longer "
+        "states a fixed 14-day window, so 'Edição só permitida enquanto "
+        "Pendente ou Devolvida (até 14 dias).' (msg_4626c63900eb164d) retires "
+        "in favour of 'Esta requisição não pode ser editada: a edição só é "
+        "permitida enquanto ela está pendente ou devolvida para retificação, "
+        "dentro do prazo.' (msg_cc975510ad5a59b4). 3 additions, 1 retirement",
+        2,
+    ),
 )
 
 # Everything before the UT-MX3 term is MX3's exact parent state. Anchored on
@@ -290,9 +303,10 @@ PARENT_CATALOG_KEYS_SHA256 = (
 # request-flow Google Drive flash, to 580; MP-3 A19 restores "Gerar backup agora"
 # under PostgreSQL with its five outcome messages and "Recuperar banco de dados"
 # with its one success message, and the R3 review's CSV warning and policy refusal, to 588; the rereview's
-# uncertain-restore warning, to 589.
+# uncertain-restore warning, to 589; RECT1 (three additions, one retirement),
+# to 591.
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "ff4b446891a6ca6c35fcea7f4d22f5eb0057b50d76cfa50359f8b0aec6da98fd"
+    "0abcfbdb792a6d696079e3a2fc2a57d3e19b1aadab764629c01c376518482872"
 )
 
 # Named post-MX3 key sets.  Suites that reconstruct UT-MX3's parent state have
@@ -846,10 +860,36 @@ A19_BACKUP_NOW_KEYS = frozenset(
 def catalog_keys_before_a19_backup_now(keys) -> set[str]:
     """Undo the MP-3 A19 term: drop the PostgreSQL "Gerar backup agora" and restore outcomes.
 
-    A19 is the newest term, so a reconstruction walks back through this first,
-    then S3-A, U5-E, U5-B and every older term.
+    A reconstruction walks back through RECT1 first, then this, then S3-A,
+    U5-E, U5-B and every older term.
     """
     return set(keys) - set(A19_BACKUP_NOW_KEYS)
+
+
+# RECT1 return for correction vs. definitive rejection (net +2).
+RECT1_REQUEST_RECTIFICATION_KEYS = frozenset(
+    {
+        "msg_577eecb81332c912",  # Informe a justificativa para indeferir ou devolver a requisição.
+        "msg_df5db57d051a2ba2",  # Requisição reenviada para análise.
+        "msg_cc975510ad5a59b4",  # Esta requisição não pode ser editada: ...
+    }
+)
+RECT1_REQUEST_RECTIFICATION_RETIRED_KEYS = frozenset(
+    {
+        "msg_4626c63900eb164d",  # Edição só permitida enquanto Pendente ou Devolvida (até 14 dias).
+    }
+)
+
+
+def catalog_keys_before_request_rectification(keys) -> set[str]:
+    """Undo the RECT1 term: drop its three keys, put the 14-day refusal back.
+
+    RECT1 is the newest term, so a reconstruction walks back through this
+    first, then A19, S3-A, U5-E, U5-B and every older term.
+    """
+    return (set(keys) - set(RECT1_REQUEST_RECTIFICATION_KEYS)) | set(
+        RECT1_REQUEST_RECTIFICATION_RETIRED_KEYS
+    )
 
 
 def catalog_keys_before_s3a_direct_documents(keys) -> set[str]:

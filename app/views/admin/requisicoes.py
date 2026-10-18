@@ -45,6 +45,7 @@ from app.request_email_notifications import (
     supersede_pending_event,
 )
 from app.requisitions import auto_indefer_devolvidas
+from app.settings import get_return_response_days
 from app.student_matrix import get_allowed_activity_version_ids_for_student
 from app.sql_dialect import date_compare, human_text_order
 from app.storage.contracts import StorageError
@@ -689,6 +690,7 @@ def admin_requisicoes():
         email_pendentes=email_pendentes,
         email_falhas=email_falhas,
         email_placeholder_help=PLACEHOLDER_HELP,
+        return_response_days=get_return_response_days(conn),
     )
 
 
@@ -1181,6 +1183,7 @@ def admin_processar_requisicao(req_id):
             anexos=anexos,
             snapshot_diag=snapshot_diag,
             snapshot_display_enabled=snapshot_display_enabled,
+            return_response_days=get_return_response_days(conn),
         )
 
     if request.method == "POST":
@@ -1200,6 +1203,12 @@ def admin_processar_requisicao(req_id):
 
         if status not in allowed_statuses:
             flash("Status de processamento inválido.", "error")
+            return redirect(url_for("admin_processar_requisicao", req_id=req_id))
+
+        # Both outcomes of Indeferir -- definitive rejection and return for
+        # correction -- tell the student why.
+        if status in ("Indeferida", "Devolvida") and not str(observacao or "").strip():
+            flash("Informe a justificativa para indeferir ou devolver a requisição.", "error")
             return redirect(url_for("admin_processar_requisicao", req_id=req_id))
 
         if status == "Deferida Parcialmente" and (horas_deferidas is None or str(horas_deferidas).strip() == ""):
@@ -1333,9 +1342,10 @@ def admin_processar_requisicao(req_id):
             record_final_decision_event(
                 conn, requisicao_id=req_id, decided_at=data_processamento
             )
-        elif status == "Pendente":
-            # Reabrir: the decision awaiting communication no longer describes
-            # reality. Already-sent history is untouched.
+        elif status in ("Pendente", "Devolvida"):
+            # Reabrir, or a return for correction: the decision awaiting
+            # communication no longer describes reality -- a returned request
+            # is never a final rejection. Already-sent history is untouched.
             supersede_pending_event(conn, requisicao_id=req_id)
 
         conn.commit()
@@ -1348,6 +1358,7 @@ def admin_processar_requisicao(req_id):
         anexos=anexos,
         snapshot_diag=snapshot_diag,
         snapshot_display_enabled=snapshot_display_enabled,
+        return_response_days=get_return_response_days(conn),
     )
 
 

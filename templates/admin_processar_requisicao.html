@@ -1,5 +1,9 @@
+{% from 'components/rejection_decision_dialog.html' import rejection_decision_dialog %}
 {% extends "base.html" %}
 {% block title %}Processar Requisição #{{ requisicao.id }}{% endblock %}
+{% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/modal.css') }}">
+{% endblock %}
 
 {% block content %}
 <h1 class="main-title">Processar Requisição #{{ requisicao.id }}</h1>
@@ -102,7 +106,7 @@
     {% endif %}
   </div>
 
-  <form method="post" class="form-grid">
+  <form method="post" class="form-grid" id="process-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="status" id="status-hidden" required />
 
@@ -131,7 +135,7 @@
 
     <label>
       <div class="help">Observação</div>
-      <textarea class="input" name="observacao" rows="3" placeholder="Comentário opcional...">{{ requisicao.observacao or '' }}</textarea>
+      <textarea class="input" name="observacao" id="process-observacao" rows="3" placeholder="Comentário opcional...">{{ requisicao.observacao or '' }}</textarea>
     </label>
 
     <!-- Botões de confirmação (process-form-actions) -->
@@ -141,7 +145,9 @@
     </div>
   </form>
 </div>
+{{ rejection_decision_dialog(return_response_days) }}
 
+<script src="{{ url_for('static', filename='js/rejection-decision.js', v=static_asset_version) }}"></script>
 <script>
   function selectStatus(btn) {
     const status = btn.getAttribute('data-process-status') || '';
@@ -157,7 +163,27 @@
       horasInput.required = parcial;
       if (!parcial) horasInput.value = '';
     }
+    // Indeferir requires a justification, whichever outcome is chosen next.
+    const observacao = document.getElementById('process-observacao');
+    if (observacao) observacao.required = status === 'Indeferida';
   }
+
+  // Indeferir asks, before anything is sent, whether the request goes back
+  // to the student for correction (Devolvida) or is rejected for good.
+  document.getElementById('process-form')?.addEventListener('submit', async (event) => {
+    const form = event.currentTarget;
+    const statusInput = document.getElementById('status-hidden');
+    if (!statusInput || statusInput.value !== 'Indeferida') return;
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    const outcome = await window.chooseRejectionOutcome?.();
+    if (outcome !== 'Devolvida' && outcome !== 'Indeferida') return;
+    statusInput.value = outcome;
+    // form.submit() fires no submit event, so this handler does not run again.
+    form.submit();
+    // A cancelled navigation (or the back button) must find Indeferir again.
+    statusInput.value = 'Indeferida';
+  });
 </script>
 {% endblock %}
 

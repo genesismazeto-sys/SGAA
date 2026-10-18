@@ -193,7 +193,11 @@ def test_rejection_is_never_limited(env):
     today = _current_semester_date()
     _approve_direct(_create_request(client, student["aluno_id"], SEMESTER_V, "Fill", today, 20)["id"])
     row = _create_request(client, student["aluno_id"], SEMESTER_V, "Reject me", today, 5)
-    _process(client, row["id"], status="Indeferida")
+    # A rejection carries its justification (required for Indeferida/Devolvida).
+    client.post(
+        f"/admin/processar_requisicao/{row['id']}",
+        data={"status": "Indeferida", "observacao": "Limite irrelevante para indeferir."},
+    )
     assert _status(row["id"]) == "Indeferida"
 
 

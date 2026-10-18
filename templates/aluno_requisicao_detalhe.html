@@ -85,6 +85,16 @@
           <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i> Atualizar</button>
         </div>
       </form>
+    {% elif retificacao %}
+      <div>
+        <div class="help">Motivo da devolução</div>
+        <div>{{ retificacao.motivo or '—' }}</div>
+      </div>
+      <div class="help">{% if retificacao.prazo %}Retifique e reenvie até {{ retificacao.prazo }}.{% else %}Retifique e reenvie para que a requisição volte para análise.{% endif %}</div>
+      <div class="form-actions">
+        <a class="btn" href="{{ request.args.get('return_to') or route_url('aluno_minhas_requisicoes', 'aluno.aluno_minhas_requisicoes') }}">Voltar</a>
+        <a class="btn primary" href="{{ route_url('aluno_requisicao_detalhe', 'aluno.aluno_requisicao_detalhe', req_id=r.id, edit=1) }}"><i class="lucide" data-lucide="pencil-line" aria-hidden="true"></i><span class="btn-label">Retificar</span></a>
+      </div>
     {% else %}
       <div>
         <div class="help">Observação</div>

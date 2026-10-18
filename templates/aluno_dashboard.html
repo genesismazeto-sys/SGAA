@@ -46,6 +46,7 @@
       color:#b45309;
       box-shadow:0 4px 12px rgba(217,119,6,.16);
     }
+    .corrigir-action-btn .lucide{ width:16px; height:16px; stroke:currentColor; stroke-width:2; }
     .aluno-alertas-stack{ display:grid; gap:8px; margin:0 0 16px; }
     .aluno-alerta-card{
       min-height:calc(var(--btn-h) * 0.8);
@@ -178,6 +179,25 @@
     }
     .dashboard-limit-meter .progress{ margin-top:0; }
     .dashboard-limit-pct{ text-align:right; }
+    /* Para Retificar rows: the Limitações row geometry plus the action. */
+    .retificar-list{ display:grid; gap:10px; width:100%; margin:0; padding:0; list-style:none; }
+    .retificar-item{
+      display:grid;
+      grid-template-columns:minmax(0, 1fr) 120px auto;
+      align-items:center;
+      gap:16px;
+    }
+    .retificar-copy{ min-width:0; display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; }
+    .retificar-nome{
+      min-width:0;
+      color:var(--text-primary);
+      font-size:var(--font-size-base);
+      font-weight:500;
+      line-height:1.35;
+    }
+    .retificar-meter{ min-width:0; display:grid; gap:5px; }
+    .retificar-meter .progress{ margin-top:0; }
+    .retificar-dias{ text-align:right; }
     .dashboard-limit-empty{
       padding:8px 0;
       color:var(--text-secondary);
@@ -187,6 +207,8 @@
     }
     @media (max-width:520px){
       .dashboard-limit-row{ grid-template-columns:minmax(0, 1fr) 96px; gap:12px; }
+      .retificar-item{ grid-template-columns:minmax(0, 1fr) 96px; gap:8px 12px; }
+      .retificar-item > .btn{ grid-column:1 / -1; justify-self:start; }
     }
     /* Title row: Painel on the left, the primary action at the far right,
        centred on the title; on a narrow track the action wraps below it.
@@ -258,7 +280,7 @@
       <span class="value">{{ pendentes or 0 }}</span>
       <span class="label"><i class="lucide" data-lucide="clock-3"></i>Pendentes</span>
     </div>
-    <div class="item" title="Requisições indeferidas marcadas como corrigíveis (30 dias)">
+    <div class="item" title="Requisições devolvidas para retificação, dentro do prazo">
       <span class="value">{{ corrigiveis or 0 }}</span>
       <span class="label"><i class="lucide" data-lucide="edit"></i>Corrigíveis</span>
     </div>
@@ -359,6 +381,38 @@
 </div>
 
 <div class="content-grid">
+  {#- Para Retificar: the requests returned for correction whose deadline is
+      still open (app.requisition_policy) -- exactly the ones the edit route
+      accepts. The meter's tone keeps the original thresholds: more than 10
+      days left positive, more than 5 caution, otherwise negative. -#}
+  {% macro retificar_lista(itens, vazio) -%}
+    {% if itens %}
+      <ul class="retificar-list">
+        {% for c in itens %}
+          <li class="retificar-item">
+            <div class="retificar-copy">
+              <span class="retificar-nome">{{ c.nome }}</span>
+              <span class="progress-meta-value">{% if c.data_expira %}Expira em {{ c.data_expira }}{% else %}Sem prazo{% endif %}</span>
+            </div>
+            <div class="retificar-meter">
+              {% if c.dias_restantes is not none %}
+                {% set pct_dias = c.dias_restantes * 100 // c.dias_total %}
+                {% set tom = 'positive' if c.dias_restantes > 10 else ('caution' if c.dias_restantes > 5 else 'negative') %}
+                <span class="progress-meta-value retificar-dias" title="dias restantes/total">{{ c.dias_restantes }}/{{ c.dias_total }}</span>
+                <div class="progress is-deadline status-{{ tom }}" data-pct="{{ pct_dias }}" aria-label="{{ c.dias_restantes }} de {{ c.dias_total }} dias restantes para retificar">
+                  <div class="progress-bar"></div>
+                </div>
+              {% endif %}
+            </div>
+            <a class="btn" href="{{ route_url('aluno_requisicao_detalhe', 'aluno.aluno_requisicao_detalhe', req_id=c.id, edit=1) }}"><i class="lucide" data-lucide="pencil-line" aria-hidden="true"></i><span class="btn-label">Retificar</span></a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="dashboard-limit-empty">{{ vazio }}</div>
+    {% endif %}
+  {%- endmacro %}
+
   <!-- Para Retificar - Acadêmicas Complementares -->
   <section class="content-block">
     <div class="content-block-header card-header-inline">
@@ -367,47 +421,8 @@
         <i class="lucide" data-lucide="alert-triangle"></i>
       </a>
     </div>
-    <style>
-      /* Cores da barra conforme tempo disponível */
-      .days-bar.ok > span { background: linear-gradient(90deg,#2ecc71,#27ae60); }
-      .days-bar.warn > span { background: linear-gradient(90deg,#f1c40f,#e67e22); }
-      .days-bar.danger > span { background: linear-gradient(90deg,#e74c3c,#c0392b); }
-      /* Layout 2 colunas apenas para esta seção */
-    .content-block-body-corrigir.corrigir-2cols{ grid-template-columns: 8fr 2fr; }
-    /* Botão acao reversivel para itens corrigiveis */
-    .corrigir-action-btn .lucide{ width:16px; height:16px; stroke:currentColor; stroke-width:2; }
-    </style>
-  <div class="content-block-body content-block-body-corrigir corrigir-2cols" style="width:100%;">
-      {% set lista_acad = corrigiveis_acad or [] %}
-      {% if lista_acad %}
-        <!-- Coluna 1 (esquerda): nomes + bloco Expira em (mesma largura da coluna direita) -->
-        <div class="corrigir-col-left" style="display:flex;flex-direction:column;gap:10px;">
-          {% for c in lista_acad %}
-            <div class="corrigir-left-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-              <span class="corrigir-nome" style="font:600 14px/1.2 system-ui;color:#111;">{{ c.nome }}</span>
-              <div class="corrigir-expira" style="display:flex;flex-direction:column;align-items:center;width:72px;gap:4px;">
-                <span style="font:600 11px/1.1 system-ui;color:#666;">Expira em:</span>
-                <span style="font:600 12px/1.1 system-ui;color:#222;">{{ c.data_expira or '' }}</span>
-              </div>
-            </div>
-          {% endfor %}
-        </div>
-        <!-- Coluna 2 (direita): X/30 acima e barra abaixo -->
-        <div class="corrigir-col-right" style="display:flex;flex-direction:column;align-items:center;gap:12px;">
-          {% for c in lista_acad %}
-            {% set pct_dias = (c.dias_restantes * 100 // 30) if c.dias_restantes > 0 else 0 %}
-            {% set cls = 'ok' if c.dias_restantes > 10 else ('warn' if c.dias_restantes > 5 else 'danger') %}
-            <div class="corrigir-right-item" style="display:flex;flex-direction:column;align-items:center;gap:4px;width:120px;">
-              <span class="corrigir-badge" title="dias restantes/total" style="font:600 12px/1 system-ui;color:#222;text-align:center;width:100%;margin:0;">{{ c.dias_restantes }}/30</span>
-              <div class="days-bar {{ cls }}" data-pct="{{ pct_dias }}" aria-label="{{ pct_dias }}% do prazo" style="height:8px;border-radius:5px;background:#eee;overflow:hidden;width:100%;">
-                <span style="display:block;height:100%;width:0;transition:width .5s;"></span>
-              </div>
-            </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="limit-empty" style="font:500 13px/1.4 system-ui;color:#666;">Nenhuma requisição corrigível acadêmica.</div>
-      {% endif %}
+    <div class="content-block-body">
+      {{ retificar_lista(corrigiveis_acad or [], 'Nenhuma requisição corrigível acadêmica.') }}
     </div>
   </section>
 
@@ -419,37 +434,8 @@
         <i class="lucide" data-lucide="alert-triangle"></i>
       </a>
     </div>
-  <div class="content-block-body content-block-body-corrigir corrigir-2cols" style="width:100%;">
-      {% set lista_ext = corrigiveis_ext or [] %}
-      {% if lista_ext %}
-        <!-- Coluna 1 (esquerda): nomes + bloco Expira em (mesma largura da coluna direita) -->
-        <div class="corrigir-col-left" style="display:flex;flex-direction:column;gap:10px;">
-          {% for c in lista_ext %}
-            <div class="corrigir-left-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-              <span class="corrigir-nome" style="font:600 14px/1.2 system-ui;color:#111;">{{ c.nome }}</span>
-              <div class="corrigir-expira" style="display:flex;flex-direction:column;align-items:center;width:72px;gap:4px;">
-                <span style="font:600 11px/1.1 system-ui;color:#666;">Expira em:</span>
-                <span style="font:600 12px/1.1 system-ui;color:#222;">{{ c.data_expira or '' }}</span>
-              </div>
-            </div>
-          {% endfor %}
-        </div>
-        <!-- Coluna 2 (direita): X/30 acima e barra abaixo -->
-        <div class="corrigir-col-right" style="display:flex;flex-direction:column;align-items:center;gap:12px;">
-          {% for c in lista_ext %}
-            {% set pct_dias = (c.dias_restantes * 100 // 30) if c.dias_restantes > 0 else 0 %}
-            {% set cls = 'ok' if c.dias_restantes > 10 else ('warn' if c.dias_restantes > 5 else 'danger') %}
-            <div class="corrigir-right-item" style="display:flex;flex-direction:column;align-items:center;gap:4px;width:120px;">
-              <span class="corrigir-badge" title="dias restantes/total" style="font:600 12px/1 system-ui;color:#222;text-align:center;width:100%;margin:0;">{{ c.dias_restantes }}/30</span>
-              <div class="days-bar {{ cls }}" data-pct="{{ pct_dias }}" aria-label="{{ pct_dias }}% do prazo" style="height:8px;border-radius:5px;background:#eee;overflow:hidden;width:100%;">
-                <span style="display:block;height:100%;width:0;transition:width .5s;"></span>
-              </div>
-            </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="limit-empty" style="font:500 13px/1.4 system-ui;color:#666;">Nenhuma requisição corrigível de extensão.</div>
-      {% endif %}
+    <div class="content-block-body">
+      {{ retificar_lista(corrigiveis_ext or [], 'Nenhuma requisição corrigível de extensão.') }}
     </div>
   </section>
 
@@ -542,13 +528,6 @@
         event.stopPropagation();
         el.hidden = true;
       });
-    });
-
-    // Days remaining bars (corrigir)
-    document.querySelectorAll('.days-bar').forEach(el => {
-      const pct = parseInt(el.getAttribute('data-pct')||'0',10);
-      const span = el.querySelector('span');
-      if(span) span.style.width = Math.max(0, Math.min(100, pct)) + '%';
     });
   });
  </script>

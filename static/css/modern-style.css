@@ -210,7 +210,6 @@ body{
    declared flex-wrap:wrap inline, and the flex-direction:column one, which
    has auto height and so never wraps. 1440 is byte-identical. */
 .content-block-body{ display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:16px; }
-.content-block-body-corrigir{ display:grid; grid-template-columns:8fr 2fr; align-items:center; column-gap:8px; row-gap:12px; }
 .content-block-body .item{ display:flex; flex-direction:column; gap:2px; }
 .content-block-body .item .value{ font-size:20px; font-weight:600; }
 .content-block-body .item .label{
@@ -362,6 +361,20 @@ body{
   border-color:var(--decision-ink);
   color:var(--text-on-brand);
 }
+
+/* Rejection decision dialog (components/rejection_decision_dialog.html): the
+   Indeferir step of the Requisições modal and of the processing page asks
+   whether the request goes back for correction or is rejected for good. The
+   shared modal contract (components/modal.css) supplies the structure; this
+   is its size, shared by both pages. (0,2,0) so it also wins over the
+   Requisições page's runtime-injected, unscoped .modal-* sizing. */
+.rejection-decision .modal-card{ width:min(520px, calc(100vw - 32px)); }
+.rejection-decision .modal-header{ padding:16px 20px 4px; }
+.rejection-decision .modal-body{ padding:8px 20px; color:var(--text-secondary); line-height:1.45; }
+.rejection-decision .modal-body p{ margin:0 0 8px; }
+.rejection-decision .modal-body ul{ margin:0; padding-left:18px; display:grid; gap:6px; }
+.rejection-decision .modal-body strong{ color:var(--text-primary); font-weight:600; }
+.rejection-decision .modal-footer{ justify-content:flex-end; flex-wrap:wrap; padding:12px 20px 16px; }
 
 /* Disabled — canonical Design System state for any .btn. Owned here with the
    rest of the button contract so a disabled primary keeps its primary identity
@@ -933,6 +946,14 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
 .kpi-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .progress{ height:6px; background:#f1f5f9; border:1px solid var(--border-strong); border-radius:2px; overflow:hidden; margin-top:4px; }
 .progress-bar{ height:100%; background:var(--brand); transition:width .25s ease; }
+/* Remaining-time meter: the same understated track, the --radius corner on
+   track and fill, and a fill in the status family that matches how much time
+   is left (the caller picks positive / caution / negative). */
+.progress.is-deadline,
+.progress.is-deadline > .progress-bar{ border-radius:var(--radius); }
+.progress.is-deadline.status-positive > .progress-bar{ background:var(--status-positive-dot); }
+.progress.is-deadline.status-caution > .progress-bar{ background:var(--status-caution-dot); }
+.progress.is-deadline.status-negative > .progress-bar{ background:var(--status-negative-dot); }
 .progress-meta{
   display:flex;
   align-items:center;

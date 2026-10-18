@@ -40,6 +40,30 @@ def get_app_settings(conn) -> dict[str, str]:
     return settings
 
 
+def _return_response_days(settings: dict[str, str]) -> int:
+    try:
+        return max(
+            0,
+            int(
+                str(
+                    settings.get("return_response_days") or DEFAULT_RETURN_RESPONSE_DAYS
+                ).strip()
+            ),
+        )
+    except ValueError:
+        return DEFAULT_RETURN_RESPONSE_DAYS
+
+
+def get_return_response_days(conn) -> int:
+    """The configured return deadline in days (0: no deadline), read-only.
+
+    The authority every student-side check of a returned request uses
+    (``app.requisition_policy``); the administrator sets it under
+    Configurações → Prazo de adequação.
+    """
+    return _return_response_days(get_app_settings(conn))
+
+
 def get_response_time_settings(conn) -> dict[str, object]:
     ensure_app_settings_schema(conn)
     settings = get_app_settings(conn)
@@ -56,17 +80,7 @@ def get_response_time_settings(conn) -> dict[str, object]:
     except ValueError:
         response_goal_days = DEFAULT_RESPONSE_GOAL_DAYS
 
-    try:
-        return_response_days = max(
-            0,
-            int(
-                str(
-                    settings.get("return_response_days") or DEFAULT_RETURN_RESPONSE_DAYS
-                ).strip()
-            ),
-        )
-    except ValueError:
-        return_response_days = DEFAULT_RETURN_RESPONSE_DAYS
+    return_response_days = _return_response_days(settings)
 
     response_metrics_reset_at = ""
     try:
@@ -233,6 +247,7 @@ __all__ = [
     "get_app_settings",
     "get_horas_settings",
     "get_response_time_settings",
+    "get_return_response_days",
     "reset_response_time_metrics",
     "save_app_settings",
     "save_horas_settings",

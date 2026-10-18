@@ -16,6 +16,7 @@ from app.requisition_policy import (
     can_student_delete_requisition,
     can_student_edit_requisition,
 )
+from app.settings import get_return_response_days
 from app.storage.contracts import (
     ComprovanteStorage,
     RemoteObject,
@@ -399,7 +400,11 @@ def _authorize_comprovante_upload(conn, request_id: int, actor_user_id: int) -> 
     student_allowed = bool(
         state
         and actor_type == "aluno"
-        and can_student_edit_requisition(state["status"], state["data_processamento"])
+        and can_student_edit_requisition(
+            state["status"],
+            state["data_processamento"],
+            return_days=get_return_response_days(conn),
+        )
     )
     admin_allowed = bool(
         state and actor_type == "admin" and state["status"] == "Pendente"
@@ -693,7 +698,9 @@ def delete_request_with_comprovantes(
             (int(request_id),),
         ).fetchone()
         if not state or not can_student_delete_requisition(
-            state["status"], state["data_processamento"]
+            state["status"],
+            state["data_processamento"],
+            return_days=get_return_response_days(conn),
         ):
             raise ComprovanteError("A requisição não pode ser excluída.", code="DELETE_DENIED")
     rows = conn.execute(
