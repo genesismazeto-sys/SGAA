@@ -1417,6 +1417,73 @@ select.control{ border-radius:var(--radius); }
   outline:none;
 }
 
+/* ===== Autofill =====
+   Accepting a browser suggestion puts the control in :autofill (Chrome/Edge
+   also :-webkit-autofill), and Blink then paints it from its own stylesheet
+   with !important -- background-color rgb(232 240 254), background-image
+   none, color fieldtext. No author background or color can win, and only the
+   control's own box turns blue: a transparent control (.field-card .control,
+   the toolbar search) became a light-blue slab inside a card or group that
+   kept the field surface.
+
+   Autofill itself is untouched. An inset box-shadow, painted above the
+   background and under the text, covers the blue with the surface the control
+   is meant to show. It is the one !important here -- the answer to the UA's --
+   so no family's or page's own box-shadow can bring the blue back, and it
+   takes both colours from component tokens that the state rules below set:
+     --field-autofill-bg    the surface; always an opaque token, since a
+                            translucent fill would let the blue through.
+     --field-autofill-ring  the control's own outer focus ring, if it draws
+                            one; `0 0 transparent` for none (an invalid value
+                            voids the whole shadow). It is the first layer so
+                            a focused control animates into the fill.
+
+   Every selector is (0,1,0) -- the rest sits in :where() -- so source order
+   decides within this block, and a component whose surface differs opts in
+   with one plain rule (.filter-text-input, components/list-cards.css). */
+
+/* A self-painted control follows the shared contract above -- repeated by
+   the page-local fields on Acesso, Configurações and the preset modals -- by
+   its own state. Its text is already fieldtext, so the forced color is moot. */
+:is(:-webkit-autofill, :autofill){
+  --field-autofill-bg:var(--field-bg);
+  --field-autofill-ring:0 0 transparent;
+  box-shadow:var(--field-autofill-ring), inset 0 0 0 100vmax var(--field-autofill-bg) !important;
+}
+:is(:-webkit-autofill, :autofill):where(:hover){
+  --field-autofill-bg:var(--field-hover-bg);
+}
+:is(:-webkit-autofill, :autofill):where(:focus){
+  --field-autofill-bg:var(--field-focus-bg);
+  --field-autofill-ring:0 0 0 1px var(--field-focus-ring);
+}
+
+/* A transparent control shows its container's surface, so the fill follows
+   the CONTAINER's state -- hovering a card's chip tints the value with it --
+   and the container draws the ring. Mirrors .field-card and .input-group
+   above (components/list-cards.css repeats the same values) and the invalid
+   card in components/form.css, in the same precedence. */
+:where(.field-card, .input-group) :is(:-webkit-autofill, :autofill){
+  --field-autofill-bg:var(--surface);
+  --field-autofill-ring:0 0 transparent;
+}
+:where(.field-card:hover, .input-group:has(> input, > select):hover) :is(:-webkit-autofill, :autofill){
+  --field-autofill-bg:var(--field-hover-bg);
+}
+:where(.field-card:focus-within, .input-group:has(> input, > select):focus-within) :is(:-webkit-autofill, :autofill){
+  --field-autofill-bg:var(--field-focus-bg);
+}
+:where(.field-card:has(.control:user-invalid), .field-card:has(.control[aria-invalid="true"])) :is(:-webkit-autofill, :autofill){
+  --field-autofill-bg:var(--field-invalid-bg);
+}
+/* The card's control paints --text-primary, not fieldtext. Blink draws the
+   glyphs through -webkit-text-fill-color, which the forced color does not
+   reach; the caret follows the text. */
+:where(.field-card .control):is(:-webkit-autofill, :autofill){
+  -webkit-text-fill-color:var(--text-primary);
+  caret-color:var(--text-primary);
+}
+
 /* Responsivo: labels acima do campo em telas menores */
 @media (max-width:1000px){
   .field-label{ position:static; transform:none; width:auto; text-align:left; margin:0 0 4px 0; display:block; }
