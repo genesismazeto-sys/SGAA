@@ -72,6 +72,7 @@ from app.requisition_policy import (
     open_return_window,
 )
 from app.settings import get_return_response_days
+from app.student_hour_progress import AxisProgress, read_student_hour_progress
 from app.student_request_edit import (
     StudentEditConflict,
     StudentRequestEdit,
@@ -385,6 +386,17 @@ def _format_hours_label(value: Any) -> str:
     return f"{_format_hours_number(value)}h"
 
 
+def _hour_goal_view(progress: AxisProgress) -> dict[str, Any]:
+    """One dashboard hour card (or the total line) from its AxisProgress."""
+    return {
+        "estado": progress.state,
+        "tem_meta": progress.has_target,
+        "horas_fmt": _format_hours_number(progress.completed),
+        "meta_fmt": _format_hours_number(progress.target) if progress.has_target else None,
+        "pct": progress.pct,
+    }
+
+
 def _format_progresso_grupo(tipo_atividade: str | None, grupo: str | None) -> str:
     if (tipo_atividade or "").strip() != AAC_ACTIVITY_TYPE:
         return "-"
@@ -612,8 +624,7 @@ def aluno_dashboard():
         """
         SELECT a.*, t.id AS turma_rel_id, t.curso_id AS turma_curso_id,
                c.nome AS curso_nome, c.codigo AS curso_codigo,
-               m.nome AS matriz_nome,
-               m.horas_aac_obrigatorias, m.horas_extensao_obrigatorias
+               m.nome AS matriz_nome
           FROM alunos a
           LEFT JOIN turmas t ON t.id = a.turma_id
           LEFT JOIN cursos c ON c.id = t.curso_id
@@ -625,23 +636,6 @@ def aluno_dashboard():
     if not aluno_info:
         flash("Dados do aluno não encontrados.", "error")
         return redirect(url_for("login"))
-
-    matriz_aluno = get_effective_matrix_for_student(conn, aluno_info["id"])
-    meta_horas_academicas = (
-        matriz_aluno["horas_aac_obrigatorias"]
-        if matriz_aluno and matriz_aluno["horas_aac_obrigatorias"] is not None
-        else None
-    )
-    meta_horas_extensao = (
-        matriz_aluno["horas_extensao_obrigatorias"]
-        if matriz_aluno and matriz_aluno["horas_extensao_obrigatorias"] is not None
-        else None
-    )
-    meta_total_horas_fmt = (
-        _format_hours_number(meta_horas_academicas + meta_horas_extensao)
-        if meta_horas_academicas is not None and meta_horas_extensao is not None
-        else "-"
-    )
 
     requisicoes_rows = conn.execute(
         """
@@ -689,6 +683,14 @@ def aluno_dashboard():
         req["horas_aprovadas"]
         for req in requisicoes
         if req["status"] in ("Deferida", "Deferida Parcialmente") and req["tipo_atividade"] == "Extensão Universitária"
+    )
+    # An axis the effective Matrix does not offer reads "NA" and stays out of
+    # the total; no Matrix at all is "undefined" (app.student_hour_progress).
+    progresso_horas = read_student_hour_progress(
+        conn,
+        aluno_info["id"],
+        completed_aac=total_horas_academicas,
+        completed_aeu=total_horas_extensao,
     )
 
     total_reqs = len(requisicoes)
@@ -780,21 +782,9 @@ def aluno_dashboard():
         horas_por_tipo=horas_por_tipo,
         total_horas_academicas=total_horas_academicas,
         total_horas_extensao=total_horas_extensao,
-        total_horas_academicas_fmt=_format_hours_number(total_horas_academicas),
-        total_horas_extensao_fmt=_format_hours_number(total_horas_extensao),
-         meta_horas_academicas_fmt=(
-             _format_hours_number(meta_horas_academicas)
-             if meta_horas_academicas is not None
-             else "-"
-         ),
-         meta_horas_extensao_fmt=(
-             _format_hours_number(meta_horas_extensao)
-             if meta_horas_extensao is not None
-             else "-"
-         ),
-         meta_total_horas_fmt=meta_total_horas_fmt,
-        meta_horas_academicas=meta_horas_academicas,
-        meta_horas_extensao=meta_horas_extensao,
+        progresso_acad=_hour_goal_view(progresso_horas.aac),
+        progresso_ext=_hour_goal_view(progresso_horas.aeu),
+        progresso_total=_hour_goal_view(progresso_horas.total),
         total_reqs=total_reqs,
         pendentes=pendentes,
         corrigiveis=corrigiveis,

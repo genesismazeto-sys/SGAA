@@ -141,6 +141,9 @@
       grid-row: 4;
       align-self: start;
     }
+    /* An axis the Matrix does not offer ("NA") or no Matrix at all: the
+       same type in the neutral secondary text colour, no meter. */
+    .aluno-kpi-progress .kpi-value.is-unavailable{ color:var(--text-secondary); }
     .dashboard-total-progress{
       width:100%;
       margin-top:10px;
@@ -286,23 +289,27 @@
     </div>
   </div>
   
-  {# === Progresso total de horas (Acad + Ext) vs meta total === #}
-  {% set acad = total_horas_academicas or 0 %}
-  {% set ext  = total_horas_extensao   or 0 %}
-  {% set meta_acad = meta_horas_academicas %}
-  {% set meta_ext  = meta_horas_extensao %}
-  {% set total_horas = acad + ext %}
-  {% set meta_total  = meta_acad + meta_ext if meta_acad is not none and meta_ext is not none else none %}
-  {% set pct_total   = (total_horas * 100 // meta_total) if meta_total is not none and meta_total > 0 else none %}
-  {% set total_horas_fmt = total_horas_academicas_fmt if not total_horas_extensao else (total_horas_academicas_fmt ~ ' + ' ~ total_horas_extensao_fmt) %}
-
+  {#- Total over the axes the student's Matrix offers only
+      (app.student_hour_progress): NA when it offers neither, a neutral
+      state when no Matrix is assigned. -#}
+  {% set t = progresso_total %}
   <div class="dashboard-total-progress">
     <div class="progress-meta">
       <span class="progress-meta-label">Progresso total de horas</span>
-      <span class="progress-meta-value">{{ (total_horas_academicas + total_horas_extensao)|int if (total_horas_academicas + total_horas_extensao) == ((total_horas_academicas + total_horas_extensao)|int) else (total_horas_academicas + total_horas_extensao) }}/{{ meta_total_horas_fmt }} h ({% if pct_total is none %}{{ meta_total_horas_fmt }}{% else %}{{ pct_total }}%{% endif %})</span>
+      <span class="progress-meta-value">
+        {%- if t.estado == 'aplicavel' and t.tem_meta -%}
+          {{ t.horas_fmt }}/{{ t.meta_fmt }} h ({{ t.pct }}%)
+        {%- elif t.estado == 'aplicavel' -%}
+          {{ t.horas_fmt }} h (sem carga horária obrigatória)
+        {%- elif t.estado == 'nao_aplicavel' -%}
+          NA
+        {%- else -%}
+          Matriz não definida
+        {%- endif -%}
+      </span>
     </div>
-    {% if pct_total is not none %}
-      <div class="progress" data-pct="{{ pct_total }}" aria-label="{{ pct_total }}% do total de horas cumprido">
+    {% if t.pct is not none %}
+      <div class="progress" data-pct="{{ t.pct }}" aria-label="{{ t.pct }}% do total de horas cumprido">
         <div class="progress-bar"></div>
       </div>
     {% endif %}
@@ -314,13 +321,27 @@
 {% set pend_pct_i = (pend_pct or 0)|round(0, 'floor') %}
 
 {# === NOVO CABEÇALHO KPI (atualizado): 1) Acadêmicas 2) Pendentes Acadêmicas 3) Extensão 4) Pendentes Extensão === #}
-{% set total_acad_req = total_horas_academicas or 0 %}
-{% set total_ext_req  = total_horas_extensao   or 0 %}
-{# Totais de referência vindos do curso do aluno #}
-{% set alvo_acad = meta_horas_academicas %}
-{% set alvo_ext  = meta_horas_extensao %}
-{% set pct_acad = none if alvo_acad is none else ((total_acad_req * 100 // alvo_acad) if total_acad_req < alvo_acad else 100) %}
-{% set pct_ext  = none if alvo_ext is none else ((total_ext_req * 100 // alvo_ext) if total_ext_req < alvo_ext else 100) %}
+{#- One axis hour card (app.student_hour_progress): progress only for an axis
+    the student's Matrix offers; "NA" for one it does not; a neutral state
+    when no Matrix is assigned. A zero target never reads as 100%. -#}
+{% macro horas_eixo(p, rotulo_barra) -%}
+  {% if p.estado == 'aplicavel' and p.tem_meta %}
+    <div class="kpi-value">{{ p.horas_fmt }}/{{ p.meta_fmt }} h</div>
+    <div class="kpi-sub">{{ p.pct }}% cumprido</div>
+    <div class="progress is-bar" aria-label="{{ rotulo_barra }}" data-pct="{{ p.pct }}">
+      <div class="progress-bar"></div>
+    </div>
+  {% elif p.estado == 'aplicavel' %}
+    <div class="kpi-value">{{ p.horas_fmt }} h</div>
+    <div class="kpi-sub">Sem carga horária obrigatória</div>
+  {% elif p.estado == 'nao_aplicavel' %}
+    <div class="kpi-value is-unavailable">NA</div>
+    <div class="kpi-sub">Não se aplica</div>
+  {% else %}
+    <div class="kpi-value is-unavailable">-</div>
+    <div class="kpi-sub">Matriz não definida</div>
+  {% endif %}
+{%- endmacro %}
 
 <div class="kpi-grid aluno-kpi-progress">
   <!-- 1: Progresso Acadêmicas -->
@@ -328,15 +349,7 @@
     <div class="kpi-head">
       <span class="kpi-title">Acadêmicas Complementares</span>
     </div>
-    <div class="kpi-value">{{ total_horas_academicas_fmt }}/{{ meta_horas_academicas_fmt }} h</div>
-    {% if alvo_acad is not none %}
-      <div class="kpi-sub">{{ pct_acad }}% cumprido</div>
-      <div class="progress is-bar" aria-label="Progresso horas acadêmicas" data-pct="{{ pct_acad }}">
-        <div class="progress-bar"></div>
-      </div>
-    {% else %}
-      <div class="kpi-sub">-</div>
-    {% endif %}
+    {{ horas_eixo(progresso_acad, 'Progresso horas acadêmicas') }}
   </div>
 
   <!-- 2: Pendentes Acadêmicas -->
@@ -356,15 +369,7 @@
     <div class="kpi-head">
       <span class="kpi-title">Extensão Universitária</span>
     </div>
-    <div class="kpi-value">{{ total_horas_extensao_fmt }}/{{ meta_horas_extensao_fmt }} h</div>
-    {% if alvo_ext is not none %}
-      <div class="kpi-sub">{{ pct_ext }}% cumprido</div>
-      <div class="progress is-bar" aria-label="Progresso horas de extensão" data-pct="{{ pct_ext }}">
-        <div class="progress-bar"></div>
-      </div>
-    {% else %}
-      <div class="kpi-sub">-</div>
-    {% endif %}
+    {{ horas_eixo(progresso_ext, 'Progresso horas de extensão') }}
   </div>
 
   <!-- 4: Pendentes Extensão -->
