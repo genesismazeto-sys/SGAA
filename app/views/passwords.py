@@ -126,7 +126,10 @@ def _render_set_password(*, purpose: str, raw_token: str, error: str = ""):
         )
     )
     response.headers["Cache-Control"] = "no-store"
-    response.headers["Referrer-Policy"] = "no-referrer"
+    # The page URL carries the raw token, so no request may send it as a
+    # Referer; the bare origin still has to go out, because production CSRF
+    # (WTF_CSRF_SSL_STRICT) refuses an HTTPS POST without a same-origin Referer.
+    response.headers["Referrer-Policy"] = "strict-origin"
     return response
 
 

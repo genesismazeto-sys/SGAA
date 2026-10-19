@@ -215,6 +215,98 @@ def test_public_password_forms_require_csrf(tmp_path):
         main.app.config["WTF_CSRF_ENABLED"] = original
 
 
+def _csrf_field(html: str) -> str:
+    marker = 'name="csrf_token" value="'
+    start = html.index(marker) + len(marker)
+    return html[start: html.index('"', start)]
+
+
+def test_password_forms_pass_production_https_csrf_with_the_origin_referrer(tmp_path):
+    """Production CSRF over HTTPS needs a same-origin Referer on the POST.
+
+    The form page used to send ``no-referrer``, so every browser POST arrived
+    without a Referer and production answered 400 ("The referrer header is
+    missing."). ``strict-origin`` sends the bare origin -- never the page URL
+    holding the raw token -- and every other CSRF refusal still holds.
+    """
+    origin = "https://sgaa.example.test"
+    own_referrer = {"Referer": f"{origin}/"}
+    saved = {
+        key: main.app.config.get(key)
+        for key in ("WTF_CSRF_ENABLED", "WTF_CSRF_SSL_STRICT")
+    }
+    try:
+        with isolated_versioned_app_env(tmp_path, "password-https-csrf.db") as env:
+            main.app.config["WTF_CSRF_ENABLED"] = True
+            main.app.config["WTF_CSRF_SSL_STRICT"] = True
+            client = env["client"]
+            with main.app.app_context():
+                conn = main.get_db_connection()
+                user_id = int(
+                    create_usuario_pending(
+                        conn, "HTTPS subject", "https-pending@example.test", "admin"
+                    ).lastrowid
+                )
+                conn.commit()
+
+            # First access promotes the account to personal, which then
+            # redeems a reset: both flows share the form and its policy.
+            for path, purpose, password in (
+                ("/primeiro-acesso", PURPOSE_FIRST_ACCESS, "primeira-senha"),
+                ("/redefinir-senha", PURPOSE_PASSWORD_RESET, "segunda-senha"),
+            ):
+                with main.app.app_context():
+                    conn = main.get_db_connection()
+                    raw_token, _ = issue_password_token(conn, user_id, purpose)
+                    conn.commit()
+                page = client.get(path, query_string={"token": raw_token}, base_url=origin)
+                html = page.get_data(as_text=True)
+                assert page.status_code == 200, path
+                assert page.headers["Referrer-Policy"] == "strict-origin", path
+                assert '<meta name="referrer" content="strict-origin" />' in html, path
+                assert "no-referrer" not in html, path
+                csrf_value = _csrf_field(html)
+                form = {
+                    "csrf_token": csrf_value,
+                    "token": raw_token,
+                    "senha": password,
+                    "confirmacao_senha": password,
+                }
+
+                # Refusals: what the old policy produced, a foreign origin, a
+                # missing token and a forged token. None consumes the link.
+                for headers, data in (
+                    ({}, form),
+                    ({"Referer": "https://attacker.example/"}, form),
+                    (own_referrer, {k: v for k, v in form.items() if k != "csrf_token"}),
+                    (own_referrer, {**form, "csrf_token": "forged"}),
+                ):
+                    refused = client.post(path, data=data, headers=headers, base_url=origin)
+                    assert refused.status_code == 400, (path, headers, sorted(data))
+
+                saved_response = client.post(
+                    path, data=form, headers=own_referrer, base_url=origin,
+                    follow_redirects=False,
+                )
+                assert saved_response.status_code in (302, 303), path
+                assert saved_response.headers["Location"].endswith("/login"), path
+                with main.app.app_context():
+                    stored = main.get_db_connection().execute(
+                        "SELECT senha FROM usuarios WHERE id=?", (user_id,)
+                    ).fetchone()[0]
+                    assert check_password(stored, password), path
+
+                # The consumed link is spent, even with a valid CSRF pair.
+                replay = client.post(
+                    path, data={**form, "senha": "x", "confirmacao_senha": "x"},
+                    headers=own_referrer, base_url=origin,
+                )
+                assert replay.status_code == 200, path
+                assert "Este link é inválido" in replay.get_data(as_text=True), path
+    finally:
+        main.app.config.update(saved)
+
+
 def test_admin_single_user_email_action_chooses_purpose_from_credential_state(
     tmp_path, monkeypatch
 ):

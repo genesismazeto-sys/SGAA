@@ -203,7 +203,7 @@ def test_public_password_surfaces_use_the_shared_auth_design_system(tmp_path):
         invalid = env["client"].get("/redefinir-senha?token=not-a-real-token")
         invalid_html = invalid.get_data(as_text=True)
         assert invalid.status_code == 200
-        assert invalid.headers["Referrer-Policy"] == "no-referrer"
+        assert invalid.headers["Referrer-Policy"] == "strict-origin"
         assert 'class="login-card"' in invalid_html
         assert "login-feedback-error" in invalid_html
         assert 'type="password"' not in invalid_html
