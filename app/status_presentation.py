@@ -246,6 +246,36 @@ def status_tone(domain: str, status) -> str:
     return tones[canonical]
 
 
+# ---------------------------------------------------------------------------
+# Remaining time (the student's return-for-correction deadline meter)
+# ---------------------------------------------------------------------------
+#
+# The meter's fill is the time LEFT (remaining / total); its tone says how
+# urgent that is, as a share of the configured deadline -- never in fixed
+# days, because the deadline is configurable (a 7-day window must start
+# positive, not caution). The proportions are the ones the meter was designed
+# with on its 30-day window: more than 10/30 left positive, more than 5/30
+# caution, otherwise negative. Integer arithmetic keeps the boundaries exact:
+# 7 days -> 3 left positive, 2 caution, 1 negative; 30 days -> 11 positive,
+# 10..6 caution, 5 negative.
+DEADLINE_POSITIVE_SHARE = (10, 30)
+DEADLINE_CAUTION_SHARE = (5, 30)
+
+
+def deadline_tone(remaining_days, total_days) -> str | None:
+    """The Design System tone for ``remaining_days`` of a ``total_days`` deadline.
+
+    ``None`` when there is no deadline to measure (no total configured, or no
+    remaining count): the caller shows no meter at all.
+    """
+    if remaining_days is None or not total_days or total_days <= 0:
+        return None
+    for tone, (part, whole) in (("positive", DEADLINE_POSITIVE_SHARE), ("caution", DEADLINE_CAUTION_SHARE)):
+        if remaining_days * whole > total_days * part:
+            return tone
+    return "negative"
+
+
 def status_label(domain: str, status) -> str:
     """Return the canonical display label, falling back to the raw value.
 

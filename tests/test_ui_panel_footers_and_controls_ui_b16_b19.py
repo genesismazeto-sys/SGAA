@@ -116,9 +116,10 @@ def test_standalone_select_control_takes_the_shared_radius():
     assert _rule(css, "select.control") == {"border-radius": "var(--radius)"}
     tokens = _read("static/css/foundation/tokens.css")
     assert re.search(r"--radius:\s*4px\s*;", tokens)
-    # No second radius token was introduced for it. The only other radius token
-    # is the semantic pill corner (DS-PILL-RADIUS), which no select consumes.
-    assert re.findall(r"--[a-z-]*radius[a-z-]*\s*:", tokens) == ["--radius:", "--pill-radius:"]
+    # No second radius token was introduced for it. The only other radius tokens
+    # are the semantic pill corner (DS-PILL-RADIUS) and the progress-meter
+    # corner, which no select consumes.
+    assert re.findall(r"--[a-z-]*radius[a-z-]*\s*:", tokens) == ["--radius:", "--pill-radius:", "--progress-radius:"]
 
 
 def test_versao_switcher_does_not_restate_select_geometry():

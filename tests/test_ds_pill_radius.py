@@ -92,8 +92,9 @@ def _radius(body: str) -> str:
 def test_one_pill_radius_token_of_4px():
     tokens = TOKENS.read_text(encoding="utf-8")
     assert re.findall(r"--pill-radius\s*:\s*([^;]+);", tokens) == ["4px"]
-    # One owner: no badge/status/chip/pill-corner synonym beside it.
-    assert re.findall(r"--[a-z-]*radius[a-z-]*\s*:", tokens) == ["--radius:", "--pill-radius:"]
+    # One owner: no badge/status/chip/pill-corner synonym beside it. The
+    # progress-meter corner is its own decision, not a pill corner.
+    assert re.findall(r"--[a-z-]*radius[a-z-]*\s*:", tokens) == ["--radius:", "--pill-radius:", "--progress-radius:"]
 
 
 def test_shared_pill_owners_consume_the_token():

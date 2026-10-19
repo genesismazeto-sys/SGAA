@@ -119,12 +119,10 @@ def pages_cached():
 # ------------------------------------------------------------ OWNERSHIP
 
 # Tokens still declared at :root outside tokens.css. This list may only shrink.
-# --card-gap is template-owned and has no global definition; the two nudge
-# tokens are redundant re-declarations with values identical to tokens.css and
-# are removed when those templates are repatriated.
+# --card-gap is template-owned and has no global definition. (The two button
+# nudge tokens left with the nudges themselves: icon and label are centred by
+# the .btn flex box alone.)
 KNOWN_ROOT_TOKEN_OWNERSHIP_EXCEPTIONS = {
-    "--btn-icon-nudge-y",
-    "--btn-text-nudge-y",
     "--card-gap",
 }
 

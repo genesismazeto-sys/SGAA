@@ -594,9 +594,10 @@ def test_standalone_processar_page_uses_the_same_decision_buttons(env):
         buttons = ".process-action-buttons .btn"
         idle = _decisions(session, buttons)
         assert [b["label"] for b in idle] == ["Deferir", "Deferir Parcialmente", "Indeferir"]
-        # This page has no other icon .btn to compare with: the modal-measured .btn values.
+        # This page has no other icon .btn to compare with: the modal-measured .btn values
+        # (the icon centred on the button: the former -0.75px nudge put it above the capitals).
         _assert_standard_geometry(idle, {"h": 32, "radius": "4px", "pad": "10px 10px", "icon": 15,
-                                         "iconGap": 6, "iconCy": -0.75})
+                                         "iconGap": 6, "iconCy": 0})
         for b in idle:
             _assert_idle(b)
 

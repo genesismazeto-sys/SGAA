@@ -13,6 +13,7 @@ expiry read the same deadline.
 from __future__ import annotations
 
 import datetime
+import json
 import re
 from pathlib import Path
 
@@ -23,6 +24,7 @@ from app import requisition_policy
 from app.db import write_transaction
 from app.requisitions import auto_indefer_devolvidas
 from app.settings import save_return_response_settings
+from app.status_presentation import deadline_tone
 from app.student_request_edit import (
     StudentEditConflict,
     StudentRequestEdit,
@@ -50,9 +52,12 @@ from tests.test_storage_s3a_request_documents import (
     _submission,
     _upload,
 )
+from tests.cdp_browser_support import BrowserSession, find_chromium
 from tests.versioned_test_support import isolated_versioned_app_env
 
 ROOT = Path(__file__).resolve().parents[1]
+CHROMIUM = find_chromium()
+browser = pytest.mark.skipif(CHROMIUM is None, reason="no headless Chromium available")
 REASON = "Falta o certificado assinado."
 JUSTIFICATION_REQUIRED = "Informe a justificativa para indeferir ou devolver a requisição."
 EDIT_CLOSED = (
@@ -237,6 +242,8 @@ def test_student_rectifies_and_resubmits_a_returned_request(env):
     assert form.status_code == 200
     page = form.get_data(as_text=True)
     assert "Retificar Requisição" in page and REASON in page and "Reenviar para análise" in page
+    # The reason stands on its own line, never run into the deadline sentence.
+    assert f'<span class="retificacao-motivo">Motivo: {REASON}</span>' in page
     for field in (r'name="nome_evento"[^>]*', r'name="horas_solicitadas"[^>]*', r'name="data_evento"[^>]*',
                   r'<textarea[^>]*name="observacao"[^>]*'):
         tag = re.search(field, page)
@@ -437,13 +444,21 @@ def test_the_deadline_meter_is_the_shared_progress_component(env):
                    "border-radius:5px", "system-ui"):
         assert legacy not in source, legacy
     css = (ROOT / "static" / "css" / "modern-style.css").read_text(encoding="utf-8")
-    assert ".progress.is-deadline,\n.progress.is-deadline > .progress-bar{ border-radius:var(--radius); }" in css
+    tokens = (ROOT / "static" / "css" / "foundation" / "tokens.css").read_text(encoding="utf-8")
+    # One corner for every meter, track and fill alike; never the 4px --radius.
+    assert "--progress-radius:2px;" in tokens
+    for selector in (".progress", ".progress-bar"):
+        assert re.search(rf"\n{re.escape(selector)}\{{[^}}]*border-radius:var\(--progress-radius\);", css), selector
+    meter_rules = [body for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css)
+                   if re.search(r"\.progress(-bar)?(?![\w-])", sel)]
+    assert meter_rules and not any("--radius)" in body for body in meter_rules)
     for tone in ("positive", "caution", "negative"):
         assert (f".progress.is-deadline.status-{tone} > .progress-bar"
                 f"{{ background:var(--status-{tone}-dot); }}") in css, tone
     assert ".rejection-decision .modal-card{" in css
 
-    # The original thresholds: more than 10 days positive, more than 5 caution.
+    # On the 30-day window the shares are the original thresholds: more than
+    # 10 days left positive, more than 5 caution.
     _set_days(30)
     for remaining, (name, age) in {
         11: ("R5 onze", datetime.timedelta(days=19, hours=1)),
@@ -459,3 +474,147 @@ def test_the_deadline_meter_is_the_shared_progress_component(env):
     ]
     for remaining in (11, 10, 6, 5):
         assert f">{remaining}/30<" in html
+
+
+def test_the_deadline_tone_is_a_share_of_the_configured_deadline():
+    # The 10/30 and 5/30 shares, on any configured total -- never fixed days.
+    expected = {
+        7: {7: "positive", 6: "positive", 3: "positive", 2: "caution", 1: "negative"},
+        14: {14: "positive", 5: "positive", 4: "caution", 3: "caution", 2: "negative", 1: "negative"},
+        30: {30: "positive", 11: "positive", 10: "caution", 6: "caution", 5: "negative", 1: "negative"},
+    }
+    for total, tones in expected.items():
+        for remaining, tone in tones.items():
+            assert deadline_tone(remaining, total) == tone, (remaining, total)
+    # No deadline configured: no meter, so no tone.
+    assert deadline_tone(None, 0) is None and deadline_tone(None, 7) is None and deadline_tone(3, 0) is None
+
+
+def test_a_seven_day_deadline_starts_positive(env):
+    _set_days(7)
+    for name, age in (("R6 sete", datetime.timedelta(hours=1)),
+                      ("R6 tres", datetime.timedelta(days=4, hours=1)),
+                      ("R6 dois", datetime.timedelta(days=5, hours=1)),
+                      ("R6 um", datetime.timedelta(days=6, hours=1))):
+        _returned(_no_file_request(env, name), age=age)
+    html = _dashboard(env)
+    meters = re.findall(r'>(\d)/7</span>\s*<div class="progress is-deadline status-(\w+)" data-pct="(\d+)"', html)
+    assert sorted(meters) == [("1", "negative", "14"), ("2", "caution", "28"),
+                              ("3", "positive", "42"), ("7", "positive", "100")]
+
+
+# ---------------------------------------------------------------- rendered
+# Real headless Chromium. The harness serves no web font, so these pin the
+# font-independent geometry; the Inter rendering itself was checked by eye.
+
+
+def _browser(env, width=1280):
+    session = BrowserSession(env["client"], CHROMIUM)
+    session.call("Emulation.setDeviceMetricsOverride",
+                 {"width": width, "height": 900, "deviceScaleFactor": 1, "mobile": False})
+    return session
+
+
+DIALOG_LAYOUT = """(() => {
+  const o = document.getElementById('rejection-decision-dialog');
+  if (!o || o.hidden) return null;
+  const card = o.querySelector('.modal-card').getBoundingClientRect();
+  const buttons = [...o.querySelectorAll('.modal-footer button')].map(b => { const r = b.getBoundingClientRect();
+    return {label: b.textContent.trim(), top: Math.round(r.top), left: r.left, right: r.right, width: Math.round(r.width),
+            fits: b.scrollWidth <= b.clientWidth, size: getComputedStyle(b).fontSize}; });
+  return JSON.stringify({card: Math.round(card.width), inside: buttons.every(b => b.left >= card.left && b.right <= card.right),
+                         buttons, overflow: document.documentElement.scrollWidth > innerWidth});
+})()"""
+
+
+@browser
+def test_the_rejection_dialog_keeps_its_three_actions_on_one_row(env):
+    request_id = _no_file_request(env, "R7 dialogo")
+    _as_admin(env)
+    order = ["Cancelar", "Enviar para retificação", "Indeferir definitivamente"]
+    for path in (f"/admin/processar_requisicao/{request_id}", "/admin/requisicoes"):
+        for width in (1280, 768, 390):
+            session = _browser(env, width)
+            try:
+                session.goto(path)
+                session.evaluate("(window.chooseRejectionOutcome(), true)")
+                layout = json.loads(session.wait_for(DIALOG_LAYOUT))
+            finally:
+                session.close()
+            buttons = layout["buttons"]
+            assert [b["label"] for b in buttons] == order, (path, width)
+            assert layout["inside"] and not layout["overflow"], (path, width, layout)
+            assert all(b["fits"] and b["size"] == "14px" for b in buttons), (path, width, buttons)
+            if width > 640:
+                # Desktop: one row, the shared 620px dialog width.
+                assert layout["card"] == 620 and len({b["top"] for b in buttons}) == 1, (path, width, layout)
+            else:
+                # Narrow: one full-width action per line, never a 2 + 1 break.
+                assert len({b["top"] for b in buttons}) == 3, (path, width, layout)
+                assert len({b["width"] for b in buttons}) == 1, (path, width, layout)
+
+
+BUTTON_OFFSETS = """JSON.stringify([...document.querySelectorAll(%s)].filter(b => b.offsetParent).map(b => {
+  const r = b.getBoundingClientRect(), svg = b.querySelector('svg'), label = b.querySelector('.btn-label');
+  const centre = (box) => +(((box.top + box.bottom) / 2) - ((r.top + r.bottom) / 2)).toFixed(2);
+  return {label: b.textContent.trim(), iconTop: getComputedStyle(svg).top, labelTop: getComputedStyle(label).top,
+          icon: centre(svg.getBoundingClientRect()), text: centre(label.getBoundingClientRect())};
+}))"""
+
+
+@browser
+def test_decision_icons_and_labels_carry_no_vertical_offset(env):
+    request_id = _no_file_request(env, "R7 icones")
+    _as_admin(env)
+    session = _browser(env)
+    try:
+        session.goto(f"/admin/processar_requisicao/{request_id}")
+        session.evaluate("(window.chooseRejectionOutcome(), true)")
+        session.wait_for("!!document.querySelector('#rejection-decision-dialog:not([hidden]) svg')")
+        buttons = json.loads(session.evaluate(BUTTON_OFFSETS % json.dumps(".btn-action-ghost")))
+    finally:
+        session.close()
+    assert [b["label"] for b in buttons] == ["Deferir", "Deferir Parcialmente", "Indeferir",
+                                             "Enviar para retificação", "Indeferir definitivamente"]
+    for b in buttons:
+        # Icon and label are both centred by the button's flex box, with no
+        # opposing nudges: both boxes sit on the button's middle.
+        assert (b["iconTop"], b["labelTop"], b["icon"], b["text"]) == ("auto", "auto", 0, 0), b
+
+
+METERS = """JSON.stringify((() => {
+  const probe = document.body.appendChild(document.createElement('i'));
+  const colour = (token) => { probe.style.color = 'var(' + token + ')'; return getComputedStyle(probe).color; };
+  const tones = {positive: colour('--status-positive-dot'), caution: colour('--status-caution-dot'),
+                 negative: colour('--status-negative-dot')};
+  return [...document.querySelectorAll('.progress')].map(p => {
+    const bar = p.querySelector('.progress-bar'), days = p.parentElement.querySelector('.retificar-dias');
+    return {deadline: p.classList.contains('is-deadline'), label: days ? days.textContent.trim() : null, tones,
+            fill: getComputedStyle(bar).backgroundColor, track: getComputedStyle(p).borderTopLeftRadius,
+            bar: getComputedStyle(bar).borderTopRightRadius, width: bar.getBoundingClientRect().width,
+            inner: p.clientWidth};
+  });
+})())"""
+
+
+@browser
+def test_the_deadline_meter_renders_its_tone_and_the_shared_corner(env):
+    _set_days(7)
+    for name, age in (("R8 sete", datetime.timedelta(hours=1)),
+                      ("R8 dois", datetime.timedelta(days=5, hours=1)),
+                      ("R8 um", datetime.timedelta(days=6, hours=1))):
+        _returned(_no_file_request(env, name), age=age)
+    _as_student(env)
+    session = _browser(env)
+    try:
+        session.goto("/aluno/dashboard")
+        meters = json.loads(session.evaluate(METERS))
+    finally:
+        session.close()
+    deadline = {m["label"]: m for m in meters if m["deadline"]}
+    assert set(deadline) == {"7/7", "2/7", "1/7"} and any(not m["deadline"] for m in meters)
+    for label, tone in (("7/7", "positive"), ("2/7", "caution"), ("1/7", "negative")):
+        assert deadline[label]["fill"] == deadline[label]["tones"][tone], (label, deadline[label])
+    assert deadline["7/7"]["width"] == deadline["7/7"]["inner"]  # 7/7: all of the time is left
+    # Every meter, the deadline one included, has the same 2px corner on track and fill.
+    assert {(m["track"], m["bar"]) for m in meters} == {("2px", "2px")}

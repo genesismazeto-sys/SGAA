@@ -388,8 +388,8 @@
 <div class="content-grid">
   {#- Para Retificar: the requests returned for correction whose deadline is
       still open (app.requisition_policy) -- exactly the ones the edit route
-      accepts. The meter's tone keeps the original thresholds: more than 10
-      days left positive, more than 5 caution, otherwise negative. -#}
+      accepts. The meter fills with the time left; its tone is that share of
+      the configured deadline (app.status_presentation.deadline_tone). -#}
   {% macro retificar_lista(itens, vazio) -%}
     {% if itens %}
       <ul class="retificar-list">
@@ -402,7 +402,7 @@
             <div class="retificar-meter">
               {% if c.dias_restantes is not none %}
                 {% set pct_dias = c.dias_restantes * 100 // c.dias_total %}
-                {% set tom = 'positive' if c.dias_restantes > 10 else ('caution' if c.dias_restantes > 5 else 'negative') %}
+                {% set tom = deadline_tone(c.dias_restantes, c.dias_total) %}
                 <span class="progress-meta-value retificar-dias" title="dias restantes/total">{{ c.dias_restantes }}/{{ c.dias_total }}</span>
                 <div class="progress is-deadline status-{{ tom }}" data-pct="{{ pct_dias }}" aria-label="{{ c.dias_restantes }} de {{ c.dias_total }} dias restantes para retificar">
                   <div class="progress-bar"></div>

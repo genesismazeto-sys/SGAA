@@ -288,6 +288,11 @@ body{
   text-decoration:none; cursor:pointer;
   transition:background .15s, color .15s, border-color .15s;
 }
+/* Icon and label are both centred by the .btn flex box and nothing else.
+   The former opposing nudges (icon -0.75px up, label +0.5px down) pulled
+   them apart: rendered with Inter at 1x to 2x, every icon sat 0.8-2.3px
+   above the capitals it labels. Centred, it sits 0-0.8px below their
+   middle, toward the x-height -- the optical middle of a mixed-case label. */
 .btn .lucide,
 .btn .btn-icon,
 .btn > svg{
@@ -297,15 +302,11 @@ body{
   width:var(--btn-icon-size); height:var(--btn-icon-size);
   margin:0 4px 0 0;
   flex:0 0 auto;
-  position:relative;
-  top:var(--btn-icon-nudge-y);
 }
 .btn .btn-label{
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  position:relative;
-  top:var(--btn-text-nudge-y);
 }
 .btn:hover{ background:#f3f4f6; }
 .btn.primary{ background:var(--brand); color:var(--text-on-brand); border-color:var(--brand); }
@@ -367,14 +368,22 @@ body{
    whether the request goes back for correction or is rejected for good. The
    shared modal contract (components/modal.css) supplies the structure; this
    is its size, shared by both pages. (0,2,0) so it also wins over the
-   Requisições page's runtime-injected, unscoped .modal-* sizing. */
-.rejection-decision .modal-card{ width:min(520px, calc(100vw - 32px)); }
+   Requisições page's runtime-injected, unscoped .modal-* sizing.
+   620px is the narrowest content dialog of the modal family (Reportar): its
+   footer holds Cancelar, Enviar para retificação and Indeferir
+   definitivamente on one row (about 540px with its gaps and padding), so
+   the row never wraps. On a narrow screen the three stack full-width in the
+   same order instead of breaking 2 + 1. */
+.rejection-decision .modal-card{ width:min(620px, calc(100vw - 32px)); }
 .rejection-decision .modal-header{ padding:16px 20px 4px; }
 .rejection-decision .modal-body{ padding:8px 20px; color:var(--text-secondary); line-height:1.45; }
 .rejection-decision .modal-body p{ margin:0 0 8px; }
 .rejection-decision .modal-body ul{ margin:0; padding-left:18px; display:grid; gap:6px; }
 .rejection-decision .modal-body strong{ color:var(--text-primary); font-weight:600; }
-.rejection-decision .modal-footer{ justify-content:flex-end; flex-wrap:wrap; padding:12px 20px 16px; }
+.rejection-decision .modal-footer{ justify-content:flex-end; flex-wrap:nowrap; padding:12px 20px 16px; }
+@media (max-width:640px){
+  .rejection-decision .modal-footer{ flex-direction:column; align-items:stretch; }
+}
 
 /* Disabled — canonical Design System state for any .btn. Owned here with the
    rest of the button contract so a disabled primary keeps its primary identity
@@ -944,13 +953,12 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
 .kpi-card .kpi-sub{ font-size:var(--font-size-small); color:var(--text-tertiary); }
 .kpi-card.kpi-primary{ border-color:rgba(0,0,0,.1); box-shadow:var(--shadow-sm); }
 .kpi-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
-.progress{ height:6px; background:#f1f5f9; border:1px solid var(--border-strong); border-radius:2px; overflow:hidden; margin-top:4px; }
-.progress-bar{ height:100%; background:var(--brand); transition:width .25s ease; }
-/* Remaining-time meter: the same understated track, the --radius corner on
-   track and fill, and a fill in the status family that matches how much time
-   is left (the caller picks positive / caution / negative). */
-.progress.is-deadline,
-.progress.is-deadline > .progress-bar{ border-radius:var(--radius); }
+.progress{ height:6px; background:#f1f5f9; border:1px solid var(--border-strong); border-radius:var(--progress-radius); overflow:hidden; margin-top:4px; }
+.progress-bar{ height:100%; background:var(--brand); border-radius:var(--progress-radius); transition:width .25s ease; }
+/* Remaining-time meter: the same track and corner as every other meter, and
+   a fill in the status family for how much of the time is left
+   (app.status_presentation.deadline_tone picks positive / caution /
+   negative). */
 .progress.is-deadline.status-positive > .progress-bar{ background:var(--status-positive-dot); }
 .progress.is-deadline.status-caution > .progress-bar{ background:var(--status-caution-dot); }
 .progress.is-deadline.status-negative > .progress-bar{ background:var(--status-negative-dot); }

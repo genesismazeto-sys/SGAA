@@ -68,6 +68,9 @@
     pointer-events: none; /* impede abrir dropdown no modo leitura */
   }
   select.control[aria-readonly="true"] option{ color: var(--text); }
+  /* The administrator's reason, verbatim, on its own line: it is never run
+     into the sentences around it, whatever punctuation it ends with. */
+  .retificacao-motivo{ display:block; margin:2px 0; }
 
   </style>
 {% endblock %}
@@ -85,7 +88,7 @@
     {% if retificando %}
     <div class="form-note form-note--guide" id="retificacao-orientacao" role="note">
       <i class="lucide" data-lucide="undo-2" aria-hidden="true"></i>
-      <span><strong>Requisição devolvida para retificação.</strong> Motivo: {{ retificacao.motivo or '—' }}{% if retificacao.prazo %} Reenvie até {{ retificacao.prazo }}.{% endif %} Corrija o que for necessário; ao reenviar, a requisição volta para análise.</span>
+      <span><strong>Requisição devolvida para retificação.</strong><span class="retificacao-motivo">Motivo: {{ retificacao.motivo or '—' }}</span>{% if retificacao.prazo %}Reenvie até {{ retificacao.prazo }}. {% endif %}Corrija o que for necessário; ao reenviar, a requisição volta para análise.</span>
     </div>
     {% endif %}
     {% set t = (tipo_atual or 'Acadêmica Complementar') %}

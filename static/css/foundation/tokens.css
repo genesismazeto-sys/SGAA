@@ -46,6 +46,11 @@
      (DS-PILL-RADIUS). Circles (dots, avatars), switches and icon buttons
      never consume it. */
   --pill-radius:4px;
+  /* Progress meters (.progress track and its .progress-bar fill, the
+     deadline meter included): one corner for every meter, the 2px the
+     standard bar always had -- not --radius, whose 4px on a 6px-high bar
+     reads as a pill. */
+  --progress-radius:2px;
   --shadow-sm:0 1px 3px rgba(0,0,0,.10);
   --shadow-md:0 8px 20px rgba(0,0,0,.05);
   /* Elevação e scrim compartilhados (UI-B11) — valor integral preservado. */
@@ -61,8 +66,6 @@
   --btn-icon-size:15px;
   --btn-icon-size-compact:14px;
   --btn-icon-shell:30px;
-  --btn-icon-nudge-y:-0.75px;
-  --btn-text-nudge-y:0.5px;
   --btn-primary:var(--brand);
   --btn-primary-strong:#002244;
 

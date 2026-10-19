@@ -357,11 +357,9 @@
     /* Mantem labels externas alinhadas iguais ao contrato atual */
     .form-cards-narrow .row-label{ right: calc(100% + var(--form-gap)); width: var(--form-label-w); }
     /* Centraliza acoes do formulario nesta pagina */
-    /* Ajuste fino de alinhamento do conteudo nos botoes */
-    :root{ --btn-icon-nudge-y: -0.75px; --btn-text-nudge-y: 0.5px; }
     .form-actions .btn{ font-weight:400; display:inline-flex; align-items:center; justify-content:center; gap:6px; line-height:1; }
-    .form-actions .btn .lucide{ display:block; width:16px; height:16px; margin:0; flex:0 0 auto; position:relative; top: var(--btn-icon-nudge-y); }
-    .form-actions .btn .btn-label{ display:block; position:relative; top: var(--btn-text-nudge-y); }
+    .form-actions .btn .lucide{ display:block; width:16px; height:16px; margin:0; flex:0 0 auto; }
+    .form-actions .btn .btn-label{ display:block; }
 
   </style>
 {% endblock %}
