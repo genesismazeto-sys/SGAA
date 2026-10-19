@@ -24,7 +24,7 @@ appending a change would make an owner worse, a proportional local refactor
 | Connections, transactions, lock helpers (incl. `skip_locked`), database-error classification | `app/db.py` (`get_db_connection`, `write_transaction`, `lock_*`, `classify_database_error`) |
 | SQL that differs between SQLite and PostgreSQL | `app/sql_dialect.py` |
 | SQLite schema and migrations | `app/prod1_schema.py` + `app/prod1_<topic>_ddl.py` / `app/prod1_<topic>_vNN.py` |
-| PostgreSQL schema, including the read-only provider API-role exposure probe (`api_role_exposure`) | `app/pg_schema.py` |
+| PostgreSQL schema, including the read-only provider API-role exposure probe (`api_role_exposure`) and the in-place v16 → v17 upgrade (`python -m app.pg_schema upgrade`) | `app/pg_schema.py` |
 | SQLite → PostgreSQL cutover; PostgreSQL logical backup | `app/pg_migrate_from_sqlite.py`; `tools/pg_backup.py` (operator tool, never imported by `app/`) |
 | SQLite file backup | `app/backup/` (`capability.py` decides whether it applies) |
 | Hosted-runtime mode, scratch space, startup blockers, the connection-kind classifier, the canonical database source identity (which database, which Supabase project; MP-3 A16) | `app/hosting.py` (no module-level import from `app`); readiness command `python -m app.hosting_cli check`, never imported by the web runtime |

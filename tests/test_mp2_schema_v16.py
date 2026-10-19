@@ -64,16 +64,17 @@ def _refused(conn, sql, params=()) -> bool:
 # --- version gate -----------------------------------------------------------------
 
 
-def test_v16_is_the_head_on_both_authorities():
-    assert prod1_schema.SCHEMA_VERSION == 16 == pg_schema.PG_SCHEMA_VERSION
+def test_v16_is_a_published_step_of_both_authorities():
+    # v17 (request reclassification) is the head; v16 stays a frozen step.
+    assert prod1_schema.SCHEMA_VERSION == pg_schema.PG_SCHEMA_VERSION > 16
     assert callable(getattr(prod1_schema, "migrate_prod1_v15_to_v16", None))
 
 
-def test_a_fresh_database_is_v16_with_both_tables_empty_and_marked():
+def test_a_fresh_database_carries_v16_with_both_tables_empty_and_marked():
     conn = _fresh()
     try:
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 16
-        assert validate_prod1_schema(conn)["schema_version"] == 16
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == prod1_schema.SCHEMA_VERSION
+        assert validate_prod1_schema(conn)["schema_version"] == prod1_schema.SCHEMA_VERSION
         row = conn.execute("SELECT name, schema_epoch FROM schema_migrations WHERE version=16").fetchone()
         assert tuple(row) == ("ephemeral_state", "prod-1")
         for table in EPHEMERAL_STATE_V16_TABLES:
@@ -96,12 +97,14 @@ def _v15_copy():
     return conn
 
 
-def test_a_v15_database_migrates_to_the_same_physical_schema_as_a_fresh_v16():
+def test_a_v15_database_migrates_to_the_same_physical_schema_as_a_fresh_head():
     migrated = _v15_copy()
     fresh = _fresh()
     try:
-        result = prod1_schema.bootstrap_prod1_schema(migrated)
+        result = prod1_schema.migrate_prod1_v15_to_v16(migrated)
         assert result["schema_version"] == 16 and result["ephemeral_state"] == "database"
+        prod1_schema._validate_prod1_v16_schema(migrated)
+        assert bootstrap_prod1_schema(migrated)["schema_version"] == prod1_schema.SCHEMA_VERSION
         assert _physical_schema_digest(migrated) == _physical_schema_digest(fresh)
         assert migrated.execute("SELECT count(*) FROM usuarios").fetchone()[0] == 2
         assert migrated.execute("SELECT count(*) FROM atividade_base").fetchone()[0] == 1
@@ -123,13 +126,13 @@ def test_the_frozen_v15_predecessor_is_recognised_and_a_tampered_one_is_not():
         conn.close()
 
 
-def test_a_v14_database_reaches_v16_through_the_whole_chain():
+def test_a_v14_database_reaches_the_head_through_the_whole_chain():
     conn = _fresh()
     try:
         _seed(conn)
         revert_prod1_v15_to_v14(conn)
         assert conn.execute("PRAGMA user_version").fetchone()[0] == 14
-        assert bootstrap_prod1_schema(conn)["schema_version"] == 16
+        assert bootstrap_prod1_schema(conn)["schema_version"] == prod1_schema.SCHEMA_VERSION
         assert _physical_schema_digest(conn) == _physical_schema_digest(_fresh())
     finally:
         conn.close()

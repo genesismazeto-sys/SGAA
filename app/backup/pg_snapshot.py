@@ -6,8 +6,8 @@ WHY THIS EXISTS
     connected Google Drive / OneDrive folder and applied retention there.  Under PostgreSQL the
     page refused it.  This module restores the same capability for the hosted database without a
     native client: it copies every application table, inside ONE repeatable-read read-only
-    transaction, into a file in the product's own snapshot format (a schema-v16 SQLite database,
-    ``app.prod1_schema``), and proves the copy table by table with the cutover's own row digests
+    transaction, into a file in the product's own snapshot format (a SQLite database of the current
+    prod-1 schema, ``app.prod1_schema``), and proves the copy table by table with the cutover's own row digests
     (``app.pg_migrate_from_sqlite``: the same normalization the PONR fingerprint uses).  The file is
     what the workstation runtime restores directly, and what the qualified Path-B tool loads into
     an empty PostgreSQL.
@@ -156,7 +156,7 @@ def create(directory, *, now: datetime | None = None, connect=None) -> dict:
             raise SnapshotError("SNAPSHOT_FOREIGN_KEYS")
         if lite.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
             raise SnapshotError("SNAPSHOT_INTEGRITY")
-        if int(lite.execute("PRAGMA user_version").fetchone()[0]) != 16:
+        if int(lite.execute("PRAGMA user_version").fetchone()[0]) != prod1_schema.SCHEMA_VERSION:
             raise SnapshotError("SNAPSHOT_VERSION")
         lite.close()
         lite = None

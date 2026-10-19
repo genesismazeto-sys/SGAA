@@ -162,7 +162,9 @@ LATER_ADDED_TRIGGERS = (
     "trg_admin_arquivos_storage_object_insert", "trg_admin_arquivos_storage_object_update",
     "trg_storage_upload_intents_transition", "trg_storage_objects_drive_account_bound",
 )
-LATER_ADDED_BASELINE_VERSIONS = (13, 14, 15, 16)
+# v17 (request reclassification) changes a trigger function body only: its
+# declaration and every table are U5-A's, so the version row is its whole delta.
+LATER_ADDED_BASELINE_VERSIONS = (13, 14, 15, 16, 17)
 #: ``(table, check name): (U5-A expression, later expression)`` -- a later unit's
 #: declared change of an existing CHECK, reverted before the digest.
 LATER_CHANGED_CHECKS = {

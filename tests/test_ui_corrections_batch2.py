@@ -577,8 +577,11 @@ def test_modal_partial_hours_validation_and_submission_are_unchanged(process_mod
     session.click("#m_footer_confirm")
     session.pump(1.5)
     posts = [(p, parse_qs(b)) for m, p, b in session.requests if m == "POST"]
+    (shown,), = _sql("SELECT atividade_versao_id FROM requisicoes WHERE id=?", (first,))
+    # The decision also names the classification the modal showed (MP-3 A22).
     assert posts == [(f"/admin/processar_requisicao/{first}",
-                      {"status": ["Deferida Parcialmente"], "horas_deferidas": ["1"], "observacao": ["Parcial por limite"]})]
+                      {"status": ["Deferida Parcialmente"], "atividade_versao_id_registrada": [str(shown)],
+                       "horas_deferidas": ["1"], "observacao": ["Parcial por limite"]})]
     (status, hours), = _sql("SELECT status, horas_deferidas FROM requisicoes WHERE id=?", (first,))
     assert (status, hours) == ("Deferida Parcialmente", 1)
 

@@ -13,6 +13,10 @@ deliberately independent of Flask and of request handling:
   SQLite migrations v1..v14 are never ported).  It is reachable only through
   the explicit CLI (``python -m app.pg_schema provision``) and never from
   ``init_db`` or from request-time ``ensure_*`` paths.
+* ``upgrade_pg_schema`` is the only in-place change: an exact prod-1/v16
+  schema becomes v17 (one trigger function body and migration row 17), also
+  reachable only through the explicit CLI (``python -m app.pg_schema
+  upgrade``).
 * ``validate_pg_schema`` is strictly read-only: it checks material catalog
   facts plus the ``pg_schema_meta`` epoch/version/digest already applied at
   provisioning time.
@@ -72,6 +76,13 @@ from app.prod1_ephemeral_state_ddl import (
     EPHEMERAL_STATE_V16_DETAILS_JSON,
     IMPORT_PREVIEW_PAYLOAD_MAX_BYTES,
 )
+from app.prod1_request_reclassification_ddl import (
+    RECLASSIFIABLE_REQUEST_STATUSES,
+    REQUEST_RECLASSIFICATION_V17_DETAILS_JSON,
+    SNAPSHOT_IDENTITY_MESSAGE,
+    SNAPSHOT_IMMUTABLE_MESSAGE,
+    SNAPSHOT_PAIRING_MESSAGE,
+)
 from app.prod1_storage_ddl import (
     BUSINESS_DOCUMENT_MAX_BYTES,
     BUSINESS_DOCUMENT_MIME_TYPES,
@@ -96,7 +107,7 @@ from app.prod1_storage_ddl import (
 )
 
 PG_SCHEMA_EPOCH = "prod-1"
-PG_SCHEMA_VERSION = 16
+PG_SCHEMA_VERSION = 17
 PG_SCHEMA_META_TABLE = "pg_schema_meta"
 PG_SCHEMA_META_ID = 1
 PG_BUSINESS_RULE_SQLSTATE = "SG001"
@@ -1871,19 +1882,46 @@ BEGIN
 END;
 $fn$
 """,
+    # v17: a Pendente/Devolvida request may replace its activity and snapshot
+    # together (app.prod1_request_reclassification_ddl).  Nested IFs because
+    # SQL does not guarantee left-to-right OR evaluation, and the jsonb cast
+    # must only ever see text sgaa_json_is_object accepted.
     "fn_requisicoes_snapshot_immutable": r"""
 CREATE FUNCTION fn_requisicoes_snapshot_immutable() RETURNS trigger
 LANGUAGE plpgsql AS $fn$
 BEGIN
   IF NEW.atividade_versao_id IS DISTINCT FROM OLD.atividade_versao_id
      OR NEW.regra_snapshot_json IS DISTINCT FROM OLD.regra_snapshot_json THEN
-    RAISE EXCEPTION 'request snapshot authority is immutable'
-      USING ERRCODE = 'SG001';
+    IF OLD.status NOT IN (__RECLASSIFIABLE__)
+       OR NEW.status NOT IN (__RECLASSIFIABLE__) THEN
+      RAISE EXCEPTION '__IMMUTABLE__'
+        USING ERRCODE = 'SG001';
+    END IF;
+    IF NEW.atividade_versao_id IS NOT DISTINCT FROM OLD.atividade_versao_id
+       OR NEW.regra_snapshot_json IS NOT DISTINCT FROM OLD.regra_snapshot_json THEN
+      RAISE EXCEPTION '__PAIRING__'
+        USING ERRCODE = 'SG001';
+    END IF;
+    IF NEW.regra_snapshot_json IS NULL
+       OR NOT sgaa_json_is_object(NEW.regra_snapshot_json) THEN
+      RAISE EXCEPTION '__IDENTITY__'
+        USING ERRCODE = 'SG001';
+    END IF;
+    IF jsonb_typeof(NEW.regra_snapshot_json::jsonb -> 'atividade_versao_id') IS DISTINCT FROM 'number'
+       OR (NEW.regra_snapshot_json::jsonb ->> 'atividade_versao_id') !~ '^[0-9]+$'
+       OR (NEW.regra_snapshot_json::jsonb ->> 'atividade_versao_id') IS DISTINCT FROM NEW.atividade_versao_id::text THEN
+      RAISE EXCEPTION '__IDENTITY__'
+        USING ERRCODE = 'SG001';
+    END IF;
   END IF;
   RETURN NEW;
 END;
 $fn$
-""",
+""".replace(
+        "__RECLASSIFIABLE__", ", ".join(f"'{status}'" for status in RECLASSIFIABLE_REQUEST_STATUSES)
+    ).replace("__IMMUTABLE__", SNAPSHOT_IMMUTABLE_MESSAGE).replace(
+        "__PAIRING__", SNAPSHOT_PAIRING_MESSAGE
+    ).replace("__IDENTITY__", SNAPSHOT_IDENTITY_MESSAGE),
     "fn_requisicoes_turma_snapshot_insert": r"""
 CREATE FUNCTION fn_requisicoes_turma_snapshot_insert() RETURNS trigger
 LANGUAGE plpgsql AS $fn$
@@ -2292,6 +2330,7 @@ PG_SCHEMA_MIGRATIONS_SEED = (
     ),
     (15, "canonical_document_custody", DOCUMENT_CUSTODY_V15_DETAILS_JSON),
     (16, "ephemeral_state", EPHEMERAL_STATE_V16_DETAILS_JSON),
+    (17, "request_reclassification", REQUEST_RECLASSIFICATION_V17_DETAILS_JSON),
 )
 
 
@@ -2688,6 +2727,22 @@ def _schema_function_names(connection):
             "SELECT p.proname FROM pg_catalog.pg_proc p "
             "JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace "
             "WHERE n.nspname = current_schema()",
+        )
+    }
+
+
+def _schema_function_sources(connection, names):
+    """``{name: prosrc}`` of the named functions in the current schema."""
+    for name in names:
+        _assert_identifier(name)
+    listed = ", ".join(f"'{name}'" for name in names)
+    return {
+        str(row[0]): str(row[1])
+        for row in _fetch(
+            connection,
+            "SELECT p.proname, p.prosrc FROM pg_catalog.pg_proc p "
+            "JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace "
+            f"WHERE n.nspname = current_schema() AND p.proname IN ({listed})",
         )
     }
 
@@ -3197,6 +3252,11 @@ def validate_pg_schema(connection):
         raise PostgresSchemaError(
             f"{PG_SCHEMA_META_TABLE}.applied_at is not UTC text seconds"
         )
+    # After the version check, so an older schema reports its version first.
+    sources = _schema_function_sources(connection, PG_UPGRADED_FUNCTIONS)
+    for name in PG_UPGRADED_FUNCTIONS:
+        if sources.get(name) != _function_body(PG_TRIGGER_FUNCTIONS[name]):
+            raise PostgresSchemaError(f"trigger function body mismatch for {name}")
 
     return {
         "schema_epoch": PG_SCHEMA_EPOCH,
@@ -3396,6 +3456,88 @@ def api_role_exposure(connection, roles=None):
 # ---------------------------------------------------------------------------
 
 
+def _function_body(definition):
+    """The ``$fn$``-quoted body of a trigger function: what ``prosrc`` stores."""
+    parts = definition.split("$fn$")
+    if len(parts) != 3:
+        raise PostgresSchemaError("trigger function definition is not $fn$-quoted")
+    return parts[1]
+
+
+#: Functions whose body an in-place upgrade replaced.  The trigger declaration
+#: and the version marker cannot show that the body was replaced, so
+#: ``validate_pg_schema`` compares these bodies with the contract.
+PG_UPGRADED_FUNCTIONS = ("fn_requisicoes_snapshot_immutable",)
+
+#: The frozen prod-1/v16 contract, the only state ``upgrade_pg_schema`` accepts.
+_PG_V16_CONTRACT_SHA256 = "499c03e5a368bb061347e3a1acbe84558f85af098d6d28d50084a21e1095a465"
+_PG_V16_SNAPSHOT_FUNCTION_BODY = """
+BEGIN
+  IF NEW.atividade_versao_id IS DISTINCT FROM OLD.atividade_versao_id
+     OR NEW.regra_snapshot_json IS DISTINCT FROM OLD.regra_snapshot_json THEN
+    RAISE EXCEPTION 'request snapshot authority is immutable'
+      USING ERRCODE = 'SG001';
+  END IF;
+  RETURN NEW;
+END;
+"""
+
+
+def upgrade_pg_schema(connection):
+    """Upgrade an exact prod-1/v16 schema in place to v17.  The caller owns the transaction.
+
+    v17 changes one trigger function body (request reclassification while the
+    request is editable) and adds migration row 17; no table, row, constraint,
+    index or trigger declaration changes.  The schema must be the frozen v16
+    contract exactly -- meta version and digest, migration rows 1..16 and the
+    v16 function body -- or nothing is written.  A schema already at v17 is
+    validated and left alone.  The ``pg_schema_meta`` row is locked first, so
+    two concurrent upgrades serialize and the second finds v17.
+    """
+    _require_server_encoding(connection)
+    meta = _fetch(
+        connection,
+        "SELECT id, schema_epoch, schema_version, contract_sha256 "
+        f"FROM {PG_SCHEMA_META_TABLE} ORDER BY id FOR UPDATE",
+    )
+    if len(meta) != 1 or int(meta[0][0]) != PG_SCHEMA_META_ID or str(meta[0][1]) != PG_SCHEMA_EPOCH:
+        raise PostgresSchemaIncompatibleError(f"{PG_SCHEMA_META_TABLE} is not the SGAA prod-1 row")
+    version, digest = int(meta[0][2]), str(meta[0][3])
+    if version == PG_SCHEMA_VERSION:
+        return {"status": "already_current", **validate_pg_schema(connection)}
+    if version != 16 or digest != _PG_V16_CONTRACT_SHA256:
+        raise PostgresSchemaIncompatibleError(
+            f"in-place upgrade starts only from the frozen prod-1/v16 contract (found version {version})"
+        )
+    migrations = _fetch(
+        connection,
+        "SELECT version, name, schema_epoch, details_json FROM schema_migrations ORDER BY version",
+    )
+    expected = [
+        (version_, name, PG_SCHEMA_EPOCH, details)
+        for version_, name, details in PG_SCHEMA_MIGRATIONS_SEED
+        if version_ <= 16
+    ]
+    if [(int(row[0]), str(row[1]), str(row[2]), row[3]) for row in migrations] != expected:
+        raise PostgresSchemaIncompatibleError("schema_migrations is not the prod-1/v16 baseline")
+    function = "fn_requisicoes_snapshot_immutable"
+    if _schema_function_sources(connection, (function,)).get(function) != _PG_V16_SNAPSHOT_FUNCTION_BODY:
+        raise PostgresSchemaIncompatibleError(f"{function} is not the prod-1/v16 body")
+
+    connection.execute(
+        PG_TRIGGER_FUNCTIONS[function].strip().replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION", 1)
+    )
+    (row_17,) = [statement for statement in _seed_statements() if statement.startswith(
+        "INSERT INTO schema_migrations") and "VALUES (17," in statement]
+    connection.execute(row_17)
+    connection.execute(
+        f"UPDATE {PG_SCHEMA_META_TABLE} SET schema_version = {PG_SCHEMA_VERSION}, "
+        f"contract_sha256 = '{PG_CONTRACT_SHA256}', applied_at = {PG_UTC_NOW_FUNCTION}() "
+        f"WHERE id = {PG_SCHEMA_META_ID}"
+    )
+    return {"status": "upgraded", "from_version": 16, **validate_pg_schema(connection)}
+
+
 def provision_pg_schema(connection):
     """Provision the prod-1/v14 baseline into the connection's current schema.
 
@@ -3477,13 +3619,29 @@ def provision_database(database_url):
         connection.close()
 
 
+def upgrade_database(database_url):
+    """Upgrade ``database_url`` from v16 to v17 in a single transaction and commit."""
+    connection = _connect_database(database_url)
+    try:
+        result = upgrade_pg_schema(connection)
+        connection.commit()
+        return result
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
 _USAGE = (
-    "usage: python -m app.pg_schema <provision|validate>\n"
+    "usage: python -m app.pg_schema <provision|validate|upgrade>\n"
     "\n"
-    "Explicit PostgreSQL schema operations for the SGAA prod-1/v14 baseline.\n"
+    "Explicit PostgreSQL schema operations for the SGAA prod-1 contract.\n"
     "DATABASE_URL must be a PostgreSQL URL. 'provision' creates the baseline\n"
     "from an empty schema or is a no-op when it already matches; it never\n"
-    "drops, alters or repairs an existing schema.\n"
+    "drops, alters or repairs an existing schema. 'upgrade' moves an exact\n"
+    "prod-1/v16 schema to v17 in one transaction (one trigger function and\n"
+    "migration row 17) and is a no-op on v17; anything else is refused.\n"
 )
 
 
@@ -3494,7 +3652,7 @@ def main(argv=None):
         print(_USAGE, file=stream)
         return 2 if not arguments else 0
     command = arguments[0]
-    if command not in {"provision", "validate"}:
+    if command not in {"provision", "validate", "upgrade"}:
         print(_USAGE, file=sys.stderr)
         return 2
     try:
@@ -3505,6 +3663,13 @@ def main(argv=None):
                 f"provision: {result['status']} "
                 f"(epoch={result['schema_epoch']} version={result['schema_version']} "
                 f"tables={result['table_count']} triggers={result['trigger_count']} "
+                f"database={_safe_url_label(url)})"
+            )
+        elif command == "upgrade":
+            result = upgrade_database(url)
+            print(
+                f"upgrade: {result['status']} "
+                f"(epoch={result['schema_epoch']} version={result['schema_version']} "
                 f"database={_safe_url_label(url)})"
             )
         else:

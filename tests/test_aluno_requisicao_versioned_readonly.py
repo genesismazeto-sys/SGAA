@@ -36,13 +36,15 @@ def test_student_creation_always_persists_and_renders_snapshot(env):
     assert detail.status_code in {200, 302}
 
 
-def test_activity_identity_is_immutable_on_edit(env):
+def test_activity_change_without_the_registered_classification_is_refused(env):
+    # A correction is accepted only from a form filled with the stored
+    # classification (app.request_reclassification); this POST names none.
     _, row = _create(env["client"], "Immutable identity")
     response = env["client"].post(f"/aluno/requisicoes/{row['id']}", data={
         "atividade_versao_id": "30", "nome_evento": "Immutable identity edited",
         "data_evento": "2026-05-11", "horas_solicitadas": "5", "observacao": "edit",
     })
-    assert response.status_code in {200, 302}
+    assert response.status_code == 200
     with main.app.app_context():
         current = main.get_db_connection().execute(
             "SELECT atividade_versao_id,regra_snapshot_json FROM requisicoes WHERE id=?", (row["id"],)

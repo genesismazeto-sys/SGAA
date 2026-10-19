@@ -946,7 +946,8 @@ def init_db():
         except PostgresSchemaError as exc:
             raise RuntimeError(
                 "PostgreSQL schema is not provisioned or is incompatible; run "
-                "'python -m app.pg_schema provision' explicitly before startup: "
+                "'python -m app.pg_schema provision' (empty database) or "
+                "'python -m app.pg_schema upgrade' (prod-1/v16) explicitly before startup: "
                 f"{exc}"
             ) from exc
         finally:

@@ -769,7 +769,7 @@ def _backup_now_fakes(monkeypatch, view, cloud_drives, remote, uploads, deleted,
             return {"file_id": file_id, "file_name": file_name, "folder_id": folder_id or "default-folder"}
         lite = sqlite3.connect(zip_path)
         try:
-            assert lite.execute("PRAGMA user_version").fetchone()[0] == 16
+            assert lite.execute("PRAGMA user_version").fetchone()[0] == 17
         finally:
             lite.close()
         uploads.append((provider, Path(zip_path).name, folder_id))

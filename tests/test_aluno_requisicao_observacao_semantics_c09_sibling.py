@@ -12,8 +12,9 @@ Contract (three states, as in UI-C09):
 * field **empty**     -> explicit clear (stored empty, as before);
 * field **with text** -> replaced.
 
-Ownership, the Pendente/Devolvida edit window and the snapshot activity lock
-still refuse before anything is written.
+Ownership, the Pendente/Devolvida edit window and an activity change from a
+form not filled with the stored classification still refuse before anything
+is written.
 """
 
 from __future__ import annotations
@@ -141,9 +142,14 @@ def test_outside_the_edit_window_writes_nothing(env):
     assert _all_rows() == before
 
 
-def test_refused_activity_change_writes_nothing(env):
+def test_activity_change_from_a_stale_form_writes_nothing(env):
+    # No atividade_versao_id_registrada: the form cannot show it was filled
+    # with the stored classification, so the change is refused and the form
+    # comes back with what was typed.
     client, req_id = env
     before = _all_rows()
     response = _post(client, req_id, atividade_versao_id="30", observacao="", nome_evento="troca recusada")
-    assert response.status_code == 302
+    assert response.status_code == 200
+    page = response.get_data(as_text=True)
+    assert "Editar Requisição" in page and 'value="troca recusada"' in page
     assert _all_rows() == before

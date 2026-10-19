@@ -178,5 +178,5 @@ def test_foto_catalog_key_retired_through_the_ledger():
     assert governance.UIB19_PHOTO_LABEL_KEYS == frozenset()
     catalog = governance.canonical_message_catalog()
     assert key not in catalog
-    assert governance.CATALOG_LEDGER[-11][1] == -1
+    assert governance.CATALOG_LEDGER[-12][1] == -1
     governance.assert_catalog_matches_canonical_baseline(catalog, context="UI-B19")

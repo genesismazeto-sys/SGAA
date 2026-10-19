@@ -287,7 +287,8 @@ def test_a_foreign_attachment_id_refuses_the_whole_edit(env, stored_pair):
     foreign = _attachments(other["id"])[0]
     before = _attachments(request["id"]) + _attachments(other["id"])
     response = _edit(env, request["id"], {"nome_evento": "vazou", "remover_comprovantes": str(foreign["id"])})
-    assert response.status_code == 302
+    # A refused edit is correctable: the same form comes back with what was typed.
+    assert response.status_code == 200 and 'value="vazou"' in response.get_data(as_text=True)
     assert _attachments(request["id"]) + _attachments(other["id"]) == before
     with main.app.app_context():
         assert _db().execute("SELECT nome_evento FROM requisicoes WHERE id=?", (request["id"],)).fetchone()[0] == "Edicao B23"

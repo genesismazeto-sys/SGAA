@@ -18,10 +18,16 @@ from __future__ import annotations
 import sqlite3
 
 from app.prod1_ephemeral_state_ddl import EPHEMERAL_STATE_V16_TABLES
+from tests.prod1_v17_support import revert_prod1_v17_to_v16
 
 
 def revert_prod1_v16_to_v15(conn: sqlite3.Connection) -> None:
-    """Drop the (empty) v16 tables with their indexes and marker 16."""
+    """Drop the (empty) v16 tables with their indexes and marker 16.
+
+    Handed the bootstrapped head (v17), it reverts v17 first.
+    """
+    if conn.execute("PRAGMA user_version").fetchone()[0] == 17:
+        revert_prod1_v17_to_v16(conn)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 16
     for table in EPHEMERAL_STATE_V16_TABLES:
         assert conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0, table

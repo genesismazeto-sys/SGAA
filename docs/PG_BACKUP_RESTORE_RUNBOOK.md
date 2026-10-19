@@ -45,7 +45,7 @@ Two procedures are kept apart throughout:
    environment.
 3. `DATABASE_URL` naming the source database **without a password**.
 4. The source is the SGAA contract: `validate_pg_schema` CURRENT (epoch
-   `prod-1`, v16, contract digest), `schema_migrations` = provisioner baseline,
+   `prod-1`, v17, contract digest), `schema_migrations` = provisioner baseline,
    17 triggers enabled, no extension-owned objects in `public`, the 64 Path-B
    domain checks green. Anything else is refused; the tool never repairs.
 5. An output directory **outside the repository** (refused inside it:
@@ -144,7 +144,8 @@ in-snapshot observation), TOC census + digest, 64 domain-check results,
 triggers enabled, account/credential cardinality, `table_data_policy`,
 the canonical-storage census (`storage`), tool git SHA + file SHA-256,
 `result: ok`. No password, URL, token, configuration value, row value or
-personal data. Manifest `format_version` 2 (prod-1/v16).
+personal data. Manifest `format_version` 2 (prod-1/v17; a v16 generation restores with the
+v16 tooling, SPEC MP-3 A22 §9).
 
 ### D2. Table-data policy (canonical storage, ephemeral state)
 
@@ -479,7 +480,7 @@ frequency (the RPO), object-set frequency, generations kept, restore-test interv
 reads it from the database it backs up and keeps that many generations in each directory
 (`--generations` may keep more, never fewer); the operator runs generations and drills on that
 cadence. "Gerar backup agora" on the same page sends a verified snapshot (`sgaa-pg-snapshot-*.db`,
-schema v16 SQLite) to the connected cloud drives; to restore one into PostgreSQL, provision an empty
+current-schema SQLite) to the connected cloud drives; to restore one into PostgreSQL, provision an empty
 target and run the Path-B tool on the downloaded file (`python -m app.pg_migrate_from_sqlite`, the file's
 SHA-256 as the expected digest).
 

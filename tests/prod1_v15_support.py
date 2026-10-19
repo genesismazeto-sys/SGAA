@@ -34,9 +34,9 @@ _ARQUIVOS_TRIGGERS = (
 def revert_prod1_v15_to_v14(conn: sqlite3.Connection) -> None:
     """Restore the v14 request triggers and ``admin_arquivos`` DDL and marker 14.
 
-    Handed the bootstrapped head (v16), it reverts v16 first.
+    Handed the bootstrapped head (v16 or v17), it reverts down to v15 first.
     """
-    if conn.execute("PRAGMA user_version").fetchone()[0] == 16:
+    if conn.execute("PRAGMA user_version").fetchone()[0] in (16, 17):
         revert_prod1_v16_to_v15(conn)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 15
     for table in ("requisicao_arquivos", "admin_arquivos"):

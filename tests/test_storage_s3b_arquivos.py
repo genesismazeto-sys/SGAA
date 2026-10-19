@@ -1216,9 +1216,10 @@ def test_G1_no_flow_writes_an_illegal_canonical_state(env):
 def test_G2_control_schema_authorities_move_together_and_v15_stays_published():
     from app import pg_schema, prod1_schema
 
-    assert prod1_schema.SCHEMA_VERSION == pg_schema.PG_SCHEMA_VERSION == 16
+    assert prod1_schema.SCHEMA_VERSION == pg_schema.PG_SCHEMA_VERSION == 17
     assert (ROOT / "app" / "prod1_document_custody_v15.py").exists()
-    assert not [p.name for p in (ROOT / "app").glob("prod1_*v17*.py")]
+    # S3-B added no schema step; v17 is the later request-reclassification one.
+    assert [p.name for p in (ROOT / "app").glob("prod1_*v17*.py")] == ["prod1_request_reclassification_v17.py"]
 
 
 def test_G3_no_s4_mirror_behaviour_on_canonical_paths(env):

@@ -1259,6 +1259,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
           other mode and every close removes it again. -#}
       <form id="req-form" method="post" data-direct-upload>
         <input type="hidden" name="edit_target_id" id="m_edit_target_id" value="">
+        {#- The classification an Editar form was filled with: a change of
+            activity is accepted only from the one still stored. -#}
+        <input type="hidden" name="atividade_versao_id_registrada" id="m_atividade_versao_id_registrada" value="">
         <input type="hidden" name="comprovantes_operation_id" value="{{ comprovantes_operation_id }}">
         <input type="hidden" name="comprovantes_submission_id" value="{{ comprovantes_submission_id }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -1520,6 +1523,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
       else scopeHint.removeAttribute('aria-invalid');
     }
 
+    // Group key shared by the map and the filter (as on the student form): a
+    // group outside the "N - Descrição" shape -- Extensão's "NA" -- is keyed by
+    // its own text, so its activities stay selectable.
+    function grupoKey(valor){
+      const g = (valor||'').trim();
+      const m = g.match(/^(\d+)\s*-\s*(.*)$/);
+      return m ? m[1] : g;
+    }
     function buildGruposPorTipo(){
       const map = { 'Acadêmica Complementar': {}, 'Extensão Universitária': {} };
       allOptions.forEach(opt => {
@@ -1530,7 +1541,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
         const g = (opt.getAttribute('data-grupo')||'').trim();
         if (!t || !g) return;
         const m = g.match(/^(\d+)\s*-\s*(.*)$/);
-        if (m){ const n=m[1]; const d=m[2]; if (!map[t]) map[t]={}; if(n && !map[t][n]) map[t][n]=d; }
+        const n = m ? m[1] : g;
+        const d = m ? m[2] : g;
+        if (!map[t]) map[t]={};
+        if (n && !map[t][n]) map[t][n]=d;
       });
       return map;
     }
@@ -1551,13 +1565,19 @@ document.addEventListener('DOMContentLoaded', ()=>{
     function populateNumeros(){
       const t = tipoSel.value || 'Acadêmica Complementar';
       const map = gruposPorTipo[t] || {};
-      const nums = Object.keys(map).sort((a,b)=> parseInt(a,10)-parseInt(b,10));
+      const nums = Object.keys(map).sort((a,b)=>{
+        const na = parseInt(a,10), nb = parseInt(b,10);
+        const aNum = !Number.isNaN(na), bNum = !Number.isNaN(nb);
+        if (aNum && bNum) return na - nb;
+        if (aNum !== bNum) return aNum ? -1 : 1;
+        return a.localeCompare(b);
+      });
       numSel.innerHTML = '';
       const optDash = document.createElement('option'); optDash.value=''; optDash.textContent='-'; numSel.appendChild(optDash);
       nums.forEach(n=>{ const op=document.createElement('option'); op.value=n; op.textContent=n; numSel.appendChild(op); });
     }
     function loadDescFromSelected(){ const t = tipoSel.value||'Acadêmica Complementar'; const n=numSel.value||''; const map=gruposPorTipo[t]||{}; const d=n ? (map[n]||'') : ''; descInput.value = d; }
-    function syncHidden(){ const n=(numSel.value||'').trim(); const d=(descInput.value||'').trim(); hidGrupo.value = n && d ? `${n} - ${d}` : (n || ''); }
+    function syncHidden(){ const n=(numSel.value||'').trim(); const d=(descInput.value||'').trim(); hidGrupo.value = n && d && n !== d ? `${n} - ${d}` : (n || ''); }
     function applyAtividadesFilter(){
       const t=(tipoSel.value||'').toLowerCase(); const n=(numSel.value||'').toLowerCase();
       let firstVisible=null;
@@ -1566,7 +1586,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         const activityId = String(opt.value || '').trim();
         const topt=(opt.getAttribute('data-tipo')||'').toLowerCase();
         const g=(opt.getAttribute('data-grupo')||'');
-        const gnum=(g.split(' - ')[0]||'').trim().toLowerCase();
+        const gnum=grupoKey(g).toLowerCase();
         const allowedByMatrix = isPlaceholder || !allowedActivityIds || !activityId || allowedActivityIds.has(activityId) || activityId === pinnedActivityId;
         const show = isPlaceholder || (allowedByMatrix && (topt===t) && (!n || gnum===n));
         opt.hidden = !show;
@@ -1722,6 +1742,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
     function openModal(){ if (!modal) return; modal.hidden = false; document.body.style.overflow='hidden'; window.lucide?.createIcons?.(); }
     const editTargetInput = document.getElementById('m_edit_target_id');
+    const registeredActivityInput = document.getElementById('m_atividade_versao_id_registrada');
     function setSaveButton(label, action, targetId=''){
       if (!createSubmit || !form) return;
       createSubmit.innerHTML = `${SAVE_ICON_SVG} ${label}`;
@@ -1735,6 +1756,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     function clearWritableTarget(){
       if (form) form.removeAttribute('action');
       if (editTargetInput) editTargetInput.value = '';
+      if (registeredActivityInput) registeredActivityInput.value = '';
       if (createSubmit){ createSubmit.hidden = true; createSubmit.disabled = true; }
     }
     function isWritableMode(){
@@ -1761,6 +1783,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       modal.removeAttribute('data-mode');
       delete modal.dataset.reqId;
       delete modal.dataset.reqStatus;
+      delete modal.dataset.reqActivity;
     }
     clearWritableTarget();
 
@@ -1779,7 +1802,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         syncHidden();
         applyAtividadesFilter();
         if (payload.grupo){
-          const num = (payload.grupo.split(' - ')[0]||'').trim();
+          const num = grupoKey(payload.grupo);
           if (numSel){ numSel.value = num; }
           loadDescFromSelected();
           syncHidden();
@@ -2198,11 +2221,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if (!Array.isArray(data.allowed_activity_ids) || !Array.isArray(data.activities)){
           throw new Error('invalid-request-activity-authority');
         }
+        // Editing a pending request may correct its classification: the API
+        // then offers the student's Matrix beside the historical option.
+        const offer = (mode === 'edit' && data.reclassification
+          && Array.isArray(data.reclassification.allowed_activity_ids)
+          && Array.isArray(data.reclassification.activities)) ? data.reclassification : data;
         if (typeof window.__setReqAllowedActivities === 'function'){
           window.__setReqAllowedActivities(
-            data.allowed_activity_ids,
+            offer.allowed_activity_ids,
             data.atividade_versao_id || '',
-            data.activities
+            offer.activities
           );
         }
         const alunoSel = document.getElementById('m_aluno_id_select');
@@ -2239,10 +2267,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if (overlay) {
           overlay.dataset.reqId = String(targetId);
           overlay.dataset.reqStatus = String(data.status || currentCard?.getAttribute('data-status') || 'Pendente');
+          overlay.dataset.reqActivity = String(data.atividade_versao_id || '');
         }
         if (typeof window.__openReqModal === 'function'){
           if (mode === 'edit'){
             window.__setSaveButton?.('Atualizar', `/admin/requisicoes/${targetId}/editar`, targetId);
+            const registered = document.getElementById('m_atividade_versao_id_registrada');
+            if (registered) registered.value = String(data.atividade_versao_id || '');
           }
           setModalMode(mode, overlay?.dataset?.reqStatus || 'Pendente');
           window.__openReqModal();
@@ -2399,6 +2430,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
       if (!status) return;
       const params = new URLSearchParams();
       params.set('status', status);
+      // The classification this modal showed: a request corrected meanwhile is refused.
+      const shownActivity = document.getElementById('req-modal')?.dataset?.reqActivity;
+      if (shownActivity) params.set('atividade_versao_id_registrada', shownActivity);
       if (status === 'Deferida Parcialmente'){
         const hv = (horasEl?.value || '').trim();
         if (!hv){ preparePanelFor('deferir_parte'); return; }

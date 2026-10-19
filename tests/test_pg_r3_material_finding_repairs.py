@@ -77,15 +77,15 @@ def _mutated_prod1_sql(kind: str) -> str:
         ),
     }
     if kind == "missing_snapshot_trigger":
-        mutated, count = re.subn(
-            r"CREATE TRIGGER trg_requisicoes_snapshot_immutable\s+.*?END;\s*",
-            "",
-            sql,
-            count=1,
-            flags=re.DOTALL,
+        # v17 drops the v16 trigger and creates its own: keep the drop, lose the creation.
+        from app.prod1_request_reclassification_ddl import REQUEST_RECLASSIFICATION_V17_SCHEMA_OBJECTS_SQL
+
+        assert sql.count(REQUEST_RECLASSIFICATION_V17_SCHEMA_OBJECTS_SQL) == 1
+        return sql.replace(
+            REQUEST_RECLASSIFICATION_V17_SCHEMA_OBJECTS_SQL,
+            "DROP TRIGGER trg_requisicoes_snapshot_immutable;",
+            1,
         )
-        assert count == 1
-        return mutated
     old, new = replacements[kind]
     assert sql.count(old) == 1, kind
     return sql.replace(old, new, 1)

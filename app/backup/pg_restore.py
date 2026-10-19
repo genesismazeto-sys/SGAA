@@ -4,8 +4,8 @@
 WHY THIS EXISTS
     The product's restore replaced the database with a chosen snapshot after saving a safety copy.
     Under PostgreSQL the page refused it.  This module restores the capability for the hosted
-    database: the snapshot (the product's own format, a schema-v16 SQLite file -- what "Gerar backup
-    agora" writes) is verified by the qualified Path-B reader (``app.pg_migrate_from_sqlite``:
+    database: the snapshot (the product's own format, a current-schema SQLite file -- what "Gerar
+    backup agora" writes) is verified by the qualified Path-B reader (``app.pg_migrate_from_sqlite``:
     version, integrity, foreign keys, the exact table and column contract, the storage
     preconditions), then, in ONE transaction holding every register table exclusively, the
     registers are replaced and proven equal to the file row by row, with the domain checks clean.

@@ -89,9 +89,9 @@ def _verdict(conn, table, row, index) -> tuple[bool, str | None]:
 # --- version gate ------------------------------------------------------------------
 
 
-def test_v15_keeps_its_v14_migration_and_the_authorities_move_together_to_v16():
-    """MP-2 moved the head to v16 on both authorities; v15 and its migration stay published."""
-    assert prod1_schema.SCHEMA_VERSION == pg_schema.PG_SCHEMA_VERSION == 16
+def test_v15_keeps_its_v14_migration_and_the_authorities_move_together_to_the_head():
+    """Later heads (v16, v17) move both authorities together; v15 and its migration stay published."""
+    assert prod1_schema.SCHEMA_VERSION == pg_schema.PG_SCHEMA_VERSION == 17
     migrate = getattr(prod1_schema, "migrate_prod1_v14_to_v15", None)
     assert callable(migrate), "v15 needs an additive v14 -> v15 migration"
 

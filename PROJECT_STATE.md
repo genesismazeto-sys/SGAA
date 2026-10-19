@@ -16,8 +16,11 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
 
 - Flask; composition root `app/__init__.py::create_app`; `main.py` is a frozen
   compatibility facade. Structural refactor complete.
-- Logical schema `prod-1` v16 on SQLite and PostgreSQL (v16 adds two empty, ephemeral
-  tables: `auth_throttle_events`, `admin_import_previews`).
+- Logical schema `prod-1` v17 in the repository on SQLite and PostgreSQL (v16 added two empty,
+  ephemeral tables; v17 lets a Pendente/Devolvida request replace its activity and snapshot
+  together -- SPEC MP-3 A22). PROD PostgreSQL is v16 until gate G1 runs `python -m app.pg_schema
+  upgrade`; governed tooling validates the exact version, so the daily backup worktree is repinned
+  in the same session.
 - PostgreSQL schema authority, runtime dialect and transaction semantics are in
   place. The production database is hosted in Supabase PostgreSQL 17; Path-B
   migration, governed Layer-2 backup/restore and the production cutover are recorded.
@@ -87,6 +90,9 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   The first subsequently scheduled DUE pass is still awaiting observation;
   a no-op scheduled wake returned HTTP 200/NOT_DUE. The configured policy is the
   default 24 h database / 7 d objects / 2 retained / 30 d restoration drill.
+- MP-3 A22 (`docs/specs/MP-3-A22-request-reclassification.md`): a student or administrator
+  corrects the activity of an editable request in place (schema v17). Slice 1 is on the
+  development branch, not deployed; PROD gate G1 (upgrade, then GF1 deploy) awaits the owner.
 
 ## Production
 

@@ -78,6 +78,13 @@ from app.student_request_edit import (
     StudentRequestEdit,
     save_student_request_edit,
 )
+from app.request_reclassification import (
+    ReclassificationConflict,
+    ReclassificationRefused,
+    apply_reclassification,
+    log_reclassified,
+    prepare_reclassification,
+)
 from app.security.passwords import hash_password
 from app.user_accounts import (
     CREDENTIAL_STATE_PERSONAL,
@@ -357,6 +364,17 @@ _PERIODICIDADE_LABELS = {SEMESTRAL: "semestral", TOTAL: "total no curso"}
 
 def _semestre_sort_key(label: str) -> tuple[int, int]:
     return semester_sort_key(label)
+
+
+def _grupo_key(grupo: str | None) -> str:
+    """The Grupo select's key, as the form's script computes it.
+
+    "N - Descrição" is keyed by N; any other group (Extensão's "NA") by its
+    own text, so its activities stay reachable.
+    """
+    raw = str(grupo or "").strip()
+    numbered = re.match(r"^(\d+)\s*-\s*", raw)
+    return numbered.group(1) if numbered else raw
 
 
 def _extract_grupo_numero(grupo: str | None) -> int | None:
@@ -1637,7 +1655,7 @@ def _submitted_request_init(form, *, keep_activity: bool = True) -> dict[str, An
     return {
         "tipo_atividade": tipo if tipo in (AAC_ACTIVITY_TYPE, EXT_ACTIVITY_TYPE) else None,
         "grupo": grupo,
-        "grupo_num": grupo.split(" - ")[0].strip() if " - " in grupo else grupo,
+        "grupo_num": _grupo_key(grupo),
         "atividade_versao_id": int(versao_raw) if keep_activity and versao_raw.isdigit() else None,
         "nome_evento": form.get("nome_evento") or "",
         "horas_solicitadas": (form.get("horas_solicitadas") or "").strip(),
@@ -1817,6 +1835,108 @@ def _flash_edit_closed() -> None:
     )
 
 
+def _flash_classification_changed() -> None:
+    flash(
+        "A atividade desta requisição foi alterada enquanto o formulário estava aberto. "
+        "Confira a atividade registrada e salve novamente.",
+        "error",
+    )
+
+
+def _request_anexos(conn, req_id: int) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        """SELECT id,label,filename,original_filename,criado_em,provider
+             FROM requisicao_arquivos
+            WHERE requisicao_id=? AND storage_status IN ('active','legacy_active')
+         ORDER BY id""",
+        (req_id,),
+    ).fetchall()
+    return [dict(item) for item in rows]
+
+
+def _rectification_note(status, data_processamento, observacao, return_days: int):
+    janela = open_return_window(status, data_processamento, return_days)
+    if janela is None:
+        return None
+    return {
+        "motivo": observacao or "",
+        "prazo": janela.deadline.strftime("%d/%m/%Y às %H:%M") if janela.deadline else None,
+    }
+
+
+def _render_request_form(
+    conn,
+    *,
+    user_id: int,
+    req_id: int,
+    stored_version_id: int,
+    init: dict[str, Any],
+    readonly: bool,
+    retificacao,
+    anexos,
+    status: int = 200,
+):
+    """The request form in edit or read-only mode.
+
+    Editing lists every activity of the student's effective Matrix -- both
+    types, filtered client-side like Nova requisição -- so the classification
+    can be corrected (``app.request_reclassification``); the stored activity
+    is always listed, even when the Matrix no longer offers it.  The form
+    carries the classification it was filled with, so a correction made
+    meanwhile by someone else is never silently undone.
+    """
+    _, _, atividades = _list_atividades_for_usuario(
+        conn, user_id, "Todas", include_activity_id=stored_version_id
+    )
+    chosen = next(
+        (item for item in atividades if item["id"] == init.get("atividade_versao_id")), None
+    )
+    if chosen is not None and not readonly:
+        # The activity is the type and group authority: the selects are
+        # prefilled from the very option the form will show selected.
+        init = {
+            **init,
+            "tipo_atividade": chosen["tipo_atividade"],
+            "grupo": str(chosen.get("grupo") or ""),
+            "grupo_num": _grupo_key(chosen.get("grupo")),
+        }
+    return render_template(
+        "aluno_nova_requisicao.html",
+        atividades=atividades,
+        tipo_atual=init.get("tipo_atividade") or AAC_ACTIVITY_TYPE,
+        mode=("view_readonly" if readonly else "edit"),
+        init=init,
+        anexos=anexos,
+        retificacao=(None if readonly else retificacao),
+        atividade_versao_id_registrada=(None if readonly else stored_version_id),
+        comprovantes_operation_id=new_comprovante_operation_id(),
+        comprovantes_submission_id=documents.issue_submission(session, user_id),
+        requisicao_id=(None if readonly else req_id),
+    ), status
+
+
+def _parse_edit_date(value) -> str | None:
+    if not value:
+        return None
+    s = str(value).strip()
+    if "/" in s:
+        parts = s.split("/")
+        if len(parts) >= 3:
+            try:
+                return f"{parts[2]}-{int(parts[1]):02d}-{int(parts[0]):02d}"
+            except Exception:
+                return None
+        return None
+    if "-" in s:
+        return s.split(" ")[0][:10]
+    return None
+
+
+def _optional_int(value) -> int | None:
+    raw = str(value or "").strip()
+    return int(raw) if raw.isdigit() else None
+
+
 @bp_aluno.route("/aluno/requisicoes/<int:req_id>", methods=["GET", "POST"])
 @aluno_required
 def aluno_requisicao_detalhe(req_id: int):
@@ -1855,145 +1975,7 @@ def aluno_requisicao_detalhe(req_id: int):
         return redirect(_aluno_url("aluno_minhas_requisicoes"))
 
     if request.method == "POST" and not delete_flag:
-        rec = conn.execute(
-            "SELECT status, data_processamento, observacao, atividade_versao_id, regra_snapshot_json "
-            "FROM requisicoes WHERE id=? AND aluno_id=?",
-            (req_id, aluno_id),
-        ).fetchone()
-        if not rec:
-            flash("Requisição não encontrada.", "error")
-            return redirect(_aluno_url("aluno_minhas_requisicoes"))
-        if not can_student_edit_requisition(
-            rec["status"], rec["data_processamento"], return_days=return_days
-        ):
-            _flash_edit_closed()
-            return redirect(_aluno_url("aluno_requisicao_detalhe", req_id=req_id))
-
-        nome_evento = request.form.get("nome_evento")
-        horas_solicitadas_raw = request.form.get("horas_solicitadas")
-        data_evento_raw = request.form.get("data_evento")
-        observacao = request.form.get("observacao")
-        atividade_id_new = request.form.get("atividade_versao_id")
-
-        # D8.2B — contrato de edição após snapshot versionado.
-        # Quando a requisição já tem um snapshot versionado registrado no
-        # momento da criação, o aluno NÃO pode trocar a atividade. O snapshot é
-        # um registro imutável do momento da criação: a edição não o recalcula
-        # nem o limpa. As demais edições (nome do evento, horas, data,
-        # observação, anexos) seguem permitidas normalmente. Requisições sem
-        # snapshot preservam o comportamento legado de troca de atividade,
-        # mantendo a validação de atividade permitida pela matriz.
-        snapshot_versionado_presente = (
-            (rec["atividade_versao_id"] is not None and str(rec["atividade_versao_id"]).strip() != "")
-            or (str(rec["regra_snapshot_json"] or "").strip() != "")
-        )
-        if (
-            snapshot_versionado_presente
-            and atividade_id_new
-            and atividade_id_new.isdigit()
-            and int(atividade_id_new) != rec["atividade_versao_id"]
-        ):
-            flash(
-                "Esta solicitação já possui uma versão de atividade registrada. "
-                "Para trocar a atividade, crie uma nova solicitação.",
-                "error",
-            )
-            return redirect(_aluno_url("aluno_requisicao_detalhe", req_id=req_id))
-
-        try:
-            horas_solicitadas = (
-                float(horas_solicitadas_raw)
-                if horas_solicitadas_raw not in (None, "")
-                else None
-            )
-        except Exception:
-            horas_solicitadas = None
-        data_evento_norm: str | None = None
-        if data_evento_raw:
-            s = str(data_evento_raw).strip()
-            if "/" in s:
-                parts = s.split("/")
-                if len(parts) >= 3:
-                    try:
-                        data_evento_norm = f"{parts[2]}-{int(parts[1]):02d}-{int(parts[0]):02d}"
-                    except Exception:
-                        data_evento_norm = None
-            elif "-" in s:
-                data_evento_norm = s.split(" ")[0][:10]
-
-        # UI-C09 (student sibling): an omitted `observacao` keeps the stored
-        # one; only a submitted field is written (submitted empty clears it).
-        edit = StudentRequestEdit(
-            nome_evento=nome_evento,
-            horas_solicitadas=horas_solicitadas,
-            data_evento=data_evento_norm,
-            observacao=observacao if "observacao" in request.form else None,
-        )
-        if documents.has_file_parts(request.files):
-            flash(DIRECT_UPLOAD_REQUIRED_MESSAGE, "error")
-            return redirect(_aluno_url("aluno_requisicao_detalhe", req_id=req_id))
-        intent_ids = documents.submitted_intent_ids(request.form)
-        submission_id = (request.form.get(documents.SUBMISSION_FIELD) or "").strip()
-        # UI-B23: only explicitly submitted ids are removed -- an omitted list
-        # keeps every stored comprovante. They are checked before any write and
-        # removed only after the edit itself succeeded.
-        remover_ids = request.form.getlist("remover_comprovantes")
-        actor_id = int(session["user_id"])
-        try:
-            validate_comprovante_removal(conn, request_id=req_id, attachment_ids=remover_ids)
-            if intent_ids and documents.find_completed_submission(
-                conn, actor_user_id=actor_id, intent_ids=intent_ids
-            ) == int(req_id):
-                intent_ids = []  # response-lost retry: these documents are attached already
-            if intent_ids and not documents.submission_is_live(session, submission_id, actor_id):
-                raise documents.RequestDocumentError(
-                    "SUBMISSION_INVALID", DIRECT_UPLOAD_REQUIRED_MESSAGE, 403
-                )
-            # The field update (or resubmission) and every canonical
-            # attachment commit together.
-            with write_transaction(conn):
-                resubmitted = save_student_request_edit(
-                    conn,
-                    request_id=req_id,
-                    aluno_id=aluno_id,
-                    status=rec["status"],
-                    data_processamento=rec["data_processamento"],
-                    stored_observacao=rec["observacao"],
-                    edit=edit,
-                )
-                documents.attach_request_documents(
-                    conn,
-                    actor_user_id=actor_id,
-                    request_id=int(req_id),
-                    submission_id=submission_id,
-                    intent_ids=intent_ids,
-                    create=False,
-                )
-            if resubmitted:
-                flash("Requisição reenviada para análise.", "success")
-            else:
-                flash("Requisição atualizada.", "success")
-            # Removal runs after the committed edit: a failed LEGACY Drive
-            # removal keeps those files and never undoes the edit above.
-            try:
-                remove_comprovantes(
-                    conn,
-                    request_id=req_id,
-                    attachment_ids=remover_ids,
-                    actor_user_id=actor_id,
-                )
-            except ComprovanteError as exc:
-                flash(exc.user_message, "error")
-        except StudentEditConflict:
-            conn.rollback()
-            _flash_edit_closed()
-        except (ComprovanteError, documents.RequestDocumentError) as exc:
-            conn.rollback()
-            flash(exc.user_message, "error")
-        except Exception:
-            conn.rollback()
-            flash("Falha ao atualizar requisição.", "error")
-        return redirect(_aluno_url("aluno_requisicao_detalhe", req_id=req_id))
+        return _save_student_request_edit(conn, req_id=req_id, aluno_id=aluno_id, return_days=return_days)
 
     row = conn.execute(
         """
@@ -2040,14 +2022,7 @@ def aluno_requisicao_detalhe(req_id: int):
         "nome_evento": row["nome_evento"] if "nome_evento" in row.keys() else None,
         "snapshot": snapshot_display,
     }
-    anexos_rows = conn.execute(
-        """SELECT id,label,filename,original_filename,criado_em,provider
-             FROM requisicao_arquivos
-            WHERE requisicao_id=? AND storage_status IN ('active','legacy_active')
-         ORDER BY id""",
-        (req_id,),
-    ).fetchall()
-    anexos = [dict(item) for item in anexos_rows]
+    anexos = _request_anexos(conn, req_id)
 
     edit_flag = (request.args.get("edit") or "").strip().lower() in {"1", "true", "yes", "y"}
     view_flag = (request.args.get("view") or "").strip().lower() in {"1", "true", "yes", "y"}
@@ -2057,44 +2032,15 @@ def aluno_requisicao_detalhe(req_id: int):
     ):
         _flash_edit_closed()
         return redirect(_aluno_url("aluno_requisicao_detalhe", req_id=req_id, view=1))
-    janela = open_return_window(row["status"], row["data_processamento"], return_days)
-    retificacao = None
-    if janela is not None:
-        retificacao = {
-            "motivo": row["observacao"] or "",
-            "prazo": janela.deadline.strftime("%d/%m/%Y às %H:%M") if janela.deadline else None,
-        }
+    retificacao = _rectification_note(
+        row["status"], row["data_processamento"], row["observacao"], return_days
+    )
     if edit_flag or view_flag:
-        tipo_filtro = detalhe["tipo_atividade"] or "Acadêmica Complementar"
-        _, _, atividades = _list_atividades_for_usuario(
-            conn,
-            user_id,
-            tipo_filtro,
-            include_activity_id=row["atividade_versao_id"],
-        )
-
-        data_iso10 = ""
-        try:
-            s = str(detalhe["data_evento"] or "").strip()
-            if s:
-                if "-" in s:
-                    data_iso10 = s.split(" ")[0][:10]
-                elif "/" in s:
-                    px = s.split("/")
-                    if len(px) >= 3:
-                        data_iso10 = f"{px[2]}-{int(px[1]):02d}-{int(px[0]):02d}"
-        except Exception:
-            data_iso10 = ""
-        grupo_raw = detalhe["grupo"] or ""
-        grupo_num = (
-            grupo_raw.split(" - ")[0].strip()
-            if " - " in grupo_raw
-            else grupo_raw.strip()
-        )
+        data_iso10 = _parse_edit_date(detalhe["data_evento"]) or ""
         init = {
             "tipo_atividade": detalhe["tipo_atividade"],
             "grupo": detalhe["grupo"],
-            "grupo_num": grupo_num,
+            "grupo_num": _grupo_key(detalhe["grupo"]),
             "atividade_versao_id": row["atividade_versao_id"],
             "nome_evento": row["nome_evento"],
             "horas_solicitadas": detalhe["horas_solicitadas"],
@@ -2103,17 +2049,15 @@ def aluno_requisicao_detalhe(req_id: int):
             # the administrator's reason, shown above the form and kept on save.
             "observacao": "" if retificacao and not view_flag else detalhe["observacao"],
         }
-        return render_template(
-            "aluno_nova_requisicao.html",
-            atividades=atividades,
-            tipo_atual=tipo_filtro,
-            mode=("view_readonly" if view_flag else "edit"),
+        return _render_request_form(
+            conn,
+            user_id=user_id,
+            req_id=req_id,
+            stored_version_id=row["atividade_versao_id"],
             init=init,
+            readonly=view_flag,
+            retificacao=retificacao,
             anexos=anexos,
-            retificacao=(None if view_flag else retificacao),
-            comprovantes_operation_id=new_comprovante_operation_id(),
-            comprovantes_submission_id=documents.issue_submission(session, user_id),
-            requisicao_id=(req_id if edit_flag else None),
         )
 
     return render_template(
@@ -2125,3 +2069,175 @@ def aluno_requisicao_detalhe(req_id: int):
         comprovantes_submission_id=documents.issue_submission(session, user_id),
     )
 
+
+def _save_student_request_edit(conn, *, req_id: int, aluno_id: int, return_days: int):
+    """POST of the edit form: fields, classification and documents in one transaction.
+
+    A correctable refusal renders the same form again with what the student
+    entered and the reason; a request that is no longer editable goes to its
+    read-only view; success returns to Minhas requisições.
+    """
+    user_id = int(session["user_id"])
+    rec = conn.execute(
+        "SELECT id, status, data_processamento, observacao, atividade_versao_id, regra_snapshot_json "
+        "FROM requisicoes WHERE id=? AND aluno_id=?",
+        (req_id, aluno_id),
+    ).fetchone()
+    if not rec:
+        flash("Requisição não encontrada.", "error")
+        return redirect(_aluno_url("aluno_minhas_requisicoes"))
+    if not can_student_edit_requisition(
+        rec["status"], rec["data_processamento"], return_days=return_days
+    ):
+        _flash_edit_closed()
+        return redirect(_aluno_url("aluno_requisicao_detalhe", req_id=req_id, view=1))
+
+    def form_again(*, activity: str = "submitted", status: int = 200, stored=rec):
+        """The form again with what was entered; ``activity`` picks the selection.
+
+        ``submitted`` keeps the student's choice, ``stored`` shows the
+        classification currently stored (someone else changed it), ``none``
+        asks for a new choice (the submitted one was refused).
+        """
+        init = _submitted_request_init(request.form, keep_activity=activity == "submitted")
+        if activity == "stored":
+            init["atividade_versao_id"] = stored["atividade_versao_id"]
+        return _render_request_form(
+            conn,
+            user_id=user_id,
+            req_id=req_id,
+            stored_version_id=stored["atividade_versao_id"],
+            init=init,
+            readonly=False,
+            retificacao=_rectification_note(
+                stored["status"], stored["data_processamento"], stored["observacao"], return_days
+            ),
+            anexos=_request_anexos(conn, req_id),
+            status=status,
+        )
+
+    horas_raw = request.form.get("horas_solicitadas")
+    try:
+        horas_solicitadas = float(horas_raw) if horas_raw not in (None, "") else None
+    except ValueError:
+        horas_solicitadas = None
+    # UI-C09 (student sibling): an omitted `observacao` keeps the stored
+    # one; only a submitted field is written (submitted empty clears it).
+    edit = StudentRequestEdit(
+        nome_evento=request.form.get("nome_evento"),
+        horas_solicitadas=horas_solicitadas,
+        data_evento=_parse_edit_date(request.form.get("data_evento")),
+        observacao=request.form.get("observacao") if "observacao" in request.form else None,
+    )
+    try:
+        reclassification = prepare_reclassification(
+            conn,
+            request_row=rec,
+            aluno_id=aluno_id,
+            new_version_id=_optional_int(request.form.get("atividade_versao_id")),
+            form_version_id=_optional_int(request.form.get("atividade_versao_id_registrada")),
+            declared_tipo=request.form.get("tipo_atividade"),
+            flow_origin="aluno_reclassify",
+            actor_role="aluno",
+            actor_user_id=user_id,
+        )
+    except ReclassificationRefused as exc:
+        if exc.code == "STALE_FORM":
+            _flash_classification_changed()
+            return form_again(activity="stored")
+        if exc.code == "NOT_RECLASSIFIABLE":
+            _flash_edit_closed()
+            return redirect(_aluno_url("aluno_requisicao_detalhe", req_id=req_id, view=1))
+        flash("A atividade selecionada não está disponível para a matriz da sua turma.", "error")
+        return form_again(activity="none")
+
+    if documents.has_file_parts(request.files):
+        flash(DIRECT_UPLOAD_REQUIRED_MESSAGE, "error")
+        return form_again(status=415)
+    intent_ids = documents.submitted_intent_ids(request.form)
+    submission_id = (request.form.get(documents.SUBMISSION_FIELD) or "").strip()
+    # UI-B23: only explicitly submitted ids are removed -- an omitted list
+    # keeps every stored comprovante. They are checked before any write and
+    # removed only after the edit itself succeeded.
+    remover_ids = request.form.getlist("remover_comprovantes")
+    try:
+        validate_comprovante_removal(conn, request_id=req_id, attachment_ids=remover_ids)
+        if intent_ids and documents.find_completed_submission(
+            conn, actor_user_id=user_id, intent_ids=intent_ids
+        ) == int(req_id):
+            intent_ids = []  # response-lost retry: these documents are attached already
+        if intent_ids and not documents.submission_is_live(session, submission_id, user_id):
+            raise documents.RequestDocumentError(
+                "SUBMISSION_INVALID", DIRECT_UPLOAD_REQUIRED_MESSAGE, 403
+            )
+        # The classification (activity + fresh snapshot), the field update or
+        # resubmission and every canonical attachment commit together.
+        with write_transaction(conn):
+            if reclassification is not None:
+                apply_reclassification(conn, reclassification)
+            resubmitted = save_student_request_edit(
+                conn,
+                request_id=req_id,
+                aluno_id=aluno_id,
+                status=rec["status"],
+                data_processamento=rec["data_processamento"],
+                stored_observacao=rec["observacao"],
+                edit=edit,
+            )
+            documents.attach_request_documents(
+                conn,
+                actor_user_id=user_id,
+                request_id=int(req_id),
+                submission_id=submission_id,
+                intent_ids=intent_ids,
+                create=False,
+            )
+    except (StudentEditConflict, ReclassificationConflict):
+        conn.rollback()
+        current = conn.execute(
+            "SELECT id, status, data_processamento, observacao, atividade_versao_id "
+            "FROM requisicoes WHERE id=? AND aluno_id=?",
+            (req_id, aluno_id),
+        ).fetchone()
+        if current is None or not can_student_edit_requisition(
+            current["status"], current["data_processamento"], return_days=return_days
+        ):
+            _flash_edit_closed()
+            return redirect(_aluno_url("aluno_requisicao_detalhe", req_id=req_id, view=1))
+        if current["atividade_versao_id"] != rec["atividade_versao_id"]:
+            _flash_classification_changed()
+        else:
+            flash(
+                "Esta requisição foi alterada enquanto o formulário estava aberto. "
+                "Reabra a requisição e confira os dados antes de salvar.",
+                "error",
+            )
+        return form_again(activity="stored", stored=current)
+    except (ComprovanteError, documents.RequestDocumentError) as exc:
+        conn.rollback()
+        flash(exc.user_message, "error")
+        return form_again(status=getattr(exc, "status", 200))
+    except Exception:
+        conn.rollback()
+        current_app.logger.exception("Falha ao atualizar requisição do aluno")
+        flash("Falha ao atualizar requisição.", "error")
+        return form_again()
+
+    if reclassification is not None:
+        log_reclassified(reclassification)
+    if resubmitted:
+        flash("Requisição reenviada para análise.", "success")
+    else:
+        flash("Requisição atualizada.", "success")
+    # Removal runs after the committed edit: a failed LEGACY Drive removal
+    # keeps those files and never undoes the edit above.
+    try:
+        remove_comprovantes(
+            conn,
+            request_id=req_id,
+            attachment_ids=remover_ids,
+            actor_user_id=user_id,
+        )
+    except ComprovanteError as exc:
+        flash(exc.user_message, "error")
+    return redirect(_aluno_url("aluno_minhas_requisicoes"))

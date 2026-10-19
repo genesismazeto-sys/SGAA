@@ -109,6 +109,9 @@
   <form method="post" class="form-grid" id="process-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="status" id="status-hidden" required />
+    {#- The classification shown on this page: a decision on a request that was
+        corrected meanwhile is refused (app.request_reclassification). -#}
+    <input type="hidden" name="atividade_versao_id_registrada" value="{{ requisicao.atividade_versao_id }}">
 
     <!-- Botões de seleção de ação (process-action-buttons) -->
     <div class="process-action-buttons" role="group" aria-label="Decisão" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">

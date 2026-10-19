@@ -228,7 +228,7 @@ reports the automatic protection against the cadence itself, so a breach of the 
 cutover ledger keeps its own 1.5x tolerance for the governed operator cadence.
 
 "Gerar backup agora" (the existing backup route, `app.backup.pg_snapshot`) copies the database inside
-one repeatable-read read-only transaction into a schema-v16 SQLite snapshot in scratch, proves it table
+one repeatable-read read-only transaction into a current-schema SQLite snapshot in scratch, proves it table
 by table with the Path-B row digests, sends it to every connected Google Drive / OneDrive account into
 the folder "Selecionar pasta" chose, and prunes there only `sgaa-pg-snapshot-*.db` files beyond the
 policy's generations kept. Beside it goes `sgaa-registros-*.zip`, the registers as CSV files (no

@@ -256,6 +256,20 @@ CATALOG_LEDGER: tuple[tuple[str, int], ...] = (
         "dentro do prazo.' (msg_cc975510ad5a59b4). 3 additions, 1 retirement",
         2,
     ),
+    (
+        "RECL1 reclassification of an editable request: the edit no longer "
+        "refuses a change of activity, so 'Esta solicitação já possui uma "
+        "versão de atividade registrada. Para trocar a atividade, crie uma nova "
+        "solicitação.' (msg_12374e2653195891) retires; a form filled before "
+        "another correction is refused with 'A atividade desta requisição foi "
+        "alterada enquanto o formulário estava aberto. Confira a atividade "
+        "registrada e salve novamente.' (msg_0a855c20f08ef553) and an "
+        "administrator edit of a request that changed meanwhile with 'Esta "
+        "requisição foi alterada enquanto o formulário estava aberto. Reabra a "
+        "requisição e confira os dados antes de salvar.' (msg_d8e79b311613efa4). "
+        "2 additions, 1 retirement",
+        1,
+    ),
 )
 
 # Everything before the UT-MX3 term is MX3's exact parent state. Anchored on
@@ -304,9 +318,9 @@ PARENT_CATALOG_KEYS_SHA256 = (
 # under PostgreSQL with its five outcome messages and "Recuperar banco de dados"
 # with its one success message, and the R3 review's CSV warning and policy refusal, to 588; the rereview's
 # uncertain-restore warning, to 589; RECT1 (three additions, one retirement),
-# to 591.
+# to 591; RECL1 (two additions, one retirement), to 592.
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "0abcfbdb792a6d696079e3a2fc2a57d3e19b1aadab764629c01c376518482872"
+    "fa766d66f239cc721fa174576534e32ccba8c42958b0020c5529e1f3a958bebc"
 )
 
 # Named post-MX3 key sets.  Suites that reconstruct UT-MX3's parent state have
@@ -884,11 +898,36 @@ RECT1_REQUEST_RECTIFICATION_RETIRED_KEYS = frozenset(
 def catalog_keys_before_request_rectification(keys) -> set[str]:
     """Undo the RECT1 term: drop its three keys, put the 14-day refusal back.
 
-    RECT1 is the newest term, so a reconstruction walks back through this
-    first, then A19, S3-A, U5-E, U5-B and every older term.
+    A reconstruction walks back through RECL1 first, then this, then A19,
+    S3-A, U5-E, U5-B and every older term.
     """
     return (set(keys) - set(RECT1_REQUEST_RECTIFICATION_KEYS)) | set(
         RECT1_REQUEST_RECTIFICATION_RETIRED_KEYS
+    )
+
+
+# RECL1 reclassification of an editable request (net +1).
+RECL1_REQUEST_RECLASSIFICATION_KEYS = frozenset(
+    {
+        "msg_0a855c20f08ef553",  # A atividade desta requisição foi alterada enquanto o formulário estava aberto. ...
+        "msg_d8e79b311613efa4",  # Esta requisição foi alterada enquanto o formulário estava aberto. ...
+    }
+)
+RECL1_REQUEST_RECLASSIFICATION_RETIRED_KEYS = frozenset(
+    {
+        "msg_12374e2653195891",  # Esta solicitação já possui uma versão de atividade registrada. ...
+    }
+)
+
+
+def catalog_keys_before_request_reclassification(keys) -> set[str]:
+    """Undo the RECL1 term: drop its two keys, put the change-of-activity refusal back.
+
+    RECL1 is the newest term, so a reconstruction walks back through this
+    first, then RECT1, A19, S3-A, U5-E, U5-B and every older term.
+    """
+    return (set(keys) - set(RECL1_REQUEST_RECLASSIFICATION_KEYS)) | set(
+        RECL1_REQUEST_RECLASSIFICATION_RETIRED_KEYS
     )
 
 

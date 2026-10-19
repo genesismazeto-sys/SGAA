@@ -91,7 +91,7 @@ def test_the_provisioned_schema_is_v16_with_both_tables_and_their_rules(database
     conn = adapter(database)
     try:
         status = pg_schema.validate_pg_schema(conn)
-        assert status["schema_version"] == 16
+        assert status["schema_version"] == 17
         assert conn.execute("SELECT count(*) FROM auth_throttle_events").fetchone()[0] == 0
         assert conn.execute("SELECT count(*) FROM admin_import_previews").fetchone()[0] == 0
         for sql, params in (

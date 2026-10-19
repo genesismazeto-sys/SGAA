@@ -84,6 +84,11 @@
 <form method="post" data-direct-upload{% if requisicao_id %} data-requisicao-id="{{ requisicao_id }}"{% endif %}>
   <input type="hidden" name="comprovantes_operation_id" value="{{ comprovantes_operation_id }}">
   <input type="hidden" name="comprovantes_submission_id" value="{{ comprovantes_submission_id }}">
+  {#- The classification this form was filled with: a change of activity is
+      accepted only from the one still stored (app.request_reclassification). -#}
+  {% if atividade_versao_id_registrada %}
+  <input type="hidden" name="atividade_versao_id_registrada" value="{{ atividade_versao_id_registrada }}">
+  {% endif %}
   <div class="form-cards-narrow form-cards-narrow--gutter-wide">
     {% if retificando %}
     <div class="form-note form-note--guide" id="retificacao-orientacao" role="note">

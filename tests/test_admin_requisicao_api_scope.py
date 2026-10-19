@@ -119,8 +119,10 @@ def test_historical_read_does_not_authorize_new_requests_or_version_rebinding(tm
         })
         assert response.status_code == 302
         assert "open_edit=1" in response.headers["Location"]
+        # A correction is accepted only from a form filled with the stored
+        # classification (app.request_reclassification); this POST names none.
         with env["client"].session_transaction() as session:
-            assert any("Para trocar a atividade, crie uma nova solicitação" in message
+            assert any("A atividade desta requisição foi alterada enquanto o formulário estava aberto" in message
                        for _, message in session.get("_flashes", []))
         with main.app.app_context():
             saved = dict(main.get_db_connection().execute("SELECT * FROM requisicoes WHERE id=?", (row["id"],)).fetchone())

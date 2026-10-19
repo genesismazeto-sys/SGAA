@@ -14,7 +14,7 @@ HOW
     The same statements the bootstrap executes, inside one ``BEGIN
     IMMEDIATE`` transaction: the pre-existing tables' rows are digested before
     and after, the counters, ``integrity_check``, ``foreign_key_check`` and
-    the v16 head digest are checked before COMMIT.  A database already at v16
+    the frozen v16 digest are checked before COMMIT.  A database already at v16
     is never passed here: the bootstrap only calls this for ``user_version``
     15.
 """
@@ -33,11 +33,12 @@ from app.prod1_storage_v14 import _columns, _data_digest, _sequences, _table_nam
 
 def migrate_prod1_v15_to_v16(conn: sqlite3.Connection) -> dict[str, object]:
     from app.prod1_schema import (
+        BASELINE_MARKER,
         EPHEMERAL_STATE_MARKER,
         SCHEMA_EPOCH,
         Prod1SchemaError,
         _validate_prod1_v15_schema,
-        validate_prod1_schema,
+        _validate_prod1_v16_schema,
     )
 
     if conn.in_transaction:
@@ -75,16 +76,19 @@ def migrate_prod1_v15_to_v16(conn: sqlite3.Connection) -> dict[str, object]:
         violations = conn.execute("PRAGMA foreign_key_check").fetchall()
         if violations:
             raise Prod1SchemaError(f"prod-1/v16 foreign key violations: {violations!r}")
-        validate_prod1_schema(conn)
+        _validate_prod1_v16_schema(conn)
         conn.execute("COMMIT")
     except Exception:
         if conn.in_transaction:
             conn.execute("ROLLBACK")
         raise
 
-    status = validate_prod1_schema(conn)
+    _validate_prod1_v16_schema(conn)
     return {
-        **status,
+        "schema_epoch": SCHEMA_EPOCH,
+        "schema_version": 16,
+        "baseline_marker": BASELINE_MARKER,
+        "table_count": len(_table_names(conn)),
         "ephemeral_state": "database",
         "rows_preserved": {table: rows for table, (rows, _digest) in data_before.items()},
     }

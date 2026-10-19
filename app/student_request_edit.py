@@ -12,8 +12,10 @@ it is reviewed again and leaves the student's correction list. The
 administrator's reason for the return stays in ``observacao`` as a bracketed
 line above the student's reply (one column holds both, as with
 ``auto_indefer_devolvidas``), and a decision e-mail still pending from before
-the return is superseded. The activity version and its frozen rule snapshot
-are never written. The caller owns the transaction.
+the return is superseded. The activity version and its rule snapshot are not
+written here: a corrected classification goes through
+``app.request_reclassification`` in the same transaction. The caller owns the
+transaction.
 """
 
 from __future__ import annotations

@@ -44,6 +44,13 @@ from app.request_email_notifications import (
     record_final_decision_event,
     supersede_pending_event,
 )
+from app.request_reclassification import (
+    ReclassificationConflict,
+    ReclassificationRefused,
+    apply_reclassification,
+    log_reclassified,
+    prepare_reclassification,
+)
 from app.requisitions import auto_indefer_devolvidas
 from app.settings import get_return_response_days
 from app.student_matrix import get_allowed_activity_version_ids_for_student
@@ -317,6 +324,18 @@ DIRECT_UPLOAD_REQUIRED_MESSAGE = (
     "Os comprovantes são enviados diretamente pelo navegador e exigem JavaScript. "
     "Recarregue a página e selecione os arquivos novamente."
 )
+
+
+class _RequestNoLongerPending(Exception):
+    """The edited request left ``Pendente`` after the route read it."""
+
+
+def _flash_classification_changed() -> None:
+    flash(
+        "A atividade desta requisição foi alterada enquanto o formulário estava aberto. "
+        "Confira a atividade registrada e salve novamente.",
+        "error",
+    )
 
 
 def _canonical_document_form():
@@ -891,35 +910,26 @@ def admin_editar_requisicao(req_id):
         flash("Informe uma data válida para o evento.", "error")
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
 
-    if not atividade_id:
-        atividade_id = requisicao["atividade_versao_id"]
-
-    allowed_activity_ids, _matriz = get_allowed_activity_version_ids_for_student(
-        conn, requisicao["aluno_id"]
-    )
-    current_atividade_id = requisicao["atividade_versao_id"]
-    if (
-        read_requisicao_snapshot_for_processing(requisicao).authority
-        is SnapshotProcessingAuthority.VALID_AUTHORITATIVE_SNAPSHOT
-        and atividade_id != current_atividade_id
-    ):
-        flash(
-            "".join(
-                (
-                    "Esta solicitação já possui uma versão de atividade registrada. ",
-                    "Para trocar a atividade, crie uma nova solicitação.",
-                )
-            ),
-            "error",
+    # A pending request may be moved to another activity of the student's
+    # effective Matrix; it keeps its id and documents and gets a fresh
+    # snapshot (app.request_reclassification), written with this edit.
+    try:
+        reclassification = prepare_reclassification(
+            conn,
+            request_row=requisicao,
+            aluno_id=requisicao["aluno_id"],
+            new_version_id=atividade_id,
+            form_version_id=request.form.get("atividade_versao_id_registrada", type=int),
+            declared_tipo=request.form.get("tipo_atividade"),
+            flow_origin="admin_reclassify",
+            actor_role="admin",
+            actor_user_id=int(session["user_id"]),
         )
-        return redirect(url_for("admin_requisicoes", **redirect_kwargs))
-    if atividade_id != current_atividade_id and atividade_id not in allowed_activity_ids:
-        flash("A atividade selecionada não pertence à matriz efetiva da turma do aluno.", "error")
-        return redirect(url_for("admin_requisicoes", **redirect_kwargs))
-
-    atividade = conn.execute("SELECT id FROM atividade_versao WHERE id = ?", (atividade_id,)).fetchone()
-    if not atividade:
-        flash("Atividade não encontrada.", "error")
+    except ReclassificationRefused as exc:
+        if exc.code == "STALE_FORM":
+            _flash_classification_changed()
+        else:
+            flash("A atividade selecionada não pertence à matriz efetiva da turma do aluno.", "error")
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
 
     params = [nome_evento, horas_solicitadas, data_evento]
@@ -934,7 +944,7 @@ def admin_editar_requisicao(req_id):
     if "observacao" in request.form:
         sql += ", observacao = ?"
         params.append(observacao)
-    sql += " WHERE id = ?"
+    sql += " WHERE id = ? AND status = 'Pendente'"
     params.append(req_id)
     if documents.has_file_parts(request.files):
         flash(DIRECT_UPLOAD_REQUIRED_MESSAGE, "error")
@@ -950,9 +960,13 @@ def admin_editar_requisicao(req_id):
             raise documents.RequestDocumentError(
                 "SUBMISSION_INVALID", DIRECT_UPLOAD_REQUIRED_MESSAGE, 403
             )
-        # The field update and every canonical attachment commit together.
+        # The classification, the field update and every canonical attachment
+        # commit together, and only while the request is still pending.
         with write_transaction(conn):
-            conn.execute(sql, tuple(params))
+            if reclassification is not None:
+                apply_reclassification(conn, reclassification)
+            if conn.execute(sql, tuple(params)).rowcount != 1:
+                raise _RequestNoLongerPending()
             documents.attach_request_documents(
                 conn,
                 actor_user_id=actor_id,
@@ -961,6 +975,14 @@ def admin_editar_requisicao(req_id):
                 intent_ids=intent_ids,
                 create=False,
             )
+    except (ReclassificationConflict, _RequestNoLongerPending):
+        conn.rollback()
+        flash(
+            "Esta requisição foi alterada enquanto o formulário estava aberto. "
+            "Reabra a requisição e confira os dados antes de salvar.",
+            "error",
+        )
+        return redirect(url_for("admin_requisicoes"))
     except (ComprovanteError, documents.RequestDocumentError) as exc:
         conn.rollback()
         flash(exc.user_message, "error")
@@ -970,6 +992,8 @@ def admin_editar_requisicao(req_id):
         logger.exception("Falha ao atualizar requisição do admin")
         flash("Falha ao atualizar requisição.", "error")
         return redirect(url_for("admin_requisicoes", **redirect_kwargs))
+    if reclassification is not None:
+        log_reclassified(reclassification)
     flash("Requisição atualizada com sucesso.", "success")
     return redirect(url_for("admin_requisicoes"))
 
@@ -1089,6 +1113,20 @@ def admin_api_requisicao(req_id):
     data["matriz_scope"] = (
         {"id": matriz["id"], "label": _matriz_option_label(matriz)} if matriz else None
     )
+    # Editing a pending request may correct its classification: the modal
+    # offers the student's effective Matrix next to the historical option
+    # (which stays first and keeps its snapshot presentation). Any other
+    # status offers nothing to change.
+    data["reclassification"] = None
+    if (r["status"] or "") == "Pendente":
+        scope = _get_admin_requisicao_scope_for_aluno(conn, r["aluno_id"])
+        if scope and scope["allowed_activity_ids"] is not None:
+            current_id = activity["atividade_versao_id"]
+            data["reclassification"] = {
+                "allowed_activity_ids": sorted({current_id, *scope["allowed_activity_ids"]}),
+                "activities": [activity]
+                + [item for item in scope["activities"] if item["id"] != current_id],
+            }
     data["anexos"] = [row_to_dict(x) for x in anexos]
     # URL pública para cada anexo (se possível)
     items = []
@@ -1160,6 +1198,12 @@ def admin_processar_requisicao(req_id):
         )
         requisicao["limite_horas_semestral"] = frozen_rule.limite_semestre
         requisicao["limite_horas_total"] = frozen_rule.limite_total
+        # The activity the administrator decides on: the recorded one, which
+        # a student's or administrator's correction may have replaced.
+        try:
+            requisicao["atividade_nome"] = read_request_presentation(requisicao, conn=conn).nome
+        except HistoricalRequestAuthorityError:
+            requisicao["atividade_nome"] = None
     snapshot_diag = _build_admin_requisicao_snapshot_diagnostic(requisicao)
     anexos = conn.execute(
         """SELECT id,label,filename,original_filename,provider,criado_em
@@ -1203,6 +1247,14 @@ def admin_processar_requisicao(req_id):
 
         if status not in allowed_statuses:
             flash("Status de processamento inválido.", "error")
+            return redirect(url_for("admin_processar_requisicao", req_id=req_id))
+
+        # A decision is recorded only on the classification the administrator
+        # was shown: an editable request may have been corrected meanwhile
+        # (app.request_reclassification).
+        registered = request.form.get("atividade_versao_id_registrada", type=int)
+        if registered is not None and registered != requisicao["atividade_versao_id"]:
+            _flash_classification_changed()
             return redirect(url_for("admin_processar_requisicao", req_id=req_id))
 
         # Both outcomes of Indeferir -- definitive rejection and return for
@@ -1329,11 +1381,19 @@ def admin_processar_requisicao(req_id):
             ])
             params.extend([data_processamento, None])
 
-        params.append(req_id)
-        conn.execute(
-            f"UPDATE requisicoes SET {', '.join(set_parts)} WHERE id = ?",
+        # Compare-and-set on the classification read above: a correction
+        # committed since then refuses the decision instead of moving it to an
+        # activity whose limits were never checked.
+        params.extend([req_id, requisicao["atividade_versao_id"], requisicao["regra_snapshot_json"]])
+        decided = conn.execute(
+            f"UPDATE requisicoes SET {', '.join(set_parts)} "
+            "WHERE id = ? AND atividade_versao_id = ? AND regra_snapshot_json = ?",
             params,
         )
+        if decided.rowcount != 1:
+            conn.rollback()
+            _flash_classification_changed()
+            return redirect(url_for("admin_processar_requisicao", req_id=req_id))
 
         # RULING 3 -- the ONLY place a notification generation is born. This is
         # the explicit administrator confirmation path; maintenance transitions
