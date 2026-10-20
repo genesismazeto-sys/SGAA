@@ -602,8 +602,9 @@ TMA1_MATRIX_AUTHORITY_KEYS = frozenset({"msg_35110e5b7a30e863"})
 # of the direct request-document upload: /storage/upload-intents
 # (comprovantes.issue_upload_intent) and
 # /storage/upload-intents/<intent_id>/finalize (comprovantes.finalize_upload_intent).
+# Access-mail batch adds one CSRF-protected POST, requiring (acesso, full).
 CANONICAL_ROUTE_IDENTITIES_SHA256 = (
-    "5e4d9b3cd32dc92d49d0f0fd89ed1143cf5cac00ec462af42f7b383a5667a7cd"
+    "28c441bceca41ecf8489b9532eff07062d2210b60b52f08807944623e6c62b6d"
 )
 
 

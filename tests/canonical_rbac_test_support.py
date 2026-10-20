@@ -761,8 +761,9 @@ def profile_digest(level: str, profiles=None) -> str:
 # owning a second endpoint. UI-C04 adds two GET-only view-authority routes for
 # Aluno and exact activity-version consultation; no existing requirement is
 # weakened.
+# Access-mail batch adds (admin_acesso_email_lote, POST, acesso, full).
 CANONICAL_REQUIREMENT_MATRIX_DIGEST = (
-    "e3e81124231ada18b552fb0d4c7ca8ea31579d37ab93d8de5bf7c034d239bb65"
+    "2ccae003b53a61a3b67d9748414af8f7fba297c033dff126ad347059385a6b3c"
 )
 
 # The profile anchor: which access level holds which scope per resource.
@@ -791,7 +792,7 @@ CANONICAL_DYNAMIC_REQUIREMENT_IDENTITIES_SHA256 = (
 # activation has no endpoint of its own; it is denied through the pre-existing
 # senhas-default requirement.
 CANONICAL_DENIAL_MATRIX_IDENTITIES_SHA256 = (
-    "274688ce6f60c097cf1f35f898a6cfe720a15e65392482699bc3afc48bdfaf6c"
+    "5f560af161f16717451a1d7a697e41431f12f9a17ffedde4124522dc9e21fa92"
 )
 
 

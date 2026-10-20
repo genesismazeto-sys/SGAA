@@ -7,6 +7,7 @@ main; registra apenas rotas legadas via LegacyRouteSpec.
 
 from __future__ import annotations
 
+import copy
 import logging
 
 from flask import (
@@ -44,9 +45,15 @@ from app.db_maintenance import (
     ensure_usuario_profile_schema,
 )
 from app.security.passwords import hash_password
-from app.password_email import issue_and_send_password_email, password_email_status
-from app.password_tokens import PURPOSE_FIRST_ACCESS, PURPOSE_PASSWORD_RESET
+from app import import_previews
+from app.password_email import (
+    issue_and_send_password_email,
+    password_email_purpose,
+    password_email_status,
+    password_email_targets,
+)
 from app.student_matrix import StudentMatrixError, matrix_for_turma_assignment
+from app.status_presentation import status_tone
 from app.root_admin import is_root_admin, resolve_root_admin_id
 from app.user_accounts import (
     CREDENTIAL_STATE_DEFAULT,
@@ -789,6 +796,95 @@ def admin_acesso_resetar_senha(usuario_id):
 
 
 @admin_required
+def admin_acesso_email_lote():
+    """One recipient per send request; persistent reservations precede mail I/O.
+
+    Reuse the existing expiring administrator-preview store, namespaced by kind.
+    No schema change, process-local locks or background work after HTTP return.
+    """
+    conn = get_db_connection()
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify(error="Solicitação inválida."), 400
+    actor = int(session["user_id"])
+    action = data.get("action")
+    if action == "preview":
+        ids = data.get("ids")
+        if (not isinstance(ids, list) or not ids or len(ids) > 500
+                or any(type(value) is not int or value <= 0 for value in ids)):
+            return jsonify(error="Selecione de 1 a 500 acessos por operação."), 400
+        targets = list(password_email_targets(conn, list(dict.fromkeys(ids))).values())
+        payload = {"kind": "access_email_batch", "items": {
+            str(target["id"]): {"target": target, "state": "ready", "result": None}
+            for target in targets
+        }}
+        token = import_previews.store(conn, usuario_id=actor, payload=payload)
+        return jsonify(operation=token, targets=[
+            {key: value for key, value in target.items() if key != "signature"} for target in targets
+        ])
+
+    token = data.get("operation")
+    if not isinstance(token, str):
+        return jsonify(error="Operação inválida."), 400
+    payload = import_previews.load(conn, usuario_id=actor, token=token)
+    if not payload or payload.get("kind") != "access_email_batch":
+        return jsonify(error="Operação expirada ou indisponível. Nenhum envio foi repetido."), 409
+    if action == "cancel":
+        # Cancellation is only offered before any recipient starts.
+        if any(item["state"] != "ready" for item in payload["items"].values()):
+            return jsonify(error="A operação já foi iniciada."), 409
+        canceled = {**payload, "kind": "access_email_batch_canceled"}
+        if not import_previews.replace(conn, usuario_id=actor, token=token, expected=payload, payload=canceled):
+            return jsonify(error="A operação já foi iniciada."), 409
+        return jsonify(ok=True)
+    user_id = data.get("id")
+    if type(user_id) is not int or str(user_id) not in payload["items"]:
+        return jsonify(error="O acesso não pertence à seleção confirmada."), 400
+    item = payload["items"][str(user_id)]
+    if item["result"] is not None:
+        return jsonify(item["result"])
+    uncertain = {"id": user_id, "status": "indeterminate", "detail":
+                 "Envio iniciado sem resultado confirmado. Não será repetido automaticamente."}
+    if action == "status" or item["state"] == "processing":
+        uncertain["access_status"] = access_status_map(conn, [user_id])[user_id]
+        uncertain["access_tone"] = status_tone("acesso", uncertain["access_status"])
+        return jsonify(uncertain if item["state"] == "processing" else {
+            "id": user_id, "status": "not_started", "detail": "Envio não iniciado."
+        })
+    if action != "send" or data.get("category") != item["target"]["category"]:
+        return jsonify(error="Confirme a categoria de envio."), 400
+    if item["target"]["category"] == "ineligible":
+        return jsonify(error=item["target"]["reason"]), 400
+    reserved = copy.deepcopy(payload)
+    reserved["items"][str(user_id)]["state"] = "processing"
+    if not import_previews.replace(conn, usuario_id=actor, token=token, expected=payload, payload=reserved):
+        return jsonify(uncertain), 409
+    target = item["target"]
+    try:
+        outcome = issue_and_send_password_email(
+            conn, usuario_id=user_id, recipient=target["email"], user_name=target["nome"],
+            purpose=target["purpose"], expected_target=target,
+        )
+        result = {"id": user_id, "status": outcome.status, "detail": outcome.detail}
+        result["access_status"] = access_status_map(conn, [user_id])[user_id]
+        result["access_tone"] = status_tone("acesso", result["access_status"])
+    except Exception:
+        # The provider or commit may already have succeeded. Never retry mail.
+        conn.rollback()
+        logger.warning("event=access_batch_mail_indeterminate usuario_id=%s", user_id)
+        result = uncertain
+    for _ in range(5):
+        current = import_previews.load(conn, usuario_id=actor, token=token)
+        if current is None:
+            break
+        completed = copy.deepcopy(current)
+        completed["items"][str(user_id)].update(state="done", result=result)
+        if import_previews.replace(conn, usuario_id=actor, token=token, expected=current, payload=completed):
+            break
+    return jsonify(result)
+
+
+@admin_required
 def admin_acesso_senha_por_email(usuario_id):
     conn = get_db_connection()
     usuario = conn.execute(
@@ -817,11 +913,7 @@ def admin_acesso_senha_por_email(usuario_id):
     # First access is onboarding, and only a pending account is still being
     # onboarded.  An account holding a usable credential -- personal, or an
     # applied default -- is sent a reset link; both end in "personal".
-    purpose = (
-        PURPOSE_FIRST_ACCESS
-        if usuario["estado"] == CREDENTIAL_STATE_PENDING
-        else PURPOSE_PASSWORD_RESET
-    )
+    purpose = password_email_purpose(usuario["estado"])
     outcome = issue_and_send_password_email(
         conn,
         usuario_id=usuario_id,
@@ -980,6 +1072,12 @@ LEGACY_ROUTE_SPECS = configure_legacy_routes(
             ("POST",),
         ),
         LegacyRouteSpec(
+            "/admin/acesso/email-lote",
+            "admin_acesso_email_lote",
+            admin_acesso_email_lote,
+            ("POST",),
+        ),
+        LegacyRouteSpec(
             "/admin/acesso/<int:usuario_id>/senha-por-email",
             "admin_acesso_senha_por_email",
             admin_acesso_senha_por_email,
@@ -1011,6 +1109,7 @@ __all__ = [
     "admin_acesso",
     "admin_acesso_deletar",
     "admin_acesso_definir_senha",
+    "admin_acesso_email_lote",
     "admin_acesso_resetar_senha",
     "admin_acesso_senha_por_email",
     "admin_acesso_salvar",

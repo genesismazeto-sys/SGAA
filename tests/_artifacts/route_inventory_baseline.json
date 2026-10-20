@@ -44,6 +44,13 @@
       "rule": "/admin/acesso/definir-senha"
     },
     {
+      "endpoint": "admin_acesso_email_lote",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/acesso/email-lote"
+    },
+    {
       "endpoint": "admin_acesso_salvar",
       "methods": [
         "POST"

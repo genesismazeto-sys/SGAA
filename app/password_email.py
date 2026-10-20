@@ -4,6 +4,8 @@ import logging
 from dataclasses import dataclass
 from urllib.parse import urlencode
 
+from app.access_onboarding import access_status_map
+from app.db import lock_password_account, write_transaction
 from app.password_tokens import (
     FIRST_ACCESS_TTL,
     PASSWORD_RESET_TTL,
@@ -16,9 +18,11 @@ from app.password_tokens import (
 from app.services.mail_service import (
     MailMessage,
     MailTransportError,
+    is_valid_email,
     mail_transport_status,
     send_text_email,
 )
+from app.user_accounts import CREDENTIAL_STATE_PENDING
 from services.oauth_config import OAuthConfigError, get_public_base_url
 
 
@@ -35,6 +39,53 @@ class PasswordMailOutcome:
     @property
     def sent(self) -> bool:
         return self.status == "sent"
+
+
+def password_email_purpose(credential_state: str) -> str:
+    """Shared individual/batch policy: onboarding only for pending accounts."""
+    return PURPOSE_FIRST_ACCESS if credential_state == CREDENTIAL_STATE_PENDING else PURPOSE_PASSWORD_RESET
+
+
+def password_email_target(conn, usuario_id: int) -> dict:
+    """Read the same credential policy as individual sending, without issuing."""
+    return password_email_targets(conn, [usuario_id])[usuario_id]
+
+
+def password_email_targets(conn, usuario_ids: list[int]) -> dict[int, dict]:
+    """Bounded-query preview, including missing/revoked/invalid selected IDs."""
+    if not usuario_ids:
+        return {}
+    placeholders = ",".join("?" for _ in usuario_ids)
+    rows = conn.execute(
+        "SELECT u.id,u.nome,u.email,c.estado,c.acesso_ativo,c.auth_version,"
+        " (SELECT COALESCE(MAX(id),0) FROM senha_tokens WHERE usuario_id=u.id) AS token_version"
+        f" FROM usuarios u LEFT JOIN usuario_credenciais c ON c.usuario_id=u.id WHERE u.id IN ({placeholders})",
+        usuario_ids,
+    ).fetchall()
+    rows_by_id = {row["id"]: row for row in rows}
+    statuses = access_status_map(conn, usuario_ids)
+    return {user_id: _password_email_target(user_id, rows_by_id.get(user_id), statuses[user_id])
+            for user_id in usuario_ids}
+
+
+def _password_email_target(usuario_id, row, status) -> dict:
+    target = {"id": usuario_id, "nome": "", "email": "", "category": "ineligible", "reason": ""}
+    if row is None:
+        return {**target, "reason": "Usuário não encontrado."}
+    target.update(nome=str(row["nome"] or ""), email=str(row["email"] or ""))
+    if row["acesso_ativo"] != 1 or row["estado"] not in ("pending", "personal", "default"):
+        return {**target, "reason": "Acesso revogado ou sem credenciais elegíveis."}
+    if not is_valid_email(target["email"]):
+        return {**target, "reason": "Destinatário ausente ou inválido."}
+    purpose = password_email_purpose(row["estado"])
+    target.update(
+        access_status=status,
+        purpose=purpose,
+        category=("password_reset" if purpose == PURPOSE_PASSWORD_RESET else
+                  "resend" if status == "Disponibilizado" else "first_access"),
+        signature=[target["email"], row["estado"], row["acesso_ativo"], row["auth_version"], row["token_version"], status],
+    )
+    return target
 
 
 def password_email_status(conn) -> dict[str, object]:
@@ -99,7 +150,12 @@ def issue_and_send_password_email(
     recipient: str,
     user_name: str,
     purpose: str,
+    expected_target: dict | None = None,
 ) -> PasswordMailOutcome:
+    # Validate before superseding any existing link. Batch confirmations also
+    # recheck their snapshot under the account lock, shared with revoke/reset.
+    if not is_valid_email(recipient):
+        return PasswordMailOutcome("failed", "Destinatário ausente ou inválido.")
     capability = password_email_status(conn)
     if not capability.get("ready"):
         return PasswordMailOutcome(
@@ -117,8 +173,16 @@ def issue_and_send_password_email(
             "Configure a URL pública do SGAA para enviar links de senha.",
         )
 
-    raw_token, token_id = issue_password_token(conn, usuario_id, purpose)
-    conn.commit()
+    if expected_target is not None:
+        with write_transaction(conn):
+            lock_password_account(conn, usuario_id)
+            target = password_email_target(conn, usuario_id)
+            if target != expected_target:
+                return PasswordMailOutcome("stale", "O acesso ou seu link mudou. Confira a conta e confirme uma nova operação.")
+            raw_token, token_id = issue_password_token(conn, usuario_id, purpose)
+    else:
+        raw_token, token_id = issue_password_token(conn, usuario_id, purpose)
+        conn.commit()
     message = _password_message(
         purpose=purpose,
         recipient=recipient,
@@ -171,4 +235,7 @@ __all__ = [
     "PasswordMailOutcome",
     "issue_and_send_password_email",
     "password_email_status",
+    "password_email_purpose",
+    "password_email_target",
+    "password_email_targets",
 ]

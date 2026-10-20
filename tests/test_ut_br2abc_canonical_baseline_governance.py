@@ -183,9 +183,10 @@ def test_derived_projections_agree_with_the_versioned_artifacts():
     """Every count the suites now delegate is read off the canonical artifacts."""
     # STORAGE S1 adds two GET rules with their own endpoints (images.*).
     # STORAGE S3-A: +2 POST routes (the direct request-document upload intents).
-    assert governance.CANONICAL_ROUTE_ENTRY_COUNT == 137
-    assert governance.CANONICAL_ROUTE_ENDPOINT_COUNT == 136
-    assert governance.CANONICAL_ROUTE_RULE_COUNT == 136
+    # Access-mail batch: +1 POST rule and endpoint, with (acesso, full).
+    assert governance.CANONICAL_ROUTE_ENTRY_COUNT == 138
+    assert governance.CANONICAL_ROUTE_ENDPOINT_COUNT == 137
+    assert governance.CANONICAL_ROUTE_RULE_COUNT == 137
     assert governance.CANONICAL_CSRF_ROW_COUNT == 78
     assert governance.CANONICAL_CSRF_PAGE_STATUS_COUNT == 68
     assert sum(governance.CANONICAL_CSRF_OWNER_PARTITIONS.values()) == 78

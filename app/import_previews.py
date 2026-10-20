@@ -109,4 +109,27 @@ def discard(conn, *, usuario_id: int, token: str) -> None:
         )
 
 
-__all__ = ["PRUNE_BATCH", "PreviewTooLarge", "TTL_SECONDS", "claim", "discard", "load", "store"]
+def replace(conn, *, usuario_id: int, token: str, expected: dict, payload: dict) -> bool:
+    """Compare-and-swap ephemeral administrator operation state across workers.
+
+    Also used by access-mail confirmations. A committed processing reservation
+    survives a worker timeout, so an uncertain external side effect is not retried.
+    """
+    encoded = json.dumps(payload, ensure_ascii=False)
+    if len(encoded.encode("utf-8")) > IMPORT_PREVIEW_PAYLOAD_MAX_BYTES:
+        raise PreviewTooLarge("the preview payload is too large to hold")
+    if not _well_formed(token):
+        return False
+    now = custody_common.utc_now()
+    with write_transaction(conn):
+        cursor = conn.execute(
+            "UPDATE admin_import_previews SET payload = ?, expires_at = ?"
+            " WHERE token_digest = ? AND usuario_id = ? AND payload = ? AND expires_at > ?",
+            (encoded, custody_common.utc_text(now + datetime.timedelta(seconds=TTL_SECONDS)),
+             _digest(token), int(usuario_id), json.dumps(expected, ensure_ascii=False),
+             custody_common.utc_text(now)),
+        )
+    return cursor.rowcount == 1
+
+
+__all__ = ["PRUNE_BATCH", "PreviewTooLarge", "TTL_SECONDS", "claim", "discard", "load", "replace", "store"]

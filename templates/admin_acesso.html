@@ -379,6 +379,7 @@
           <div class="menu-title">{{ user_message("Ações da seleção") }}</div>
           <div class="menu-list">
             <button class="menu-item" type="button" id="access-action-select-all"><i class="lucide" data-lucide="check-check"></i><span>{{ user_message("Selecionar tudo") }}</span></button>
+            <button class="menu-item" type="button" id="access-action-email" {% if not auth_can('acesso', 'full') %}hidden disabled{% endif %}><i class="lucide" data-lucide="mail"></i><span>Enviar acesso por e-mail</span></button>
             <button class="menu-item danger" type="button" id="access-action-delete" {% if not auth_can('acesso', 'full') %}hidden disabled{% endif %}><i class="lucide" data-lucide="trash-2"></i><span>{{ user_message("Excluir") }}</span></button>
             <button class="menu-item warn" type="button" id="access-action-reset"><i class="lucide" data-lucide="key-round"></i><span>{{ user_message("Aplicar senha padrão") }}</span></button>
             <button class="menu-item" type="button" id="access-action-new-password"><i class="lucide" data-lucide="lock-keyhole"></i><span>{{ user_message("Nova") }}</span></button>
@@ -500,6 +501,32 @@
         }) }}
       {% endfor %}
     {% endcall %}
+  </div>
+</div>
+
+<div id="access-email-modal" class="modal-overlay" hidden data-endpoint="{{ url_for('admin_acesso_email_lote') }}">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="access-email-title" aria-describedby="access-email-summary" tabindex="-1">
+    <div class="modal-header">
+      <h3 id="access-email-title"><i class="lucide" data-lucide="mail"></i> Enviar acesso por e-mail</h3>
+      <button class="btn" type="button" id="access-email-close" aria-label="Fechar"><i class="lucide" data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <p id="access-email-summary" role="status" aria-live="polite"></p>
+      <fieldset id="access-email-categories">
+        <legend>Confirme quais categorias serão incluídas</legend>
+        <p><label><input type="checkbox" value="first_access" checked> Primeiro acesso: <strong data-email-count="first_access">0</strong></label><br>Pendentes ou expirados receberão um novo link de primeiro acesso.</p>
+        <p><label><input type="checkbox" value="resend"> Reenvio: <strong data-email-count="resend">0</strong></label><br>O link anterior de primeiro acesso será invalidado ao emitir o novo, mesmo se o envio falhar.</p>
+        <p><label><input type="checkbox" value="password_reset"> Redefinição de senha: <strong data-email-count="password_reset">0</strong></label><br>Estes usuários já possuem acesso. Será enviado um link de redefinição; um link anterior de redefinição será invalidado.</p>
+      </fieldset>
+      <p>A solicitação de envio não modifica a senha atual. Um novo link invalida o anterior do mesmo propósito.</p>
+      <p id="access-email-invalid"></p>
+      <progress id="access-email-progress" value="0" max="1" hidden aria-label="Progresso dos envios"></progress>
+      <ul id="access-email-results" aria-label="Destinatários e resultados"></ul>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" type="button" id="access-email-cancel">Cancelar</button>
+      <button class="btn primary" type="button" id="access-email-submit" disabled>Confirmar envio</button>
+    </div>
   </div>
 </div>
 
@@ -731,6 +758,7 @@
 
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/toolbar-filters.js') }}"></script>
+<script src="{{ url_for('static', filename='js/access-email-batch.js') }}"></script>
 <script>
   (function(){
     const accessDefaults = JSON.parse(document.getElementById('access-defaults-data')?.textContent || '{}');
@@ -794,6 +822,7 @@
     let selectedRows = [];
     let rowSelectionApi = null;
     let confirmResolver = null;
+    let emailBatch = null;
 
     const isStudentLevel = (level) => level === 'usuario' || level === 'usuario_teste';
     const scopeLabels = {
@@ -847,6 +876,8 @@
       // one that refuses to start.
       actionResetButton.disabled = !selectedResettable || selectedResettable !== selectedCount;
       actionNewPasswordButton.disabled = !hasSelection;
+      const emailAction = document.getElementById('access-action-email');
+      if (emailAction) emailAction.disabled = !hasSelection || !mailAvailable || !!emailBatch?.busy;
       if (actionSelectAllButton){
         const label = actionSelectAllButton.querySelector('span');
         const shouldClear = rowSelectionApi?.isAllSelected?.() || false;
@@ -1384,6 +1415,9 @@
       }
     });
 
+    emailBatch = window.initAccessEmailBatch?.({
+      getSelectedRows, buildPostHeaders, onBusyChange: syncActionsMenu
+    });
     syncActionsMenu();
     syncPolicyFields();
   })();
