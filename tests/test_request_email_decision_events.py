@@ -57,7 +57,7 @@ def test_explicit_indeferir_creates_pending_generation():
 
 def test_non_final_transitions_create_nothing():
     conn, versao, aluno = _setup()
-    for status in ("Devolvida", "Encerrada", "Pendente"):
+    for status in ("Encerrada", "Pendente"):
         req = seed_request(conn, aluno_id=aluno, versao_id=versao)
         conn.execute("UPDATE requisicoes SET status=? WHERE id=?", (status, req))
         assert record_final_decision_event(conn, requisicao_id=req) is None

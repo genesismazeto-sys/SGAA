@@ -150,7 +150,7 @@ def test_sending_for_correction_returns_the_request_without_a_final_decision(env
     row = _row(request_id)
     assert (row["status"], row["observacao"], row["admin_id"]) == ("Devolvida", REASON, env["admin"]["id"])
     assert row["data_processamento"] and row["aluno_update_notified_at"]
-    assert _events(request_id) == []  # a return is never recorded as a final rejection
+    assert _events(request_id) == [{"status_decisao": "Devolvida", "estado": "pending"}]
 
 
 def test_definitive_rejection_is_the_final_decision(env):
@@ -181,7 +181,10 @@ def test_returning_a_decided_request_withdraws_its_pending_rejection_email(env):
     _process(env, request_id, status="Indeferida", observacao="Primeira análise.")
     _process(env, request_id, status="Devolvida", observacao=REASON)
     assert _row(request_id)["status"] == "Devolvida"
-    assert _events(request_id) == [{"status_decisao": "Indeferida", "estado": "superseded"}]
+    assert _events(request_id) == [
+        {"status_decisao": "Indeferida", "estado": "superseded"},
+        {"status_decisao": "Devolvida", "estado": "pending"},
+    ]
 
 
 def test_modal_and_processing_page_ask_through_the_same_dialog(env):
@@ -278,7 +281,7 @@ def test_student_rectifies_and_resubmits_a_returned_request(env):
     [active] = [doc for doc in docs.values() if doc["storage_status"] == "active"]
     assert (active["provider"], active["original_filename"]) == ("supabase", "certificado.png")
     assert env["google_calls"] == []
-    assert _events(request_id) == []
+    assert _events(request_id) == [{"status_decisao": "Devolvida", "estado": "superseded"}]
 
     # Out of Para Retificar, and back in administrative review.
     assert _edit_link(request_id) not in _dashboard(env)

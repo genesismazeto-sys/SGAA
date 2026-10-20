@@ -13,8 +13,8 @@ deliberately independent of Flask and of request handling:
   SQLite migrations v1..v14 are never ported).  It is reachable only through
   the explicit CLI (``python -m app.pg_schema provision``) and never from
   ``init_db`` or from request-time ``ensure_*`` paths.
-* ``upgrade_pg_schema`` is the only in-place change: an exact prod-1/v16
-  schema becomes v17 (one trigger function body and migration row 17), also
+* ``upgrade_pg_schema`` is the only in-place change: an exact prod-1/v16 or v17
+  schema becomes v18 (the v17 trigger and the return notification CHECK), also
   reachable only through the explicit CLI (``python -m app.pg_schema
   upgrade``).
 * ``validate_pg_schema`` is strictly read-only: it checks material catalog
@@ -106,8 +106,10 @@ from app.prod1_storage_ddl import (
     STORAGE_ORIGINS,
 )
 
+from app.prod1_return_notifications_ddl import RETURN_NOTIFICATIONS_V18_DETAILS_JSON
+
 PG_SCHEMA_EPOCH = "prod-1"
-PG_SCHEMA_VERSION = 17
+PG_SCHEMA_VERSION = 18
 PG_SCHEMA_META_TABLE = "pg_schema_meta"
 PG_SCHEMA_META_ID = 1
 PG_BUSINESS_RULE_SQLSTATE = "SG001"
@@ -1521,7 +1523,7 @@ PG_TABLE_SPECS = {
             _ck(
                 "requisicao_email_eventos",
                 "status_decisao",
-                "status_decisao IN ('Deferida','Deferida Parcialmente','Indeferida')",
+                "status_decisao IN ('Deferida','Deferida Parcialmente','Indeferida','Devolvida')",
             ),
             _ck(
                 "requisicao_email_eventos",
@@ -2331,6 +2333,7 @@ PG_SCHEMA_MIGRATIONS_SEED = (
     (15, "canonical_document_custody", DOCUMENT_CUSTODY_V15_DETAILS_JSON),
     (16, "ephemeral_state", EPHEMERAL_STATE_V16_DETAILS_JSON),
     (17, "request_reclassification", REQUEST_RECLASSIFICATION_V17_DETAILS_JSON),
+    (18, "return_notifications", RETURN_NOTIFICATIONS_V18_DETAILS_JSON),
 )
 
 
@@ -3469,8 +3472,9 @@ def _function_body(definition):
 #: ``validate_pg_schema`` compares these bodies with the contract.
 PG_UPGRADED_FUNCTIONS = ("fn_requisicoes_snapshot_immutable",)
 
-#: The frozen prod-1/v16 contract, the only state ``upgrade_pg_schema`` accepts.
+#: Frozen predecessors accepted by the explicit, transactional upgrade.
 _PG_V16_CONTRACT_SHA256 = "499c03e5a368bb061347e3a1acbe84558f85af098d6d28d50084a21e1095a465"
+_PG_V17_CONTRACT_SHA256 = "09f618d08de0c39c0d8e2c04fc181c1c9f15e8ea3d10180d31815752cee0ebfa"
 _PG_V16_SNAPSHOT_FUNCTION_BODY = """
 BEGIN
   IF NEW.atividade_versao_id IS DISTINCT FROM OLD.atividade_versao_id
@@ -3484,15 +3488,11 @@ END;
 
 
 def upgrade_pg_schema(connection):
-    """Upgrade an exact prod-1/v16 schema in place to v17.  The caller owns the transaction.
+    """Upgrade the frozen v16/v17 contract to v18; caller owns the transaction.
 
-    v17 changes one trigger function body (request reclassification while the
-    request is editable) and adds migration row 17; no table, row, constraint,
-    index or trigger declaration changes.  The schema must be the frozen v16
-    contract exactly -- meta version and digest, migration rows 1..16 and the
-    v16 function body -- or nothing is written.  A schema already at v17 is
-    validated and left alone.  The ``pg_schema_meta`` row is locked first, so
-    two concurrent upgrades serialize and the second finds v17.
+    v18 expands one notification CHECK and adds migration row 18. Starting
+    from v16 also applies the v17 trigger replacement. Existing rows and all
+    delivery history stay intact. The metadata row serializes upgrades.
     """
     _require_server_encoding(connection)
     meta = _fetch(
@@ -3505,9 +3505,10 @@ def upgrade_pg_schema(connection):
     version, digest = int(meta[0][2]), str(meta[0][3])
     if version == PG_SCHEMA_VERSION:
         return {"status": "already_current", **validate_pg_schema(connection)}
-    if version != 16 or digest != _PG_V16_CONTRACT_SHA256:
+    predecessors = {16: _PG_V16_CONTRACT_SHA256, 17: _PG_V17_CONTRACT_SHA256}
+    if version not in predecessors or digest != predecessors[version]:
         raise PostgresSchemaIncompatibleError(
-            f"in-place upgrade starts only from the frozen prod-1/v16 contract (found version {version})"
+            f"in-place upgrade starts only from frozen prod-1/v16 or v17 (found version {version})"
         )
     migrations = _fetch(
         connection,
@@ -3516,26 +3517,41 @@ def upgrade_pg_schema(connection):
     expected = [
         (version_, name, PG_SCHEMA_EPOCH, details)
         for version_, name, details in PG_SCHEMA_MIGRATIONS_SEED
-        if version_ <= 16
+        if version_ <= version
     ]
     if [(int(row[0]), str(row[1]), str(row[2]), row[3]) for row in migrations] != expected:
-        raise PostgresSchemaIncompatibleError("schema_migrations is not the prod-1/v16 baseline")
+        raise PostgresSchemaIncompatibleError("schema_migrations is not the frozen predecessor baseline")
     function = "fn_requisicoes_snapshot_immutable"
-    if _schema_function_sources(connection, (function,)).get(function) != _PG_V16_SNAPSHOT_FUNCTION_BODY:
-        raise PostgresSchemaIncompatibleError(f"{function} is not the prod-1/v16 body")
+    expected_body = _PG_V16_SNAPSHOT_FUNCTION_BODY if version == 16 else _function_body(PG_TRIGGER_FUNCTIONS[function])
+    if _schema_function_sources(connection, (function,)).get(function) != expected_body:
+        raise PostgresSchemaIncompatibleError(f"{function} is not the frozen predecessor body")
 
-    connection.execute(
-        PG_TRIGGER_FUNCTIONS[function].strip().replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION", 1)
-    )
-    (row_17,) = [statement for statement in _seed_statements() if statement.startswith(
-        "INSERT INTO schema_migrations") and "VALUES (17," in statement]
-    connection.execute(row_17)
+    check = next(c for c in PG_TABLE_SPECS['requisicao_email_eventos']['checks'] if c['name'].endswith('status_decisao'))
+    old_check = next((c for c in _catalog_constraints(connection)
+                      if c['table'] == 'requisicao_email_eventos' and c['name'] == check['name']), None)
+    if old_check is None or re.findall(r"'([^']*)'", old_check['definition']) != [
+        'Deferida', 'Deferida Parcialmente', 'Indeferida'
+    ]:
+        raise PostgresSchemaIncompatibleError('notification status CHECK is not the frozen predecessor')
+
+    if version == 16:
+        connection.execute(
+            PG_TRIGGER_FUNCTIONS[function].strip().replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION", 1)
+        )
+        (row_17,) = [statement for statement in _seed_statements() if statement.startswith(
+            "INSERT INTO schema_migrations") and "VALUES (17," in statement]
+        connection.execute(row_17)
+    connection.execute(f'ALTER TABLE requisicao_email_eventos DROP CONSTRAINT "{check["name"]}", '
+                       f'ADD CONSTRAINT "{check["name"]}" CHECK ({check["expression"]})')
+    (row_18,) = [statement for statement in _seed_statements() if statement.startswith(
+        "INSERT INTO schema_migrations") and "VALUES (18," in statement]
+    connection.execute(row_18)
     connection.execute(
         f"UPDATE {PG_SCHEMA_META_TABLE} SET schema_version = {PG_SCHEMA_VERSION}, "
         f"contract_sha256 = '{PG_CONTRACT_SHA256}', applied_at = {PG_UTC_NOW_FUNCTION}() "
         f"WHERE id = {PG_SCHEMA_META_ID}"
     )
-    return {"status": "upgraded", "from_version": 16, **validate_pg_schema(connection)}
+    return {"status": "upgraded", "from_version": version, **validate_pg_schema(connection)}
 
 
 def provision_pg_schema(connection):
@@ -3620,7 +3636,7 @@ def provision_database(database_url):
 
 
 def upgrade_database(database_url):
-    """Upgrade ``database_url`` from v16 to v17 in a single transaction and commit."""
+    """Upgrade ``database_url`` from v16/v17 to v18 in one transaction."""
     connection = _connect_database(database_url)
     try:
         result = upgrade_pg_schema(connection)
@@ -3640,8 +3656,8 @@ _USAGE = (
     "DATABASE_URL must be a PostgreSQL URL. 'provision' creates the baseline\n"
     "from an empty schema or is a no-op when it already matches; it never\n"
     "drops, alters or repairs an existing schema. 'upgrade' moves an exact\n"
-    "prod-1/v16 schema to v17 in one transaction (one trigger function and\n"
-    "migration row 17) and is a no-op on v17; anything else is refused.\n"
+    "prod-1/v16 or v17 schema to v18 in one transaction; v18 is a validated\n"
+    "no-op. Existing data is preserved and notifications are never backfilled.\n"
 )
 
 

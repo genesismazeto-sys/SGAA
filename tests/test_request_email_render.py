@@ -25,6 +25,21 @@ from tests.request_email_support import (
 )
 
 
+@pytest.mark.parametrize("template", ["Acesse o SGAA para conferir.", "Detalhes:\n{ requisicoes }"])
+def test_return_always_includes_its_result_and_snapshot_reason_once(template):
+    conn = new_v7_connection()
+    versao = seed_activity(conn)
+    aluno = seed_student(conn, nome="Synthetic Student", matricula="RETURN", email="return@example.test")
+    req = seed_request(conn, aluno_id=aluno, versao_id=versao)
+    decide(conn, req, status="Devolvida", observacao="Anexe o certificado assinado.")
+    _subject, body = render_student_email(
+        assunto="Processamento", corpo=template, events=_events(conn, [req]),
+        aluno_nome="Synthetic Student", aluno_matricula="RETURN",
+    )
+    assert body.count("Resultado: Devolvida para retificação") == 1
+    assert body.count("Justificativa: Anexe o certificado assinado.") == 1
+
+
 def _events(conn, req_ids):
     from app.request_email_notifications import load_pending_events
 

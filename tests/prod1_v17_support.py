@@ -20,6 +20,9 @@ from app.prod1_schema import canonical_prod1_pre_v17_object_sql
 
 def revert_prod1_v17_to_v16(conn: sqlite3.Connection) -> None:
     """Restore the v16 snapshot trigger and drop marker 17."""
+    if conn.execute("PRAGMA user_version").fetchone()[0] == 18:
+        from tests.prod1_v18_support import revert_prod1_v18_to_v17
+        revert_prod1_v18_to_v17(conn)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 17
     conn.commit()
     try:

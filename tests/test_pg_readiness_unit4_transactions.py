@@ -90,6 +90,7 @@ DEFERRED_MIGRATION_BEGIN_IMMEDIATE = frozenset(
         "app/prod1_document_custody_v15.py",
         "app/prod1_ephemeral_state_v16.py",
         "app/prod1_request_reclassification_v17.py",
+        "app/prod1_return_notifications_v18.py",
         "app/prod1_notifications_v7.py",
         "app/prod1_password_foundation_v8.py",
         "app/prod1_schema.py",

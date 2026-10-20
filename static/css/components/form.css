@@ -553,6 +553,14 @@ a.file-list-name:hover{ color:var(--accent-blue); text-decoration:underline; }
   cursor:default;
 }
 
+/* Opt-in readable details: preserve native locks, use the active field paint.
+   Only viewing/processing surfaces opt in; create/edit retain their states. */
+.form-readonly-readable{ --field-readonly-bg:var(--field-bg); }
+.form-readonly-readable .field-card .control:is([readonly], :disabled[aria-readonly="true"]){
+  color:var(--text);
+  -webkit-text-fill-color:var(--text);
+}
+
 /* READ-ONLY REGION — the same declaration, made at the fieldset.
 
    A "view mode" page does not disable its controls one by one; it wraps the

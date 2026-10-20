@@ -498,7 +498,7 @@ def test_real_pg_a_snapshot_is_proven_equal_and_restores_through_path_b(business
             counted.close()
     lite = sqlite3.connect(snap["path"])
     try:
-        assert lite.execute("PRAGMA user_version").fetchone()[0] == 17
+        assert lite.execute("PRAGMA user_version").fetchone()[0] == 18
         counters = dict(lite.execute("SELECT name, seq FROM sqlite_sequence").fetchall())
     finally:
         lite.close()

@@ -26,7 +26,7 @@ def revert_prod1_v16_to_v15(conn: sqlite3.Connection) -> None:
 
     Handed the bootstrapped head (v17), it reverts v17 first.
     """
-    if conn.execute("PRAGMA user_version").fetchone()[0] == 17:
+    if conn.execute("PRAGMA user_version").fetchone()[0] in (17, 18):
         revert_prod1_v17_to_v16(conn)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 16
     for table in EPHEMERAL_STATE_V16_TABLES:

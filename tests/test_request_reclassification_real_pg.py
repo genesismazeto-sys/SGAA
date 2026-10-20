@@ -275,7 +275,11 @@ def _as_frozen_v16(url):
         definition = pg_schema.PG_TRIGGER_FUNCTIONS["fn_requisicoes_snapshot_immutable"].strip()
         v16 = definition.replace(pg_schema._function_body(definition), pg_schema._PG_V16_SNAPSHOT_FUNCTION_BODY)
         raw.execute(v16.replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION", 1))
-        raw.execute("DELETE FROM schema_migrations WHERE version = 17")
+        raw.execute("DELETE FROM schema_migrations WHERE version >= 17")
+        check = next(c for c in pg_schema.PG_TABLE_SPECS['requisicao_email_eventos']['checks'] if c['name'].endswith('status_decisao'))
+        old = check['expression'].replace(",'Devolvida'", "")
+        raw.execute(f'ALTER TABLE requisicao_email_eventos DROP CONSTRAINT "{check["name"]}", '
+                    f'ADD CONSTRAINT "{check["name"]}" CHECK ({old})')
         raw.execute(f"UPDATE {pg_schema.PG_SCHEMA_META_TABLE} SET schema_version = 16, "
                     f"contract_sha256 = '{pg_schema._PG_V16_CONTRACT_SHA256}'")
         raw.commit()
@@ -303,9 +307,9 @@ def test_the_upgrade_moves_the_frozen_v16_contract_to_v17_once(database, conn):
             apply_reclassification(conn, prepared)
 
     result = pg_schema.upgrade_database(database)
-    assert (result["status"], result["from_version"], result["schema_version"]) == ("upgraded", 16, 17)
-    assert _meta(database) == (17, pg_schema.PG_CONTRACT_SHA256)
-    assert pg_schema.validate_database(database)["schema_version"] == 17
+    assert (result["status"], result["from_version"], result["schema_version"]) == ("upgraded", 16, 18)
+    assert _meta(database) == (18, pg_schema.PG_CONTRACT_SHA256)
+    assert pg_schema.validate_database(database)["schema_version"] == 18
     assert pg_schema.upgrade_database(database)["status"] == "already_current"
     # The rows are untouched and the new rule is live.
     with write_transaction(conn):

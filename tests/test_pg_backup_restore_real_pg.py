@@ -468,7 +468,7 @@ def test_backup_writes_exactly_the_artifact_set_and_a_value_free_manifest(regist
     assert manifest["schema"]["epoch"] == pg_schema.PG_SCHEMA_EPOCH
     assert manifest["schema"]["version"] == pg_schema.PG_SCHEMA_VERSION
     assert manifest["schema"]["contract_sha256"] == pg_schema.PG_CONTRACT_SHA256
-    assert manifest["schema"]["latest_migration"]["version"] == 17  # the v16 head (MP-2 ephemeral state)
+    assert manifest["schema"]["latest_migration"]["version"] == 18  # return notification CHECK
     schema_only = set(tool.SCHEMA_ONLY_TABLE_POLICIES)
     assert {t: v for t, v in manifest["tables"].items() if t not in schema_only} == {
         t: v for t, v in backup_set["before"].tables.items() if t not in schema_only

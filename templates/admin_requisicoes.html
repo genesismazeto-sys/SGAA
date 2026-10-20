@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/modal.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/list-cards.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/actions-float.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/request-presets.css') }}">
   <style>
     /* Botão Adicionar: somente contorno e texto azuis (scoped) */
     .btn.outline-primary{
@@ -247,7 +248,8 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn" id="req-presets-ok" type="button">{{ user_message("Fechar") }}</button>
+      <button class="btn" id="req-presets-ok" type="button"><i class="lucide" data-lucide="x"></i> {{ user_message("Fechar") }}</button>
+      <button class="btn primary" id="presets-save" type="button"{% if not can_requisicoes_edit %} hidden disabled{% endif %}><i class="lucide" data-lucide="check"></i> {{ user_message("Salvar") }}</button>
     </div>
   </div>
 </div>
@@ -314,67 +316,7 @@
 }
 .req-email-result{ margin-top:10px; font-size:13px; font-weight:500; }
 
-/* Pré-definições: assunto, padrão e placeholders */
-.presets-field-hint{ display:block; font-size:11px; color:#71717a; margin-top:4px; }
-.presets-default-row{ display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer; }
-.presets-placeholders{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
-.presets-ph{
-  border:1px solid #e4e4e7; background:#fafafa; border-radius:999px;
-  padding:3px 9px; font-size:11px; font-family:ui-monospace,monospace;
-  color:#3f3f46; cursor:pointer;
-}
-.presets-ph:hover{ background:var(--info-bg); border-color:var(--info-border); color:var(--info-text); }
-
-/* Estilos do modal de Pré-ajustes (escopo local) */
-#req-presets-modal .modal-card{ width:min(900px, calc(100vw - 32px)); }
-/* Header */
-#req-presets-modal .modal-header{ padding:18px 24px 6px; align-items:flex-start; }
-#req-presets-modal .modal-header h3{ flex-direction:column; align-items:flex-start; gap:0; font-size:16px; font-weight:500; }
-#req-presets-modal .presets-title-row{ display:inline-flex; align-items:center; gap:8px; line-height:1.2; }
-#req-presets-modal .presets-title-row .lucide{ width:20px; height:20px; }
-#req-presets-modal .presets-subtitle{ display:block; margin-top:2px; font-size:12px; font-weight:400; color:#71717a; }
-#req-presets-modal #req-presets-close{ width:30px; height:30px; min-width:30px; padding:0; border:0; background:transparent; box-shadow:none; color:#71717a; display:inline-grid; place-items:center; }
-#req-presets-modal #req-presets-close:hover{ background:#f4f4f5; }
-#req-presets-modal #req-presets-close .lucide{ margin:0; top:0; width:16px; height:16px; color:inherit; }
-/* Filter */
 .modal-filter{ margin-bottom: 10px; display:grid; grid-template-columns: 1fr auto; align-items:center; column-gap:2px; }
-#req-presets-modal .modal-filter{ margin-bottom:0; padding:0 24px 10px; grid-template-columns:1fr; border-bottom:0; }
-#req-presets-modal .presets-tipo-label{ display:block; margin-bottom:6px; font-size:11px; font-weight:500; color:#71717a; text-transform:uppercase; letter-spacing:.04em; }
-#req-presets-modal .presets-divider{ margin:0 24px; border:0; border-top:1px solid #e4e4e7; }
-/* Footer */
-#req-presets-modal .modal-footer{ justify-content:center; padding:10px 12px; border-top:1px solid var(--border); }
-/* Toolbar */
-#req-presets-modal .actions-mini{ display:flex; align-items:center; gap:4px; background:#f4f4f5; border-radius:6px; padding:2px; }
-#req-presets-modal .actions-mini .btn.icon-btn{ display:inline-grid; place-items:center; width:22px; height:22px; min-width:22px; padding:0; gap:0; border:0; border-radius:4px; background:transparent; color:#a1a1aa; box-shadow:none; }
-#req-presets-modal .actions-mini #preset-add{ background:var(--surface); border:0.5px solid #e4e4e7 !important; color:var(--text-tertiary); }
-#req-presets-modal .actions-mini #preset-del{ color:#a1a1aa; }
-#req-presets-modal .actions-mini #preset-del:hover{ color:var(--danger-text); background:var(--surface); border:0.5px solid #e4e4e7 !important; }
-#req-presets-modal .actions-mini #preset-del.is-active .lucide{ color:var(--danger-text); }
-#req-presets-modal .actions-mini .btn.icon-btn .lucide{ margin:0; top:0; width:14px; height:14px; color:inherit; }
-/* List */
-#req-presets-modal .menu-list{ padding:0; border:0; outline:0; box-shadow:none; }
-#req-presets-modal .menu-item{ display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:6px; cursor:pointer; font-weight:500; border:1px solid transparent; transition:background .12s, border-color .12s; min-height:0; height:auto; }
-#req-presets-modal .menu-item:hover{ background:var(--hover-bg); border-color:#e4e4e7; }
-#req-presets-modal .menu-item.is-selected{ background:var(--info-bg); border-color:var(--info-border); }
-/* Split body */
-#req-presets-modal .modal-body.presets-body-split{ display:grid; grid-template-columns:200px 1fr; gap:0; padding:18px 24px; flex:1; min-height:0; }
-.presets-col-left{ display:flex; flex-direction:column; min-width:0; overflow:hidden; }
-.presets-col-header{ display:flex; align-items:center; justify-content:space-between; padding:0 0 8px; flex-shrink:0; }
-.presets-itens-label{ font-size:11px; font-weight:500; color:#71717a; text-transform:uppercase; letter-spacing:.04em; display:block; }
-#req-presets-modal .presets-col-left{ padding-right:10px; }
-#req-presets-modal .presets-col-left .menu-list{ padding:0; flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:2px; }
-.presets-col-right{ display:flex; flex-direction:column; gap:0; padding:0 0 0 20px; border-left:1px solid #e4e4e7; min-width:0; overflow-y:auto; }
-#req-presets-modal .presets-col-right .presets-field-block{ margin-bottom:14px; }
-#req-presets-modal .presets-col-right .presets-field-label{ display:block; margin-bottom:6px; font-size:11px; font-weight:500; color:#71717a; text-transform:uppercase; letter-spacing:.04em; }
-#req-presets-modal .presets-col-right input.control,
-#req-presets-modal .presets-col-right textarea.control{ border:1px solid var(--border-strong); border-radius:var(--radius); padding:8px 10px; background:var(--field-bg); font-family:inherit; font-size:var(--font-size-base); box-sizing:border-box; outline:none; width:100%; }
-#req-presets-modal .presets-col-right input.control:hover,
-#req-presets-modal .presets-col-right textarea.control:hover{ background:var(--field-hover-bg); border-color:var(--field-hover-border); box-shadow:none; }
-#req-presets-modal .presets-col-right input.control:focus,
-#req-presets-modal .presets-col-right textarea.control:focus{ background:var(--field-focus-bg); border-color:var(--field-focus-border); box-shadow:0 0 0 1px var(--field-focus-ring); }
-/* campo simples no editor direito */
-.preset-field{ display:flex; flex-direction:column; gap:4px; }
-.preset-field .section-title{ margin:0; }
 .card-box{ border:1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); padding:10px; display:flex; flex-direction:column; gap:10px; }
 .card-header{ display:flex; align-items:center; gap:8px; font-weight:600; }
 .card-header .lucide{ width:16px; height:16px; }
@@ -382,6 +324,50 @@
 </style>
 
 <script>
+// One persisted source for both editors and processing. Reads started before a
+// write cannot replace its confirmed snapshot; drafts never enter this cache.
+window.__reqPresetStore = (() => {
+  let revision = 0, reading = null, writing = null;
+  let cached = null;
+  const clone = data => JSON.parse(JSON.stringify(data));
+  async function load(refresh = false) {
+    if (writing) { await writing; return load(); }
+    if (reading) return reading;
+    if (!refresh && cached) return clone(cached);
+    const started = revision;
+    const request = (async () => {
+      const resp = await fetch('/admin/api/presets', { cache: 'no-store' });
+      if (!resp.ok) throw new Error('Erro ao carregar presets');
+      const data = await resp.json();
+      if (started !== revision) return load();
+      cached = data;
+      return clone(data);
+    })();
+    reading = request;
+    try { return await request; }
+    finally { if (reading === request) reading = null; }
+  }
+  async function save(data, headers) {
+    if (writing) throw new Error('Gravação em andamento');
+    const snapshot = clone(data);
+    revision += 1;
+    reading = null;
+    const request = (async () => {
+      const resp = await fetch('/admin/api/presets', {
+        method: 'POST', headers, body: JSON.stringify(snapshot)
+      });
+      const result = await resp.json();
+      if (!resp.ok || !result?.ok) throw new Error(result?.detail || result?.error || 'Erro ao salvar presets');
+      cached = snapshot;
+      window.dispatchEvent(new CustomEvent('request-presets-saved', { detail: clone(snapshot) }));
+      return result;
+    })();
+    writing = request;
+    try { return await request; }
+    finally { if (writing === request) writing = null; }
+  }
+  return { load, save };
+})();
 // Modal Pré-ajustes: lógica de seleção, edição e salvamento persistente
 document.addEventListener('DOMContentLoaded', ()=>{
   const canRequisicoesEdit = {{ 'true' if can_requisicoes_edit else 'false' }};
@@ -394,28 +380,27 @@ document.addEventListener('DOMContentLoaded', ()=>{
   let presetsData = { respostas: [], emails: [] };
   let currentTipo = 'respostas';
   let selectedId = null;
+  let loading = false, saving = false, loadFailed = false;
+  let openRevision = 0;
   const reqMessageTemplates = JSON.parse(document.getElementById('req-message-templates')?.textContent || '{}');
 
   const btn = document.getElementById('req-presets-btn');
   const overlay = document.getElementById('req-presets-modal');
   const btnClose = document.getElementById('req-presets-close');
   const btnOk = document.getElementById('req-presets-ok');
-  const saveBtn = document.createElement('button');
-  const SAVE_ICON_SVG = '<i class="lucide btn-icon-save" data-lucide="check"></i>';
-  saveBtn.className = 'btn btn-primary';
-  saveBtn.id = 'presets-save';
-  saveBtn.type = 'button';
-  saveBtn.innerHTML = `${SAVE_ICON_SVG} ${reqMessageTemplates.save}`;
+  const saveBtn = document.getElementById('presets-save');
   const filter = document.getElementById('req-presets-filter');
   const listBox = document.getElementById('presets-list');
   const select = document.getElementById('req-presets-select');
   const addBtn = document.getElementById('preset-add');
   const delBtn = document.getElementById('preset-del');
   const updatePresetsSaveState = ()=>{
-    if (saveBtn) saveBtn.disabled = !canRequisicoesEdit || !selectedId;
+    if (saveBtn) saveBtn.disabled = !canRequisicoesEdit || !selectedId || loading || saving || loadFailed;
+    if (addBtn) addBtn.disabled = !canRequisicoesEdit || loading || saving || loadFailed;
+    if (select) select.disabled = loading || saving || loadFailed;
     if (delBtn) {
       delBtn.classList.toggle('is-active', !!selectedId && canRequisicoesEdit);
-      delBtn.disabled = !canRequisicoesEdit;
+      delBtn.disabled = !canRequisicoesEdit || loading || saving || loadFailed;
     }
   };
 
@@ -487,13 +472,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
     syncSelectedPresetDraft();
   });
 
-  // Insere o botão Salvar no footer, se não existir
-  const footer = overlay?.querySelector('.modal-footer');
-  if (footer && !document.getElementById('presets-save')) {
-    footer.appendChild(saveBtn);
-    window.lucide?.createIcons?.();
-  }
-
   if (!canRequisicoesEdit) {
     if (addBtn) addBtn.hidden = true;
     if (delBtn) delBtn.hidden = true;
@@ -504,31 +482,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
   }
 
   async function fetchPresets() {
-    try {
-      const resp = await fetch('/admin/api/presets');
-      if (!resp.ok) throw new Error('Erro ao carregar presets');
-      presetsData = await resp.json();
-      console.log('[PRESETS] Dados carregados do backend:', presetsData);
-    } catch (e) {
-      presetsData = { respostas: [], emails: [] };
-      console.error('[PRESETS] Erro ao carregar presets:', e);
-    }
+    return window.__reqPresetStore.load(true);
   }
 
   async function savePresets() {
     try {
-      console.log('[PRESETS] Salvando dados:', presetsData);
-      const resp = await fetch('/admin/api/presets', {
-        method: 'POST',
-        headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify(presetsData)
-      });
-      const result = await resp.json();
-      console.log('[PRESETS] Resposta do backend ao salvar:', result);
-      if (!resp.ok || !result?.ok) {
-        throw new Error(result?.detail || result?.error || 'Erro ao salvar presets');
-      }
-      return result;
+      return await window.__reqPresetStore.save(presetsData, withCsrfHeaders({ 'Content-Type': 'application/json' }));
     } catch (e) {
       console.error('[PRESETS] Erro ao salvar presets:', e);
       throw e;
@@ -640,9 +599,26 @@ document.addEventListener('DOMContentLoaded', ()=>{
   }
 
   async function open() {
+    const opened = ++openRevision;
     overlay.hidden = false;
     document.body.style.overflow = 'hidden';
-    await fetchPresets();
+    loading = true;
+    selectedId = null;
+    renderContent();
+    updatePresetsSaveState();
+    try {
+      const data = await fetchPresets();
+      if (opened !== openRevision || overlay.hidden) return;
+      presetsData = data;
+      loadFailed = false;
+    } catch (e) {
+      if (opened !== openRevision || overlay.hidden) return;
+      loadFailed = true;
+      window.showToast?.(reqMessageTemplates.unknownError, 'error');
+      return; // Never offer to overwrite persisted models after a failed read.
+    } finally {
+      if (opened === openRevision) { loading = false; updatePresetsSaveState(); }
+    }
     // Garante que os campos existem
     if (!presetsData.respostas) presetsData.respostas = [];
     if (!presetsData.emails) presetsData.emails = [];
@@ -660,7 +636,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     renderContent();
     updatePresetsSaveState();
   }
-  function close(){ syncSelectedPresetDraft(); overlay.hidden = true; document.body.style.overflow=''; }
+  function close(){ if (saving) return; ++openRevision; syncSelectedPresetDraft(); overlay.hidden = true; document.body.style.overflow=''; }
   btn?.addEventListener('click', open);
   btnClose?.addEventListener('click', close);
   btnOk?.addEventListener('click', close);
@@ -707,7 +683,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   });
 
   saveBtn?.addEventListener('click', async () => {
-    if (!canRequisicoesEdit) return;
+    if (!canRequisicoesEdit || loading || saving || loadFailed) return;
     syncSelectedPresetDraft();
     // Sincroniza todos os inputs de título antes de salvar
     document.querySelectorAll('#presets-list input[type="text"]').forEach(input => {
@@ -722,6 +698,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
     // Salva texto do textarea
     const ta = document.getElementById('preset-textarea');
     if (ta) item.texto = ta.value;
+    saving = true;
+    updatePresetsSaveState();
+    // Freeze the draft while its snapshot is being committed.
+    overlay.querySelectorAll('input, textarea, button').forEach(el => {
+      el.dataset.beforeSaveDisabled = String(el.disabled);
+      el.disabled = true;
+    });
     try {
       await savePresets();
       window.showToast && window.showToast(reqMessageTemplates.presetSaved, 'success');
@@ -732,6 +715,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
         window.appFormatMessage(reqMessageTemplates.presetSaveError, { value_1: e.message || reqMessageTemplates.unknownError }),
         'error'
       );
+    } finally {
+      saving = false;
+      overlay.querySelectorAll('[data-before-save-disabled]').forEach(el => {
+        el.disabled = el.dataset.beforeSaveDisabled === 'true';
+        delete el.dataset.beforeSaveDisabled;
+      });
+      updatePresetsSaveState();
     }
   });
 });
@@ -1688,21 +1678,23 @@ document.addEventListener('DOMContentLoaded', ()=>{
           window.lucide?.createIcons?.();
           return;
         }
-        items.forEach((ax)=>{
-          const lbl = String(ax.label || 'Comprovante');
+        items.forEach((ax, index)=>{
+          const lbl = items.length === 1 ? 'Comprovante' : `Comprovante ${index + 1}`;
           const row = document.createElement('div');
           row.className = 'form-row';
           const safe = lbl.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;');
           const fname = ax.filename || '';
-          const titleAttr = fname ? ` title="${fname}"` : '';
           const actionLabel = ax.url ? 'Abrir' : 'Arquivo';
           row.innerHTML = `
-            <label class="row-label">Comprovante (${safe})</label>
+            <label class="row-label">${safe}</label>
             <div class="field-card file-card ${fname ? 'has-file' : ''}" data-file-card>
               <div class="field-chip"><i class="lucide" data-lucide="file-text"></i></div>
-              <div class="control file-name" data-file-name${titleAttr}>${fname || 'Nenhum arquivo enviado'}</div>
+              <div class="control file-name" data-file-name></div>
               <div class="field-chip chip-right" title="${actionLabel}"><i class="lucide" data-lucide="paperclip"></i><span>${actionLabel}</span></div>
             </div>`;
+          const filename = row.querySelector('[data-file-name]');
+          filename.textContent = fname || 'Nenhum arquivo enviado';
+          if (fname) filename.title = fname;
           if (ax.url){
             row.querySelector('.chip-right')?.addEventListener('click', (event)=>{
               event.stopPropagation();
@@ -1844,6 +1836,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       const effectiveMode = (!canRequisicoesEdit && mode !== 'view') ? 'view' : mode;
       const isCreate = effectiveMode === 'create';
       const isEdit   = effectiveMode === 'edit';
+      overlay.classList.toggle('form-readonly-readable', !isCreate && !isEdit);
 
       // Sempre reset do estado de confirmação ao trocar de modo
       setFooterRowVisibility(confirmRow, false);
@@ -2326,7 +2319,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
 
     window.__openExistingReqModal = function(reqId, mode='view'){
-      loadReqAndOpen(mode, reqId);
+      return loadReqAndOpen(mode, reqId);
     };
 
     const openParams = new URLSearchParams(window.location.search);
@@ -2503,15 +2496,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
     // Expor helpers globais usados acima
     window.__loadJustPresetsOnce = async function(){
       try{
-        if (window.__justPresetsOnce) return;
-        const resp = await fetch('/admin/api/presets');
-        let respostas = [];
-        if (resp.ok){ const data = await resp.json(); respostas = Array.isArray(data?.respostas) ? data.respostas : []; }
-        window.__justPresets = respostas;
-        window.__justPresetsOnce = true;
+        const data = await window.__reqPresetStore.load(true);
+        window.__justPresets = Array.isArray(data?.respostas) ? data.respostas : [];
         if (typeof window.__populateJustSelect === 'function') window.__populateJustSelect();
-      }catch(_e){ window.__justPresetsOnce = true; }
+      }catch(e){ console.error('[PRESETS] Erro ao carregar justificativas:', e); }
     };
+    window.addEventListener('request-presets-saved', event => {
+      window.__justPresets = event.detail.respostas || [];
+      window.__populateJustSelect?.();
+    });
     window.__populateJustSelect = function(){
       try{
         const sel = document.getElementById('m_just_select');

@@ -189,7 +189,8 @@ def render_request_block(events) -> str:
             lines.append(f"  Atividade: {event['atividade_nome']}")
         if (event["nome_evento"] or "").strip():
             lines.append(f"  Evento: {str(event['nome_evento']).strip()}")
-        lines.append(f"  Resultado: {event['status_decisao']}")
+        result = "Devolvida para retificação" if event["status_decisao"] == "Devolvida" else event["status_decisao"]
+        lines.append(f"  Resultado: {result}")
         lines.append(f"  Horas solicitadas: {_format_hours(event['horas_solicitadas'])}")
         status = str(event["status_decisao"])
         if status == "Deferida Parcialmente" and event["horas_deferidas"] is not None:
@@ -198,7 +199,7 @@ def render_request_block(events) -> str:
             lines.append(f"  Horas deferidas: {_format_hours(event['horas_solicitadas'])}")
         # Full deferment must not emit an empty "Justificativa:" label.
         justification = (event["justificativa"] or "").strip()
-        if justification and status in ("Deferida Parcialmente", "Indeferida"):
+        if justification and status in ("Deferida Parcialmente", "Indeferida", "Devolvida"):
             lines.append(f"  Justificativa: {justification}")
         lines.append("")
     return "\n".join(lines).rstrip()
@@ -287,9 +288,17 @@ def render_student_email(
         aluno_matricula=aluno_matricula,
         moment=moment,
     )
+    body = render_template(corpo, context, allow_block=True)
+    # Existing models may only say "acesse o SGAA" and omit the detail block.
+    # A correction request must still communicate its outcome and recorded
+    # reason. Append those returns once without rewriting the stored model.
+    returns = [event for event in events if event["status_decisao"] == "Devolvida"]
+    has_details = any(token.strip() == BLOCK_PLACEHOLDER for token in _TOKEN_RE.findall(corpo))
+    if returns and not has_details:
+        body = f"{body.rstrip()}\n\n{render_request_block(returns)}".lstrip()
     return (
         render_template(assunto, context, allow_block=False),
-        render_template(corpo, context, allow_block=True),
+        body,
     )
 
 

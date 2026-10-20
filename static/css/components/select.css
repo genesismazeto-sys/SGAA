@@ -88,6 +88,8 @@ select.select--plain{ appearance:none; }
     border-color:var(--control-native-border-disabled);
     opacity:.7;
   }
+  /* Details keep the native lock while matching active-control contrast. */
+  .form-readonly-readable select:disabled[aria-readonly="true"]{ opacity:1; }
   .field-card select.control{ --select-border-end:0px; }
 
   /* The menulist's own inset: 4px before the label, 1px above and below it. */

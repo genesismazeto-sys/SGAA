@@ -1036,7 +1036,7 @@ def test_a_full_backup_survives_the_restore_path_the_admin_page_offers(productio
         snap = pg_snapshot.create(str(tmp_path))
     lite = sqlite3.connect(snap["path"])
     try:
-        assert lite.execute("PRAGMA user_version").fetchone()[0] == 17
+        assert lite.execute("PRAGMA user_version").fetchone()[0] == 18
         assert lite.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
         assert lite.execute("SELECT count(*) FROM storage_objects").fetchone()[0] == len(env.ids)
     finally:

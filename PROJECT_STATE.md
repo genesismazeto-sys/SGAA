@@ -16,9 +16,10 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
 
 - Flask; composition root `app/__init__.py::create_app`; `main.py` is a frozen
   compatibility facade. Structural refactor complete.
-- Logical schema `prod-1` v17 in the repository on SQLite and PostgreSQL (v16 added two empty,
-  ephemeral tables; v17 lets a Pendente/Devolvida request replace its activity and snapshot
-  together -- SPEC MP-3 A22). PROD PostgreSQL is v16 until gate G1 runs `python -m app.pg_schema
+- Logical schema `prod-1` v18 in the repository on SQLite and PostgreSQL (v17 permits activity
+  correction; v18 expands the notification decision CHECK to include Devolvida, with no backfill).
+  The processing repairs and controlled recovery are documented in `docs/request-processing-corrections.md`.
+  PROD PostgreSQL is v16 until a separately authorized gate runs `python -m app.pg_schema
   upgrade`; governed tooling validates the exact version, so the daily backup worktree is repinned
   in the same session.
 - PostgreSQL schema authority, runtime dialect and transaction semantics are in

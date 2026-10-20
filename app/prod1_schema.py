@@ -35,8 +35,13 @@ from app.prod1_request_reclassification_ddl import (
     REQUEST_RECLASSIFICATION_V17_DETAILS_JSON,
     REQUEST_RECLASSIFICATION_V17_SCHEMA_OBJECTS_SQL,
 )
+from app.prod1_return_notifications_ddl import (
+    RETURN_NOTIFICATIONS_V18_SCHEMA_OBJECTS_SQL,
+    RETURN_NOTIFICATIONS_V18_MARKER_SQL,
+)
+
 SCHEMA_EPOCH = "prod-1"
-SCHEMA_VERSION = 17
+SCHEMA_VERSION = 18
 BASELINE_MARKER = "first_production_baseline"
 NORMA_REMOVAL_MARKER = "remove_norma_domain"
 MATRIX_VERSION_REMOVAL_MARKER = "remove_matrix_version_metadata"
@@ -54,7 +59,8 @@ CANONICAL_STORAGE_MARKER = "canonical_storage"
 CANONICAL_DOCUMENT_CUSTODY_MARKER = "canonical_document_custody"
 EPHEMERAL_STATE_MARKER = "ephemeral_state"
 REQUEST_RECLASSIFICATION_MARKER = "request_reclassification"
-LATEST_MIGRATION_MARKER = REQUEST_RECLASSIFICATION_MARKER
+RETURN_NOTIFICATIONS_MARKER = "return_notifications"
+LATEST_MIGRATION_MARKER = RETURN_NOTIFICATIONS_MARKER
 REQUEST_STATUSES = (
     "Pendente", "Deferida", "Deferida Parcialmente",
     "Indeferida", "Devolvida", "Encerrada",
@@ -310,6 +316,7 @@ __STORAGE_V14_SCHEMA_OBJECTS__
 __DOCUMENT_CUSTODY_V15_SCHEMA_OBJECTS__
 __EPHEMERAL_STATE_V16_SCHEMA_OBJECTS__
 __REQUEST_RECLASSIFICATION_V17_SCHEMA_OBJECTS__
+__RETURN_NOTIFICATIONS_V18_SCHEMA_OBJECTS__
 
 INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(1,'first_production_baseline','prod-1','{"schema_epoch":"prod-1"}');
@@ -345,7 +352,8 @@ INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(16,'ephemeral_state','prod-1','__EPHEMERAL_STATE_V16_DETAILS__');
 INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(17,'request_reclassification','prod-1','__REQUEST_RECLASSIFICATION_V17_DETAILS__');
-PRAGMA user_version=17;
+__RETURN_NOTIFICATIONS_V18_MARKER__
+PRAGMA user_version=18;
 """.replace(
     "__CONFIGURACOES_PRESETS_TABLE__", CONFIGURACOES_PRESETS_TABLE_SQL
 ).replace(
@@ -380,14 +388,22 @@ PRAGMA user_version=17;
     "__REQUEST_RECLASSIFICATION_V17_SCHEMA_OBJECTS__", REQUEST_RECLASSIFICATION_V17_SCHEMA_OBJECTS_SQL
 ).replace(
     "__REQUEST_RECLASSIFICATION_V17_DETAILS__", REQUEST_RECLASSIFICATION_V17_DETAILS_JSON
+).replace(
+    "__RETURN_NOTIFICATIONS_V18_SCHEMA_OBJECTS__", RETURN_NOTIFICATIONS_V18_SCHEMA_OBJECTS_SQL
+).replace(
+    "__RETURN_NOTIFICATIONS_V18_MARKER__", RETURN_NOTIFICATIONS_V18_MARKER_SQL
 )
 
+
+_PRE_V18_SCHEMA_SQL = PROD1_SCHEMA_SQL.replace(RETURN_NOTIFICATIONS_V18_SCHEMA_OBJECTS_SQL, "", 1).replace(
+    RETURN_NOTIFICATIONS_V18_MARKER_SQL, "", 1
+).replace("PRAGMA user_version=18;", "PRAGMA user_version=17;", 1)
 
 #: The head script without the v17 statements: the frozen v16 object authority
 #: (used by the test-only v17 -> v16 inverse).  v17 drops and recreates one
 #: trigger in one contiguous block, so removing it leaves the v16 trigger.
 assert PROD1_SCHEMA_SQL.count(REQUEST_RECLASSIFICATION_V17_SCHEMA_OBJECTS_SQL) == 1
-_PRE_V17_SCHEMA_SQL = PROD1_SCHEMA_SQL.replace(REQUEST_RECLASSIFICATION_V17_SCHEMA_OBJECTS_SQL, "", 1)
+_PRE_V17_SCHEMA_SQL = _PRE_V18_SCHEMA_SQL.replace(REQUEST_RECLASSIFICATION_V17_SCHEMA_OBJECTS_SQL, "", 1)
 
 #: The head script without the v16 (and v17) additions: the frozen v15 object
 #: authority (used by the test-only v16 -> v15 inverse).  v16 only adds two
@@ -434,6 +450,11 @@ def canonical_prod1_object_sql(kind: str, name: str) -> str:
 def canonical_prod1_pre_v17_object_sql(kind: str, name: str) -> str:
     """DDL of the same authority before the v17 statements (the frozen v16 objects)."""
     return _probe_object_sql(_PRE_V17_SCHEMA_SQL, kind, name)
+
+
+def canonical_prod1_pre_v18_object_sql(kind: str, name: str) -> str:
+    """Frozen v17 object authority, before the return notification CHECK."""
+    return _probe_object_sql(_PRE_V18_SCHEMA_SQL, kind, name)
 
 
 def canonical_prod1_pre_v16_object_sql(kind: str, name: str) -> str:
@@ -567,6 +588,7 @@ _PROD1_V14_SIGNATURE_SHA256 = "96339ae9cf58f94be3af59338db9d1491dfea7d6de4faee64
 _PROD1_V15_SIGNATURE_SHA256 = "01053f9071f348c4b83f32742cb4eb020fc9d3eeaf0177ff678b041570a0f817"
 _PROD1_V16_SIGNATURE_SHA256 = "fec016723ce0dfb207ec97c6a06886076677347661544a38143b7b462151f108"
 _PROD1_V17_SIGNATURE_SHA256 = "31bc8c594739245216a2a686d1c23ecb1b0e964cc4f818c6584b4501931455c8"
+_PROD1_V18_SIGNATURE_SHA256 = "77cf9fe3c4562df206c9d8f9ed44c6e46cd70396da8fe55fcfcdbebcff8db161"
 
 
 def _expected_physical_schema_signature() -> dict[str, object]:
@@ -1265,6 +1287,30 @@ def migrate_prod1_v16_to_v17(conn: sqlite3.Connection) -> dict[str, object]:
     return migrate(conn)
 
 
+def _validate_prod1_v17_schema(conn):
+    if _user_version(conn) != 17 or _physical_schema_digest(conn) != _PROD1_V17_SIGNATURE_SHA256:
+        raise Prod1SchemaError("prod-1/v17 physical schema contract mismatch")
+    reference = sqlite3.connect(":memory:")
+    try:
+        reference.executescript(_PRE_V18_SCHEMA_SQL)
+        if _marker(conn) != _marker(reference):
+            raise Prod1SchemaError("prod-1/v17 migration marker mismatch")
+    finally:
+        reference.close()
+    if conn.execute("PRAGMA foreign_key_check").fetchall():
+        raise Prod1SchemaError("prod-1/v17 foreign key violations")
+
+
+def migrate_prod1_v17_to_v18(conn):
+    from app.prod1_return_notifications_v18 import migrate_prod1_v17_to_v18 as migrate
+    return migrate(conn)
+
+
+def _migrate_prod1_v16_to_head(conn):
+    previous = migrate_prod1_v16_to_v17(conn)
+    return {**previous, **migrate_prod1_v17_to_v18(conn)}
+
+
 def validate_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
     tables = _names(conn, "table")
     missing, unexpected = EXPECTED_TABLES - tables, tables - EXPECTED_TABLES
@@ -1288,6 +1334,7 @@ def validate_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
         (15, CANONICAL_DOCUMENT_CUSTODY_MARKER, SCHEMA_EPOCH),
         (16, EPHEMERAL_STATE_MARKER, SCHEMA_EPOCH),
         (17, REQUEST_RECLASSIFICATION_MARKER, SCHEMA_EPOCH),
+        (18, RETURN_NOTIFICATIONS_MARKER, SCHEMA_EPOCH),
     ]
     if _marker(conn) != expected_markers:
         raise Prod1SchemaError("prod-1 migration marker mismatch")
@@ -1299,8 +1346,8 @@ def validate_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
     expected_signature = _expected_physical_schema_signature()
     if actual_signature != expected_signature:
         raise Prod1SchemaError("prod-1 physical schema contract mismatch")
-    if _physical_schema_digest(conn) != _PROD1_V17_SIGNATURE_SHA256:
-        raise Prod1SchemaError("prod-1/v17 physical schema digest mismatch")
+    if _physical_schema_digest(conn) != _PROD1_V18_SIGNATURE_SHA256:
+        raise Prod1SchemaError("prod-1/v18 physical schema digest mismatch")
     violations = conn.execute("PRAGMA foreign_key_check").fetchall()
     if violations:
         raise Prod1SchemaError(f"prod-1 foreign key violations: {violations!r}")
@@ -1326,7 +1373,7 @@ def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
             migrate_prod1_v13_to_v14(conn)
             migrate_prod1_v14_to_v15(conn)
             migrate_prod1_v15_to_v16(conn)
-            return migrate_prod1_v16_to_v17(conn)
+            return _migrate_prod1_v16_to_head(conn)
         if _user_version(conn) == 2:
             migrate_prod1_v2_to_v3(conn)
             migrate_prod1_v3_to_v4(conn)
@@ -1342,7 +1389,7 @@ def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
             migrate_prod1_v13_to_v14(conn)
             migrate_prod1_v14_to_v15(conn)
             migrate_prod1_v15_to_v16(conn)
-            return migrate_prod1_v16_to_v17(conn)
+            return _migrate_prod1_v16_to_head(conn)
         if _user_version(conn) == 3:
             migrate_prod1_v3_to_v4(conn)
             migrate_prod1_v4_to_v5(conn)
@@ -1357,7 +1404,7 @@ def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
             migrate_prod1_v13_to_v14(conn)
             migrate_prod1_v14_to_v15(conn)
             migrate_prod1_v15_to_v16(conn)
-            return migrate_prod1_v16_to_v17(conn)
+            return _migrate_prod1_v16_to_head(conn)
         if _user_version(conn) == 4:
             migrate_prod1_v4_to_v5(conn)
             migrate_prod1_v5_to_v6(conn)
@@ -1371,7 +1418,7 @@ def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
             migrate_prod1_v13_to_v14(conn)
             migrate_prod1_v14_to_v15(conn)
             migrate_prod1_v15_to_v16(conn)
-            return migrate_prod1_v16_to_v17(conn)
+            return _migrate_prod1_v16_to_head(conn)
         if _user_version(conn) == 5:
             migrate_prod1_v5_to_v6(conn)
             migrate_prod1_v6_to_v7(conn)
@@ -1384,7 +1431,7 @@ def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
             migrate_prod1_v13_to_v14(conn)
             migrate_prod1_v14_to_v15(conn)
             migrate_prod1_v15_to_v16(conn)
-            return migrate_prod1_v16_to_v17(conn)
+            return _migrate_prod1_v16_to_head(conn)
         if _user_version(conn) == 6:
             migrate_prod1_v6_to_v7(conn)
             migrate_prod1_v7_to_v8(conn)
@@ -1396,7 +1443,7 @@ def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
             migrate_prod1_v13_to_v14(conn)
             migrate_prod1_v14_to_v15(conn)
             migrate_prod1_v15_to_v16(conn)
-            return migrate_prod1_v16_to_v17(conn)
+            return _migrate_prod1_v16_to_head(conn)
         if _user_version(conn) == 7:
             migrate_prod1_v7_to_v8(conn)
             migrate_prod1_v8_to_v9(conn)
@@ -1407,7 +1454,7 @@ def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
             migrate_prod1_v13_to_v14(conn)
             migrate_prod1_v14_to_v15(conn)
             migrate_prod1_v15_to_v16(conn)
-            return migrate_prod1_v16_to_v17(conn)
+            return _migrate_prod1_v16_to_head(conn)
         if _user_version(conn) == 8:
             migrate_prod1_v8_to_v9(conn)
             migrate_prod1_v9_to_v10(conn)
@@ -1417,7 +1464,7 @@ def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
             migrate_prod1_v13_to_v14(conn)
             migrate_prod1_v14_to_v15(conn)
             migrate_prod1_v15_to_v16(conn)
-            return migrate_prod1_v16_to_v17(conn)
+            return _migrate_prod1_v16_to_head(conn)
         if _user_version(conn) == 9:
             migrate_prod1_v9_to_v10(conn)
             migrate_prod1_v10_to_v11(conn)
@@ -1426,7 +1473,7 @@ def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
             migrate_prod1_v13_to_v14(conn)
             migrate_prod1_v14_to_v15(conn)
             migrate_prod1_v15_to_v16(conn)
-            return migrate_prod1_v16_to_v17(conn)
+            return _migrate_prod1_v16_to_head(conn)
         if _user_version(conn) == 10:
             migrate_prod1_v10_to_v11(conn)
             migrate_prod1_v11_to_v12(conn)
@@ -1434,34 +1481,36 @@ def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
             migrate_prod1_v13_to_v14(conn)
             migrate_prod1_v14_to_v15(conn)
             migrate_prod1_v15_to_v16(conn)
-            return migrate_prod1_v16_to_v17(conn)
+            return _migrate_prod1_v16_to_head(conn)
         if _user_version(conn) == 11:
             migrate_prod1_v11_to_v12(conn)
             migrate_prod1_v12_to_v13(conn)
             migrate_prod1_v13_to_v14(conn)
             migrate_prod1_v14_to_v15(conn)
             migrate_prod1_v15_to_v16(conn)
-            return migrate_prod1_v16_to_v17(conn)
+            return _migrate_prod1_v16_to_head(conn)
         if _user_version(conn) == 12:
             migrate_prod1_v12_to_v13(conn)
             migrate_prod1_v13_to_v14(conn)
             migrate_prod1_v14_to_v15(conn)
             migrate_prod1_v15_to_v16(conn)
-            return migrate_prod1_v16_to_v17(conn)
+            return _migrate_prod1_v16_to_head(conn)
         if _user_version(conn) == 13:
             migrate_prod1_v13_to_v14(conn)
             migrate_prod1_v14_to_v15(conn)
             migrate_prod1_v15_to_v16(conn)
-            return migrate_prod1_v16_to_v17(conn)
+            return _migrate_prod1_v16_to_head(conn)
         if _user_version(conn) == 14:
             migrate_prod1_v14_to_v15(conn)
             migrate_prod1_v15_to_v16(conn)
-            return migrate_prod1_v16_to_v17(conn)
+            return _migrate_prod1_v16_to_head(conn)
         if _user_version(conn) == 15:
             migrate_prod1_v15_to_v16(conn)
-            return migrate_prod1_v16_to_v17(conn)
+            return _migrate_prod1_v16_to_head(conn)
         if _user_version(conn) == 16:
-            return migrate_prod1_v16_to_v17(conn)
+            return _migrate_prod1_v16_to_head(conn)
+        if _user_version(conn) == 17:
+            return migrate_prod1_v17_to_v18(conn)
         try:
             return validate_prod1_schema(conn)
         except Prod1SchemaError as exc:

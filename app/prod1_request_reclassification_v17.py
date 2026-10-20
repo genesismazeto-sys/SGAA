@@ -31,11 +31,12 @@ from app.prod1_storage_v14 import _columns, _data_digest, _sequences, _table_nam
 
 def migrate_prod1_v16_to_v17(conn: sqlite3.Connection) -> dict[str, object]:
     from app.prod1_schema import (
+        BASELINE_MARKER,
         REQUEST_RECLASSIFICATION_MARKER,
         SCHEMA_EPOCH,
         Prod1SchemaError,
         _validate_prod1_v16_schema,
-        validate_prod1_schema,
+        _validate_prod1_v17_schema,
     )
 
     if conn.in_transaction:
@@ -68,14 +69,16 @@ def migrate_prod1_v16_to_v17(conn: sqlite3.Connection) -> dict[str, object]:
         violations = conn.execute("PRAGMA foreign_key_check").fetchall()
         if violations:
             raise Prod1SchemaError(f"prod-1/v17 foreign key violations: {violations!r}")
-        validate_prod1_schema(conn)
+        _validate_prod1_v17_schema(conn)
         conn.execute("COMMIT")
     except Exception:
         if conn.in_transaction:
             conn.execute("ROLLBACK")
         raise
 
-    status = validate_prod1_schema(conn)
+    _validate_prod1_v17_schema(conn)
+    status = {"schema_epoch": SCHEMA_EPOCH, "schema_version": 17,
+              "baseline_marker": BASELINE_MARKER, "table_count": len(_table_names(conn))}
     return {
         **status,
         "request_reclassification": "pending_or_returned",

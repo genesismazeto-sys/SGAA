@@ -22,7 +22,7 @@ def test_single_init_owner_and_no_main_bridge():
 
 
 def test_migration_registry_is_exactly_prod1_v1_to_v17():
-    assert len(db_maintenance.SCHEMA_MIGRATIONS) == 17
+    assert len(db_maintenance.SCHEMA_MIGRATIONS) == 18
     assert [(version, marker) for version, marker, _ in db_maintenance.SCHEMA_MIGRATIONS] == [
         (1, "first_production_baseline"),
         (2, "remove_norma_domain"),
@@ -41,6 +41,7 @@ def test_migration_registry_is_exactly_prod1_v1_to_v17():
         (15, "canonical_document_custody"),
         (16, "ephemeral_state"),
         (17, "request_reclassification"),
+        (18, "return_notifications"),
     ]
     assert all(owner.__module__ == "app.prod1_schema" for _, _, owner in db_maintenance.SCHEMA_MIGRATIONS)
 

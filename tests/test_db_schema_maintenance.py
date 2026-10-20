@@ -46,8 +46,8 @@ def test_schema_status_is_prod1_v9():
     conn = _prod1()
     status = db_maintenance.get_schema_status(conn)
     assert status["schema_epoch"] == status["target_schema_epoch"] == "prod-1"
-    assert status["schema_version"] == status["target_schema_version"] == 17
-    assert status["latest_migration"]["name"] == "request_reclassification"
+    assert status["schema_version"] == status["target_schema_version"] == 18
+    assert status["latest_migration"]["name"] == "return_notifications"
 
 
 def test_access_defaults_are_idempotent_and_do_not_overwrite_customization():

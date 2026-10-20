@@ -38,11 +38,17 @@ def auto_indefer_devolvidas(conn) -> int:
          WHERE status = 'Devolvida'
            AND data_processamento IS NOT NULL
            AND {datetime_before_now_days(conn, "data_processamento")}
+        RETURNING id
         """,
         (days, days, days),
     )
-    count = result.rowcount
+    expired_ids = [int(row[0]) for row in result.fetchall()]
+    count = len(expired_ids)
     if count:
+        from app.request_email_notifications import supersede_pending_event
+
+        for request_id in expired_ids:
+            supersede_pending_event(conn, requisicao_id=request_id)
         conn.commit()
     return count
 

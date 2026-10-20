@@ -1402,10 +1402,9 @@ def admin_processar_requisicao(req_id):
             record_final_decision_event(
                 conn, requisicao_id=req_id, decided_at=data_processamento
             )
-        elif status in ("Pendente", "Devolvida"):
-            # Reabrir, or a return for correction: the decision awaiting
-            # communication no longer describes reality -- a returned request
-            # is never a final rejection. Already-sent history is untouched.
+        else:
+            # Reopening/closing withdraws the pending decision. Sent history
+            # remains immutable; neither transition manufactures an e-mail.
             supersede_pending_event(conn, requisicao_id=req_id)
 
         conn.commit()

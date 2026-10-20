@@ -5,8 +5,8 @@ RULING 3 -- generations are *explicit*, never derived.
 Nothing in this module infers a notification from ``requisicoes.status``,
 ``data_processamento`` or a content hash of the request row.  A generation is
 created only by :func:`record_final_decision_event`, which the canonical
-processing handler calls after it has committed an administrator's explicit
-``deferir`` / ``deferir_parte`` / ``indeferir`` confirmation.
+processing handler calls in the same transaction as an administrator's explicit
+``deferir`` / ``deferir_parte`` / ``indeferir`` / return-for-correction confirmation.
 
 That distinction matters because status can move without an administrator:
 ``auto_indefer_devolvidas`` rewrites ``Devolvida -> Indeferida`` in bulk on mere
@@ -31,11 +31,12 @@ import datetime
 import sqlite3
 from collections import OrderedDict
 
-#: The only three transitions that represent a communicable academic decision.
-FINAL_DECISION_STATUSES = ("Deferida", "Deferida Parcialmente", "Indeferida")
+#: Explicit administrative decisions, including the non-final return for correction.
+#: The historical constant name is retained for its existing callers.
+FINAL_DECISION_STATUSES = ("Deferida", "Deferida Parcialmente", "Indeferida", "Devolvida")
 
 #: Transitions that must never create a notification generation.
-NON_NOTIFYING_STATUSES = ("Pendente", "Devolvida", "Encerrada")
+NON_NOTIFYING_STATUSES = ("Pendente", "Encerrada")
 
 _EVENT_COLUMNS = """
     e.id, e.requisicao_id, e.aluno_id, e.destinatario_snapshot,
@@ -68,10 +69,10 @@ def supersede_pending_event(conn: sqlite3.Connection, *, requisicao_id: int) -> 
 def record_final_decision_event(
     conn: sqlite3.Connection, *, requisicao_id: int, decided_at: str | None = None
 ) -> int | None:
-    """Create the pending generation for an explicitly committed final decision.
+    """Create the pending generation for an explicit administrative decision.
 
     Returns the new event id, or ``None`` when the request's current status is
-    not a final academic decision (defensive: callers should only invoke this on
+    not a communicable decision (defensive: callers should only invoke this on
     the explicit decision path).
     """
     row = conn.execute(

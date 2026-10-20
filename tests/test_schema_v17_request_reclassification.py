@@ -92,9 +92,9 @@ def _v16_copy() -> sqlite3.Connection:
 # --- version gate -----------------------------------------------------------------
 
 
-def test_v17_is_the_head_on_both_authorities():
-    assert prod1_schema.SCHEMA_VERSION == 17 == pg_schema.PG_SCHEMA_VERSION
-    assert prod1_schema.LATEST_MIGRATION_MARKER == "request_reclassification"
+def test_v17_is_preserved_on_both_authorities():
+    assert prod1_schema.SCHEMA_VERSION == 18 == pg_schema.PG_SCHEMA_VERSION
+    assert prod1_schema.LATEST_MIGRATION_MARKER == "return_notifications"
     seed = {version: name for version, name, _details in pg_schema.PG_SCHEMA_MIGRATIONS_SEED}
     assert seed[17] == "request_reclassification"
 
@@ -111,7 +111,7 @@ def test_a_v16_database_migrates_to_the_same_physical_schema_as_a_fresh_v17():
     migrated = _v16_copy()
     before = [tuple(r) for r in migrated.execute("SELECT * FROM requisicoes ORDER BY id")]
     result = prod1_schema.bootstrap_prod1_schema(migrated)
-    assert result["schema_version"] == 17 and result["request_reclassification"] == "pending_or_returned"
+    assert result["schema_version"] == 18 and result["request_reclassification"] == "pending_or_returned"
     assert result["rows_preserved"]["requisicoes"] == len(prod1_schema.REQUEST_STATUSES)
     assert _physical_schema_digest(migrated) == _physical_schema_digest(_fresh())
     assert [tuple(r) for r in migrated.execute("SELECT * FROM requisicoes ORDER BY id")] == before

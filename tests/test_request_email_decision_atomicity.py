@@ -56,7 +56,7 @@ def _decide_like_the_handler(conn, req_id, *, status, fail_event=False):
     conn.commit()
 
 
-@pytest.mark.parametrize("status", ["Deferida", "Deferida Parcialmente", "Indeferida"])
+@pytest.mark.parametrize("status", ["Deferida", "Deferida Parcialmente", "Indeferida", "Devolvida"])
 def test_decision_and_generation_commit_together(status):
     conn, _versao, _aluno, req = _setup()
 
@@ -72,7 +72,7 @@ def test_decision_and_generation_commit_together(status):
     ).fetchone()[0] == 1
 
 
-@pytest.mark.parametrize("status", ["Deferida", "Deferida Parcialmente", "Indeferida"])
+@pytest.mark.parametrize("status", ["Deferida", "Deferida Parcialmente", "Indeferida", "Devolvida"])
 def test_event_persistence_failure_rolls_back_the_decision(status):
     """Failure injection: no event => no final decision either."""
     conn, _versao, _aluno, req = _setup()

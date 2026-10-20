@@ -1,0 +1,69 @@
+/* Pré-definições: assunto, padrão e placeholders */
+.presets-field-hint{ display:block; font-size:11px; color:#71717a; margin-top:4px; }
+.presets-default-row{ display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer; }
+.presets-placeholders{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+.presets-ph{
+  border:1px solid #e4e4e7; background:#fafafa; border-radius:999px;
+  padding:3px 9px; font-size:11px; font-family:ui-monospace,monospace;
+  color:#3f3f46; cursor:pointer;
+}
+.presets-ph:hover{ background:var(--info-bg); border-color:var(--info-border); color:var(--info-text); }
+
+/* Estilos do modal de Pré-ajustes (escopo local) */
+#req-presets-modal .modal-card{ width:min(900px, calc(100vw - 32px)); }
+/* Header */
+#req-presets-modal .modal-header{ padding:18px 24px 6px; align-items:flex-start; }
+#req-presets-modal .modal-header h3{ flex-direction:column; align-items:flex-start; gap:0; font-size:16px; font-weight:500; }
+#req-presets-modal .presets-title-row{ display:inline-flex; align-items:center; gap:8px; line-height:1.2; }
+#req-presets-modal .presets-title-row .lucide{ width:20px; height:20px; }
+#req-presets-modal .presets-subtitle{ display:block; margin-top:2px; font-size:12px; font-weight:400; color:#71717a; }
+#req-presets-modal #req-presets-close{ width:30px; height:30px; min-width:30px; padding:0; border:0; background:transparent; box-shadow:none; color:#71717a; display:inline-grid; place-items:center; }
+#req-presets-modal #req-presets-close:hover{ background:#f4f4f5; }
+#req-presets-modal #req-presets-close .lucide{ margin:0; top:0; width:16px; height:16px; color:inherit; }
+/* Filter */
+
+#req-presets-modal .modal-filter{ margin-bottom:0; padding:0 24px 10px; grid-template-columns:1fr; border-bottom:0; }
+#req-presets-modal .presets-tipo-label{ display:block; margin-bottom:6px; font-size:11px; font-weight:500; color:#71717a; text-transform:uppercase; letter-spacing:.04em; }
+#req-presets-modal .presets-divider{ margin:0 24px; border:0; border-top:1px solid #e4e4e7; }
+/* Footer */
+#req-presets-modal .modal-footer{ justify-content:center; padding:10px 12px; border-top:1px solid var(--border); }
+/* Toolbar */
+#req-presets-modal .actions-mini{ display:flex; align-items:center; gap:4px; background:#f4f4f5; border-radius:6px; padding:2px; }
+#req-presets-modal .actions-mini .btn.icon-btn{ display:inline-grid; place-items:center; width:22px; height:22px; min-width:22px; padding:0; gap:0; border:0; border-radius:4px; background:transparent; color:#a1a1aa; box-shadow:none; }
+#req-presets-modal .actions-mini #preset-add{ background:var(--surface); border:0.5px solid #e4e4e7 !important; color:var(--text-tertiary); }
+#req-presets-modal .actions-mini #preset-del{ color:#a1a1aa; }
+#req-presets-modal .actions-mini #preset-del:hover{ color:var(--danger-text); background:var(--surface); border:0.5px solid #e4e4e7 !important; }
+#req-presets-modal .actions-mini #preset-del.is-active .lucide{ color:var(--danger-text); }
+#req-presets-modal .actions-mini .btn.icon-btn .lucide{ margin:0; top:0; width:14px; height:14px; color:inherit; }
+/* List */
+#req-presets-modal .menu-list{ padding:0; border:0; outline:0; box-shadow:none; }
+#req-presets-modal .menu-item{ display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:6px; cursor:pointer; font-weight:500; border:1px solid transparent; transition:background .12s, border-color .12s; min-height:0; height:auto; }
+#req-presets-modal .menu-item:hover{ background:var(--hover-bg); border-color:#e4e4e7; }
+#req-presets-modal .menu-item.is-selected{ background:var(--info-bg); border-color:var(--info-border); }
+/* Split body */
+#req-presets-modal .modal-body.presets-body-split{ display:grid; grid-template-columns:200px 1fr; gap:0; padding:18px 24px; flex:1; min-height:0; }
+.presets-col-left{ display:flex; flex-direction:column; min-width:0; overflow:hidden; }
+.presets-col-header{ display:flex; align-items:center; justify-content:space-between; padding:0 0 8px; flex-shrink:0; }
+.presets-itens-label{ font-size:11px; font-weight:500; color:#71717a; text-transform:uppercase; letter-spacing:.04em; display:block; }
+#req-presets-modal .presets-col-left{ padding-right:10px; }
+#req-presets-modal .presets-col-left .menu-list{ padding:0; flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:2px; }
+.presets-col-right{ display:flex; flex-direction:column; gap:0; padding:0 0 0 20px; border-left:1px solid #e4e4e7; min-width:0; overflow-y:auto; }
+#req-presets-modal .presets-col-right .presets-field-block{ margin-bottom:14px; }
+#req-presets-modal .presets-col-right .presets-field-label{ display:block; margin-bottom:6px; font-size:11px; font-weight:500; color:#71717a; text-transform:uppercase; letter-spacing:.04em; }
+#req-presets-modal .presets-col-right input.control,
+#req-presets-modal .presets-col-right textarea.control{ border:1px solid var(--border-strong); border-radius:var(--radius); padding:8px 10px; background:var(--field-bg); font-family:inherit; font-size:var(--font-size-base); box-sizing:border-box; outline:none; width:100%; }
+#req-presets-modal .presets-col-right input.control:hover,
+#req-presets-modal .presets-col-right textarea.control:hover{ background:var(--field-hover-bg); border-color:var(--field-hover-border); box-shadow:none; }
+#req-presets-modal .presets-col-right input.control:focus,
+#req-presets-modal .presets-col-right textarea.control:focus{ background:var(--field-focus-bg); border-color:var(--field-focus-border); box-shadow:0 0 0 1px var(--field-focus-ring); }
+/* campo simples no editor direito */
+.preset-field{ display:flex; flex-direction:column; gap:4px; }
+.preset-field .section-title{ margin:0; }
+
+/* Keep a usable editor width on phones; the body owns vertical scrolling. */
+@media (max-width:640px){
+  #req-presets-modal .modal-body.presets-body-split{ grid-template-columns:minmax(0,1fr); overflow-y:auto; }
+  #req-presets-modal .presets-col-left{ padding-right:0; overflow:visible; }
+  #req-presets-modal .presets-col-left .menu-list{ max-height:120px; flex:none; }
+  #req-presets-modal .presets-col-right{ padding:16px 0 0; margin-top:16px; border-left:0; border-top:1px solid var(--border); overflow:visible; }
+}
