@@ -22,7 +22,7 @@ from app.services.mail_service import (
     mail_transport_status,
     send_text_email,
 )
-from app.user_accounts import CREDENTIAL_STATE_PENDING
+from app.user_accounts import CREDENTIAL_STATE_PENDING, usuario_access_is_active
 from services.oauth_config import OAuthConfigError, get_public_base_url
 
 
@@ -173,16 +173,19 @@ def issue_and_send_password_email(
             "Configure a URL pública do SGAA para enviar links de senha.",
         )
 
-    if expected_target is not None:
-        with write_transaction(conn):
-            lock_password_account(conn, usuario_id)
+    # The account is locked and re-checked in the same transaction that issues
+    # the link: revocation takes the same lock first, so it either lands before
+    # (no link is issued) or after (and its token invalidation kills the link).
+    with write_transaction(conn):
+        lock_password_account(conn, usuario_id)
+        if expected_target is not None:
+            # Batch confirmations recheck their whole snapshot, access included.
             target = password_email_target(conn, usuario_id)
             if target != expected_target:
                 return PasswordMailOutcome("stale", "O acesso ou seu link mudou. Confira a conta e confirme uma nova operação.")
-            raw_token, token_id = issue_password_token(conn, usuario_id, purpose)
-    else:
+        elif not usuario_access_is_active(conn, usuario_id):
+            return PasswordMailOutcome("ineligible", "Acesso revogado ou sem credenciais elegíveis.")
         raw_token, token_id = issue_password_token(conn, usuario_id, purpose)
-        conn.commit()
     message = _password_message(
         purpose=purpose,
         recipient=recipient,

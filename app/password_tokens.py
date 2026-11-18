@@ -129,6 +129,15 @@ def resolve_password_token(
     purpose: str | None = None,
     now: dt.datetime | None = None,
 ) -> PasswordTokenRecord | None:
+    """The live token behind ``raw_token``, or ``None``.
+
+    A token of a revoked access is not live, whatever its own state: a link
+    issued before (or racing with) a revocation must never set a password on a
+    login an administrator ended. ``consume_password_token_and_set_password``
+    re-resolves under the account lock, which revocation also takes first, so
+    the refusal holds for a revocation that commits after the link was issued.
+    The caller sees the same ``None`` as for an expired or unknown token.
+    """
     if purpose is not None and purpose not in PASSWORD_TOKEN_PURPOSES:
         raise ValueError(f"invalid password token purpose: {purpose!r}")
     if not _valid_raw_token(raw_token):
@@ -149,6 +158,7 @@ def resolve_password_token(
            AND t.expires_at>?
            AND t.consumed_at IS NULL
            AND t.invalidated_at IS NULL
+           AND c.acesso_ativo=1
            {purpose_sql}
          LIMIT 1
         """,

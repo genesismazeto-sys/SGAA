@@ -728,6 +728,122 @@ def test_p2_concurrent_consume_of_one_token_succeeds_exactly_once(env, password_
 
 
 # ===========================================================================
+# P7/P8 -- a revocation that lands after a recovery link was issued
+# ===========================================================================
+
+
+def _access_active(env, usuario_id):
+    return env.observer.execute(
+        "SELECT acesso_ativo FROM usuario_credenciais WHERE usuario_id = %s", (usuario_id,)
+    ).fetchone()[0]
+
+
+def test_p7a_a_revocation_committed_while_a_consumer_waits_refuses_its_live_token(env, password_hashes):
+    """The race itself: the access is revoked but the token row is still live.
+
+    The revoker owns the account; the consumer, which already resolved the
+    token while the access was active, waits on the account lock and, once the
+    revocation commits, re-resolves under that lock and refuses.
+    """
+    from app.user_accounts import set_usuario_access_active
+
+    usuario_id = _seed_user(env, password_hashes)
+    raw_token, token_id = _seed_token(env, usuario_id)
+    before = _account(env, usuario_id)
+
+    revoker = env.production()
+    holder = env.hold(revoker)
+    holder.__enter__()
+    app_db.lock_password_account(revoker, usuario_id)
+    set_usuario_access_active(revoker, usuario_id, False)  # leaves the token row live
+
+    consumer = env.production()
+    consumer_pid = _pid(consumer)
+    worker = env.worker(
+        "consume",
+        lambda: consume_password_token_and_set_password(
+            consumer, raw_token, PURPOSE_PASSWORD_RESET, password_hashes["a"]
+        ),
+    )
+    blocked = wait_until_blocked(env.observer, consumer_pid, by={_pid(revoker)}, worker=worker)
+    assert ACCOUNT_LOCK_SQL in blocked["query"], blocked
+
+    holder.commit()
+    assert worker.outcome() is None
+    assert _token_rows(env, usuario_id)[token_id] == {"consumed": False, "invalidated": False}
+    after = _account(env, usuario_id)
+    assert after["senha"] == before["senha"] and after["estado"] == before["estado"]
+    assert _access_active(env, usuario_id) == 0  # still revoked: nothing reactivated it
+
+
+def test_p7b_the_production_revocation_serializes_with_a_waiting_consumer(env, password_hashes):
+    """The real revocation path takes the account first; the consumer refuses after it."""
+    from app.views.admin.acesso import _revoke_usuario_access
+
+    usuario_id = _seed_user(env, password_hashes)
+    raw_token, token_id = _seed_token(env, usuario_id)
+
+    revoker = env.production()
+    holder = env.hold(revoker)
+    holder.__enter__()
+    _revoke_usuario_access(revoker, usuario_id)
+
+    consumer = env.production()
+    consumer_pid = _pid(consumer)
+    worker = env.worker(
+        "consume",
+        lambda: consume_password_token_and_set_password(
+            consumer, raw_token, PURPOSE_PASSWORD_RESET, password_hashes["a"]
+        ),
+    )
+    blocked = wait_until_blocked(env.observer, consumer_pid, by={_pid(revoker)}, worker=worker)
+    assert ACCOUNT_LOCK_SQL in blocked["query"], blocked
+
+    holder.commit()
+    assert worker.outcome() is None
+    assert _token_rows(env, usuario_id)[token_id] == {"consumed": False, "invalidated": True}
+    assert _account(env, usuario_id)["estado"] == "pending"
+    assert _access_active(env, usuario_id) == 0
+
+
+def test_p8_an_issuer_waiting_behind_a_revocation_issues_no_link(env, password_hashes, monkeypatch):
+    """The issuance recheck: blocked on the account, it sees the revocation and issues nothing."""
+    import app.password_email as password_email
+    from app.views.admin.acesso import _revoke_usuario_access
+
+    sent = []
+    monkeypatch.setattr(password_email, "password_email_status", lambda conn: {"ready": True})
+    monkeypatch.setattr(password_email, "get_public_base_url", lambda: "https://sgaa.example.test")
+    monkeypatch.setattr(password_email, "send_text_email", lambda conn, message: sent.append(message))
+
+    usuario_id = _seed_user(env, password_hashes)
+    tokens_before = _token_rows(env, usuario_id)
+
+    revoker = env.production()
+    holder = env.hold(revoker)
+    holder.__enter__()
+    _revoke_usuario_access(revoker, usuario_id)
+
+    issuer = env.production()
+    issuer_pid = _pid(issuer)
+    worker = env.worker(
+        "issue",
+        lambda: password_email.issue_and_send_password_email(
+            issuer, usuario_id=usuario_id, recipient="epg2.user@example.test",
+            user_name="EPG2 Usuario", purpose=PURPOSE_PASSWORD_RESET,
+        ),
+    )
+    blocked = wait_until_blocked(env.observer, issuer_pid, by={_pid(revoker)}, worker=worker)
+    assert ACCOUNT_LOCK_SQL in blocked["query"], blocked
+
+    holder.commit()
+    assert worker.outcome().status == "ineligible"
+    assert _token_rows(env, usuario_id) == tokens_before
+    assert sent == []
+    assert issuer.raw_connection.info.transaction_status.name == "IDLE"
+
+
+# ===========================================================================
 # P3 -- FOR NO KEY UPDATE semantics of lock_activity_base
 # ===========================================================================
 

@@ -168,11 +168,6 @@ corrections of 2026-11-18 (identical on the untouched prior head; not fixed):
 - Admin → Reportes: "Selecionar tudo" calls `rowSelectionApi.selectAll`, which
   the shared row selection does not provide (it offers `selectAllRows`), so the
   item selects nothing.
-- Public recovery (`/esqueci-minha-senha`,
-  `app/views/passwords.py::_eligible_recovery_user`) does not check
-  `acesso_ativo`: a revoked account can be sent a reset link and set a
-  password. Login stays refused while revoked, and reactivation states the
-  credential outright.
 
 ## Roadmap
 

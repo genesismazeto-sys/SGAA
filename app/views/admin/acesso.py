@@ -153,7 +153,13 @@ def _revoke_usuario_access(conn, usuario_id: int) -> None:
 
     Reactivation is an explicit administrative act -- see
     ``_reactivate_usuario_access``.  The caller owns the transaction.
+
+    The account lock comes first, as for every credential and token writer: a
+    recovery link being issued or redeemed at the same moment either finishes
+    before the revocation or sees it (app/password_tokens.py refuses a revoked
+    access's token under that same lock).
     """
+    lock_password_account(conn, usuario_id)
     set_usuario_password_hash(
         conn,
         usuario_id,

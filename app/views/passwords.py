@@ -24,7 +24,7 @@ from app.password_tokens import (
     resolve_password_token,
 )
 from app.security.passwords import hash_password
-from app.user_accounts import first_access_redeemable
+from app.user_accounts import first_access_redeemable, usuario_access_is_active
 
 
 logger = logging.getLogger(__name__)
@@ -51,6 +51,10 @@ def _eligible_recovery_user(conn, email: str):
         (email,),
     ).fetchone()
     if row is None:
+        return None
+    # A revoked access receives no recovery link. The caller answers with the
+    # same neutral message either way, so this reveals nothing.
+    if not usuario_access_is_active(conn, int(row["id"])):
         return None
     if str(row["tipo"] or "").strip().lower() == "aluno":
         if str(row["aluno_status"] or "Ativo").strip().lower() != "ativo":
