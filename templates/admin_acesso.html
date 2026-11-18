@@ -103,6 +103,41 @@
     /* The effective-scope indicator has no page-local visual contract: it is
        the shared .badge.status-pill primitive from modern-style.css. */
     .access-scope-card select{ width:100%; height:32px; border:1px solid var(--border-strong); border-radius:var(--radius); padding:0 calc(10px + var(--select-arrow-room, 0px)) 0 10px; font:inherit; color:#0f172a; background:var(--field-bg); }
+    /* E-mail batch dialog. Page-level layout of DS parts only: the meter is
+       the shared .progress/.progress-bar/.progress-meta, the counters are the
+       shared status pills (no rule here), the notes are .form-note -- every
+       colour a token. The native <progress> it replaces sized itself (140px)
+       and drew the browser's own look. */
+    .access-email-body{ display:grid; gap:12px; align-content:start; }
+    .access-email-body > p{ margin:0; }
+    .access-email-summary{ color:var(--text-primary); font-size:13px; line-height:1.45; }
+    .access-email-categories{ display:grid; gap:8px; min-width:0; margin:0; padding:0; border:0; }
+    .access-email-categories legend{ padding:0; margin-bottom:8px; color:var(--text-secondary); font-size:12.5px; font-weight:600; }
+    .access-email-category{ display:grid; grid-template-columns:auto minmax(0, 1fr); gap:10px; align-items:start; padding:10px 12px; border:1px solid var(--border-strong); border-radius:var(--radius); background:var(--surface); cursor:pointer; }
+    .access-email-category:has(input:checked){ border-color:var(--status-info-border); background:var(--info-bg); }
+    .access-email-category:has(input:disabled){ cursor:default; opacity:.6; }
+    .access-email-category input{ margin:2px 0 0; }
+    .access-email-category-text{ display:grid; gap:4px; min-width:0; }
+    .access-email-category-title{ display:flex; align-items:center; gap:8px; color:var(--text-primary); font-size:13px; font-weight:600; }
+    .access-email-category small{ color:var(--text-secondary); font-size:12px; line-height:1.45; }
+    .access-email-replace{ align-items:flex-start; padding:8px 10px; border:1px solid var(--status-caution-border); border-left:3px solid var(--status-caution-dot); border-radius:var(--radius); background:var(--status-caution-bg); color:var(--status-caution-text); }
+    .access-email-replace > .lucide{ margin-top:1px; color:var(--status-caution-dot); }
+    .access-email-replace > span{ display:grid; gap:6px; }
+    .access-email-replace-ack{ display:flex; align-items:flex-start; gap:8px; font-weight:600; cursor:pointer; }
+    .access-email-replace-ack input{ flex:none; margin:2px 0 0; }
+    .access-email-note:empty{ display:none; }
+    .access-email-progress{ display:grid; gap:8px; padding:12px; border:1px solid var(--border-strong); border-radius:var(--radius); background:var(--surface); }
+    .access-email-progress[hidden]{ display:none; }
+    .access-email-progress .progress{ margin-top:0; }
+    .access-email-progress[data-state="done-ok"] .progress-bar{ background:var(--status-positive-dot); }
+    .access-email-progress[data-state="done-attention"] .progress-bar{ background:var(--status-caution-dot); }
+    .access-email-tally{ display:flex; flex-wrap:wrap; gap:6px; }
+    .access-email-tally strong{ font-weight:700; font-variant-numeric:tabular-nums; }
+    .access-email-results{ max-height:min(34vh, 280px); overflow:auto; margin:0; padding:0; list-style:none; border:1px solid var(--border-strong); border-radius:var(--radius); }
+    .access-email-results:empty{ display:none; }
+    .access-email-results li{ padding:6px 10px; border-top:1px solid var(--border-strong); color:var(--text-secondary); font-size:12.5px; line-height:1.45; overflow-wrap:anywhere; }
+    .access-email-results li:first-child{ border-top:0; }
+    .access-email-results li strong{ color:var(--text-primary); font-weight:600; }
     .access-row-muted{ color:#64748b; font-size:13px; }
     .access-actions-float .act-btn.warn{ background:#fef3c7; color:#92400e; }
     .access-actions-float .act-btn.danger{ background:#fee2e2; color:var(--danger-text); }
@@ -465,6 +500,10 @@
         {% if user.turma_label %}
           {% set student_info = student_info ~ ' • ' ~ user.turma_label %}
         {% endif %}
+        {#- A revoked access appears only under an explicit Situação =
+            Revogado filter, and only for consultation: the shared row
+            selection never selects a .toolbar-selection-disabled row, and it
+            carries no e-mail, default-password or delete URL. -#}
         {#- Exactly one pill per row, through the shared .badge.status-pill
             primitive. Tone comes from the single owner
             app/status_presentation.py -- no page-local ladder, no colour. -#}
@@ -494,11 +533,12 @@
           'data-user-has-aluno': 1 if user.has_aluno else 0,
           'data-user-is-self': 1 if user.is_current_user else 0,
           'data-user-is-root': 1 if user.is_root_admin else 0,
-          'data-reset-url': url_for('admin_acesso_resetar_senha', usuario_id=user.id),
-          'data-email-url': url_for('admin_acesso_senha_por_email', usuario_id=user.id),
-          'data-delete-url': (url_for('admin_acesso_deletar', usuario_id=user.id) if auth_can('acesso', 'full') and not user.is_current_user and not user.is_root_admin else ''),
+          'data-user-revoked': 1 if user.is_revoked else 0,
+          'data-reset-url': ('' if user.is_revoked else url_for('admin_acesso_resetar_senha', usuario_id=user.id)),
+          'data-email-url': ('' if user.is_revoked else url_for('admin_acesso_senha_por_email', usuario_id=user.id)),
+          'data-delete-url': (url_for('admin_acesso_deletar', usuario_id=user.id) if auth_can('acesso', 'full') and not user.is_current_user and not user.is_root_admin and not user.is_revoked else ''),
           'data-level-label': user.nivel_label,
-        }) }}
+        }, 'toolbar-selection-disabled' if user.is_revoked else '') }}
       {% endfor %}
     {% endcall %}
   </div>
@@ -510,18 +550,67 @@
       <h3 id="access-email-title"><i class="lucide" data-lucide="mail"></i> Enviar acesso por e-mail</h3>
       <button class="btn" type="button" id="access-email-close" aria-label="Fechar"><i class="lucide" data-lucide="x"></i></button>
     </div>
-    <div class="modal-body">
-      <p id="access-email-summary" role="status" aria-live="polite"></p>
-      <fieldset id="access-email-categories">
+    <div class="modal-body access-email-body">
+      <p id="access-email-summary" class="access-email-summary" role="status" aria-live="polite"></p>
+      {#- DS meter (.progress / .progress-bar / .progress-meta), full width of
+          the dialog body and first under the summary, so it is in view on a
+          phone too. The track is the progressbar; its label is the visible
+          "Enviando N de M" line. Screen readers get milestone announcements
+          from the polite region, not one per recipient. -#}
+      <section id="access-email-progress" class="access-email-progress" hidden data-state="running" aria-label="Progresso dos envios">
+        <div class="progress-meta">
+          <span class="progress-meta-label" id="access-email-progress-label"></span>
+          <span class="progress-meta-value" id="access-email-progress-percent" aria-hidden="true">0%</span>
+        </div>
+        <div class="progress" id="access-email-progress-track" role="progressbar" aria-labelledby="access-email-progress-label" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+          <div class="progress-bar" style="width:0%"></div>
+        </div>
+        <div class="access-email-tally">
+          <span class="badge status-pill status-info" id="access-email-progress-state">Em andamento</span>
+          <span class="badge status-pill status-neutral" data-email-tally="sent">Enviados: <strong>0</strong></span>
+          <span class="badge status-pill status-neutral" data-email-tally="failed">Falhas: <strong>0</strong></span>
+          <span class="badge status-pill status-neutral" data-email-tally="indeterminate">Indeterminados: <strong>0</strong></span>
+        </div>
+        <p class="sr-only" id="access-email-progress-live" aria-live="polite"></p>
+      </section>
+      {#- Only first access starts checked. Reenvio and Redefinição invalidate a
+          link the person may still be holding, and Redefinição reaches
+          accounts that already have access: both are opt-in, and including
+          either one also requires the explicit acknowledgement below. -#}
+      <fieldset id="access-email-categories" class="access-email-categories">
         <legend>Confirme quais categorias serão incluídas</legend>
-        <p><label><input type="checkbox" value="first_access" checked> Primeiro acesso: <strong data-email-count="first_access">0</strong></label><br>Pendentes ou expirados receberão um novo link de primeiro acesso.</p>
-        <p><label><input type="checkbox" value="resend"> Reenvio: <strong data-email-count="resend">0</strong></label><br>O link anterior de primeiro acesso será invalidado ao emitir o novo, mesmo se o envio falhar.</p>
-        <p><label><input type="checkbox" value="password_reset"> Redefinição de senha: <strong data-email-count="password_reset">0</strong></label><br>Estes usuários já possuem acesso. Será enviado um link de redefinição; um link anterior de redefinição será invalidado.</p>
+        <label class="access-email-category">
+          <input type="checkbox" value="first_access" checked>
+          <span class="access-email-category-text">
+            <span class="access-email-category-title">Primeiro acesso <strong class="access-count-chip" data-email-count="first_access">0</strong></span>
+            <small>Pendentes ou expirados receberão um novo link de primeiro acesso.</small>
+          </span>
+        </label>
+        <label class="access-email-category">
+          <input type="checkbox" value="resend">
+          <span class="access-email-category-text">
+            <span class="access-email-category-title">Reenvio <strong class="access-count-chip" data-email-count="resend">0</strong></span>
+            <small>Já receberam um link ainda válido. O link anterior de primeiro acesso será invalidado ao emitir o novo, mesmo se o envio falhar.</small>
+          </span>
+        </label>
+        <label class="access-email-category">
+          <input type="checkbox" value="password_reset">
+          <span class="access-email-category-text">
+            <span class="access-email-category-title">Redefinição de senha <strong class="access-count-chip" data-email-count="password_reset">0</strong></span>
+            <small>Estes usuários já possuem acesso. Será enviado um link de redefinição; um link anterior de redefinição será invalidado.</small>
+          </span>
+        </label>
       </fieldset>
-      <p>A solicitação de envio não modifica a senha atual. Um novo link invalida o anterior do mesmo propósito.</p>
-      <p id="access-email-invalid"></p>
-      <progress id="access-email-progress" value="0" max="1" hidden aria-label="Progresso dos envios"></progress>
-      <ul id="access-email-results" aria-label="Destinatários e resultados"></ul>
+      <div id="access-email-replace" class="form-note access-email-replace" hidden>
+        <i class="lucide" data-lucide="triangle-alert" aria-hidden="true"></i>
+        <span>
+          <span id="access-email-replace-text"></span>
+          <label class="access-email-replace-ack"><input type="checkbox" id="access-email-replace-ack"> Confirmo o envio e a invalidação dos links anteriores destes usuários.</label>
+        </span>
+      </div>
+      <p class="form-note access-email-note">A solicitação de envio não modifica a senha atual. Um novo link invalida o anterior do mesmo propósito.</p>
+      <p id="access-email-invalid" class="form-note access-email-note"></p>
+      <ul id="access-email-results" class="access-email-results" aria-label="Destinatários e resultados"></ul>
     </div>
     <div class="modal-footer">
       <button class="btn" type="button" id="access-email-cancel">Cancelar</button>
@@ -1292,20 +1381,48 @@
       bar.style.right = 'auto';
     }
 
+    // A revoked access is listed only under an explicit Situação = Revogado
+    // filter, for consultation. Every row action stays visible but disabled
+    // and says why, rather than looking broken.
+    const revokedHint = 'Acesso revogado: somente consulta. Para reativar, use Novo acesso com o mesmo e-mail.';
+
+    // static/js/ui-tooltips.js moves a title into data-ui-tooltip once and then
+    // drops it, so a hint that changes from row to row must be written to
+    // data-ui-tooltip itself or the bar keeps showing the first row's text.
+    function setActionHint(btn, label, tooltip){
+      btn.setAttribute('aria-label', label);
+      btn.setAttribute('title', tooltip);
+      btn.dataset.uiTooltip = tooltip;
+    }
+
+    function describeAction(btn, label, title, disabledReason){
+      setActionHint(
+        btn,
+        disabledReason ? `${label} — ${disabledReason}` : label,
+        disabledReason ? `${title} — ${disabledReason}` : title
+      );
+    }
+
     function showBar(card, data){
       currentCard = card;
       currentData = data;
       positionFor(card);
       bar.classList.add('is-visible');
+      const editBtn = bar.querySelector('[data-action="edit"]');
+      if (editBtn){
+        editBtn.disabled = !!data.isRevoked;
+        describeAction(editBtn, 'Editar acesso', 'Editar', data.isRevoked ? revokedHint : '');
+      }
       const deleteBtn = bar.querySelector('[data-action="delete"]');
       if (deleteBtn){
         deleteBtn.disabled = data.isSelf || data.isRootAdmin || !data.deleteUrl;
+        describeAction(deleteBtn, 'Excluir acesso', 'Excluir', data.isRevoked ? revokedHint : '');
       }
       const emailBtn = bar.querySelector('[data-action="email"]');
       if (emailBtn){
+        const emailLabel = data.emailActionLabel || 'Enviar senha por e-mail';
         emailBtn.disabled = !data.emailUrl || !mailAvailable;
-        emailBtn.setAttribute('aria-label', data.emailActionLabel || 'Enviar senha por e-mail');
-        emailBtn.setAttribute('title', data.emailActionLabel || 'Enviar senha por e-mail');
+        describeAction(emailBtn, emailLabel, emailLabel, data.isRevoked ? revokedHint : '');
       }
       // "Aplicar senha padrão" is decided per row by the backend, never here:
       // root protection and revoked access are already resolved in
@@ -1325,6 +1442,7 @@
         const hint = allowed || !reason ? label : `${label} — ${reason}`;
         resetBtn.setAttribute('aria-label', hint);
         resetBtn.setAttribute('title', hint);
+        resetBtn.dataset.uiTooltip = hint;  // see setActionHint
       }
     }
 
@@ -1356,6 +1474,7 @@
         status: card.getAttribute('data-user-status') || 'Ativo',
         isSelf: card.getAttribute('data-user-is-self') === '1',
         isRootAdmin: card.getAttribute('data-user-is-root') === '1',
+        isRevoked: card.getAttribute('data-user-revoked') === '1',
         resetUrl: card.getAttribute('data-reset-url') || '',
         emailUrl: card.getAttribute('data-email-url') || '',
         deleteUrl: card.getAttribute('data-delete-url') || '',
@@ -1381,6 +1500,7 @@
       const target = currentData;
       if (!btn || !target) return;
       const action = btn.getAttribute('data-action');
+      if (target.isRevoked) return;
       if (action === 'edit'){
         openModal('edit', target);
         return;

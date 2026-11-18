@@ -24,7 +24,11 @@ from app.access_default_password import (
     default_password_eligibility,
     default_password_eligibility_map,
 )
-from app.access_onboarding import access_status_map
+from app.access_onboarding import (
+    ACCESS_STATUSES,
+    access_status_map,
+    filter_usuario_ids_by_access_status,
+)
 from app.admin_access import _load_admin_access_context
 from app.auth import (
     ACCESS_LEVEL_META,
@@ -53,7 +57,12 @@ from app.password_email import (
     password_email_targets,
 )
 from app.student_matrix import StudentMatrixError, matrix_for_turma_assignment
-from app.status_presentation import status_tone
+from app.status_presentation import (
+    ACCESS_STATUS_REVOGADO,
+    DOMAIN_ACESSO,
+    canonical_status,
+    status_tone,
+)
 from app.root_admin import is_root_admin, resolve_root_admin_id
 from app.user_accounts import (
     CREDENTIAL_STATE_DEFAULT,
@@ -183,6 +192,60 @@ def _turma_label_by_id(conn, turma_id: int | None) -> str:
     return (row["label"] or "") if row else ""
 
 
+_ACCESS_LIST_SELECT = """
+    SELECT
+        u.id,
+        u.nome,
+        u.email,
+        u.tipo,
+        u.nivel_acesso,
+        a.id AS aluno_id,
+        a.matricula,
+        a.status AS aluno_status,
+        a.turma_id,
+        COALESCE(t.codigo, t.nome, '') AS turma_label,
+        c.estado AS credential_state,
+        c.auth_version
+"""
+
+
+def _access_list_page(conn, *, base_from, where, params, order_sql, situacoes, limit):
+    """The Acesso list's total and the rows of the requested page.
+
+    Without a Situação filter SQL counts and pages, as it always did. The
+    situation is not a column: app/access_onboarding.py derives it per account.
+    So with that filter the whole ordered candidate list is filtered first and
+    only then paged -- the total and the page are the filtered ones, never a
+    filter applied to a page that was already cut.
+    """
+    where_sql = append_conditions_sql(False, where)
+    if not situacoes:
+        total = conn.execute("SELECT COUNT(*) " + base_from + where_sql, params).fetchone()[0]
+        query = _ACCESS_LIST_SELECT + base_from + where_sql + order_sql
+        page_params = list(params)
+        if limit is not None:
+            query += " LIMIT ? OFFSET ?"
+            page_params += list(limit)
+        return total, conn.execute(query, page_params).fetchall()
+
+    candidates = conn.execute("SELECT u.id " + base_from + where_sql + order_sql, params).fetchall()
+    matching = filter_usuario_ids_by_access_status(conn, [row[0] for row in candidates], situacoes)
+    if limit is not None:
+        per_page, offset = limit
+        page_ids = matching[offset:offset + per_page]
+    else:
+        page_ids = matching
+    if not page_ids:
+        return len(matching), []
+    placeholders = ", ".join("?" for _ in page_ids)
+    page_where_sql = append_conditions_sql(False, [*where, f"u.id IN ({placeholders})"])
+    rows = conn.execute(
+        _ACCESS_LIST_SELECT + base_from + page_where_sql + order_sql,
+        [*params, *page_ids],
+    ).fetchall()
+    return len(matching), rows
+
+
 @admin_required
 def admin_acesso():
     page, per_page, offset = get_pagination(default_per_page=25)
@@ -195,6 +258,10 @@ def admin_acesso():
     turma_filters = get_int_multi_query_values("turma_id")
     nivel_filters = {canonicalize_access_level(item) for item in get_multi_query_values("nivel")}
     tipo_filters = {str(item or "").strip().lower() for item in get_multi_query_values("tipo")}
+    # An unrecognised value becomes None and matches no account (fail closed).
+    situacao_filters = {
+        canonical_status(DOMAIN_ACESSO, item) for item in get_multi_query_values("situacao")
+    }
 
     conn = get_db_connection()
     ensure_usuario_access_schema(conn)
@@ -229,8 +296,10 @@ def admin_acesso():
     # A revoked access is not an ordinary access: it is history kept for
     # attribution. The active list therefore excludes it, while the identity
     # stays findable by the re-creation path in admin_acesso_salvar, which
-    # reuses it rather than minting a duplicate.
-    where = ["COALESCE(c.acesso_ativo, 1) = 1"]
+    # reuses it rather than minting a duplicate. Only an explicit Situação
+    # filter naming Revogado lists them -- for consultation: the rows render
+    # read-only and every mutation keeps refusing a revoked account.
+    where = [] if ACCESS_STATUS_REVOGADO in situacao_filters else ["COALESCE(c.acesso_ativo, 1) = 1"]
     params = []
     if q:
         like = f"%{q}%"
@@ -257,7 +326,6 @@ def admin_acesso():
         where.append(f"u.tipo IN ({placeholders})")
         params.extend(sorted(tipo_filters))
 
-    where_sql = append_conditions_sql(False, where)
     order_map = {
         "nome": human_text_order("COALESCE(u.nome, '')", connection=conn),
         "email": "LOWER(u.email)",
@@ -267,35 +335,16 @@ def admin_acesso():
     }
     order_col = order_map.get(sort_field, order_map["nome"])
     direction = "DESC" if sort_dir == "desc" else "ASC"
-    count_sql = "SELECT COUNT(*) " + base_from + where_sql
-    total = conn.execute(count_sql, params).fetchone()[0]
-    query = (
-        """
-        SELECT
-            u.id,
-            u.nome,
-            u.email,
-            u.tipo,
-            u.nivel_acesso,
-            a.id AS aluno_id,
-            a.matricula,
-            a.status AS aluno_status,
-            a.turma_id,
-            COALESCE(t.codigo, t.nome, '') AS turma_label,
-            c.estado AS credential_state,
-            c.auth_version
-        """
-        + base_from
-        + where_sql
-        + f" ORDER BY {order_col} {direction}, u.id DESC"
-    )
-    params_exec = list(params)
     apply_limit = wants_pagination()
-    if apply_limit:
-        query += " LIMIT ? OFFSET ?"
-        params_exec += [per_page, offset]
-
-    rows = conn.execute(query, params_exec).fetchall()
+    total, rows = _access_list_page(
+        conn,
+        base_from=base_from,
+        where=where,
+        params=params,
+        order_sql=f" ORDER BY {order_col} {direction}, u.id DESC",
+        situacoes=situacao_filters,
+        limit=(per_page, offset) if apply_limit else None,
+    )
     current_user_id = session.get("user_id")
     root_admin_id = resolve_root_admin_id(conn)
     # Access/onboarding lifecycle for the whole page in two queries -- never one
@@ -313,6 +362,10 @@ def admin_acesso():
     for row in rows:
         nivel = canonicalize_access_level(row["nivel_acesso"])
         default_password = default_password_by_id[row["id"]]
+        access_status = access_status_by_id.get(row["id"], "")
+        # Listed only under an explicit Revogado filter, and then for
+        # consultation: no selection, no row action, no e-mail affordance.
+        is_revoked = access_status == ACCESS_STATUS_REVOGADO
         tipo = (row["tipo"] or "admin").strip().lower()
         is_student = tipo == "aluno"
         access_context = _load_admin_access_context(conn, row["id"]) if not is_student else {
@@ -341,7 +394,8 @@ def admin_acesso():
                 # Distinct key from "aluno_status": that one is the academic
                 # Ativo/Inativo, this one is the login lifecycle. They must never
                 # be read for each other.
-                "access_status": access_status_by_id.get(row["id"], ""),
+                "access_status": access_status,
+                "is_revoked": is_revoked,
             }
         )
         users_payload[str(row["id"])] = {
@@ -377,6 +431,7 @@ def admin_acesso():
             # instead of looking broken.
             "canApplyDefaultPassword": default_password.allowed,
             "applyDefaultPasswordReason": default_password.reason,
+            "isRevoked": is_revoked,
         }
 
     filter_schema = [
@@ -427,6 +482,14 @@ def admin_acesso():
                 {"value": "admin", "label": "Admin"},
                 {"value": "aluno", "label": "Aluno"},
             ],
+        },
+        {
+            # The access/onboarding lifecycle -- the Situação pill -- never
+            # the academic alunos.status.
+            "param": "situacao",
+            "label": "Situação",
+            "type": "multi_select",
+            "values": [{"value": status, "label": status} for status in ACCESS_STATUSES],
         },
     ]
     access_resource_groups = []

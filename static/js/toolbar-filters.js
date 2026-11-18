@@ -16,16 +16,25 @@
     return button;
   }
 
-  function isAllRowsSelected(rows, selectedRows){
-    return rows.length > 0 && selectedRows.size === rows.length;
-  }
-
   function isInteractiveTarget(target){
     return !!target.closest('a, button, input, label, select, textarea');
   }
 
-  function getSelectableRows(root){
-    return Array.from(root.querySelectorAll('.impresso-card[role="listitem"]')).filter((row) => !row.classList.contains('header') && !row.classList.contains('toolbar-live-search-hidden') && !row.classList.contains('toolbar-filter-hidden'));
+  // Every data row of a list, hidden or not: rows are bound once, while which
+  // of them a selection gesture may reach is decided at the moment of the
+  // gesture (isRowSelectable), because a search or filter changes it later.
+  function getListRows(root){
+    return Array.from(root.querySelectorAll('.impresso-card[role="listitem"]')).filter((row) => !row.classList.contains('header'));
+  }
+
+  // Selectable right now: shown by the live search and filters, and not marked
+  // read-only by its page (.toolbar-selection-disabled).
+  function isRowSelectable(row){
+    return row.isConnected
+      && !row.hidden
+      && !row.classList.contains('toolbar-live-search-hidden')
+      && !row.classList.contains('toolbar-filter-hidden')
+      && !row.classList.contains('toolbar-selection-disabled');
   }
 
   // Human-text search key. The one authority is static/js/human-text.js
@@ -898,7 +907,7 @@
     const rowsRoot = rowsRootSelector ? document.querySelector(rowsRootSelector) : (toolbar.parentElement?.querySelector('.impressoes-cards') || document.querySelector('.impressoes-cards'));
     if (!rowsRoot) return;
 
-    const rows = getSelectableRows(rowsRoot);
+    const rows = getListRows(rowsRoot);
     if (!rows.length) return;
 
     const filterGroup = toolbar.querySelector(filterGroupSelector);
@@ -918,19 +927,31 @@
       addButton.insertAdjacentElement('beforebegin', bulkDeleteButton);
     }
 
-    let anchorIndex = null;
+    // The anchor is a ROW, not a position. Positions are only meaningful in the
+    // list of rows selectable at the moment of the gesture: a search or filter
+    // reshuffles them, and a stale index once let a Shift range sweep in rows
+    // the search had hidden.
+    let anchorRow = null;
+    // Invariant: only selectable rows are ever selected (see pruneUnselectable).
     const selectedRows = new Set();
+
+    const selectableRows = () => rows.filter(isRowSelectable);
+
+    const isAllSelected = () => {
+      const candidates = selectableRows();
+      return candidates.length > 0 && candidates.every((row) => selectedRows.has(row));
+    };
 
     const clearSelection = () => {
       selectedRows.clear();
-      anchorIndex = null;
+      anchorRow = null;
       syncRowState();
     };
 
     const updateSelectAllButton = () => {
       if (!selectAllButton) return;
       const label = selectAllButton.querySelector('span');
-      const shouldClear = isAllRowsSelected(rows, selectedRows);
+      const shouldClear = isAllSelected();
       if (label) label.textContent = shouldClear ? 'Desselecionar' : 'Selecionar tudo';
       selectAllButton.setAttribute('aria-label', shouldClear ? 'Desselecionar tudo' : 'Selecionar tudo');
       selectAllButton.setAttribute('title', shouldClear ? 'Desselecionar tudo' : 'Selecionar tudo');
@@ -953,63 +974,113 @@
         onSelectionChange({
           selectedRows: selected,
           allRows: rows,
+          visibleRows: selectableRows(),
           canDelete,
-          allSelected: isAllRowsSelected(rows, selectedRows),
+          allSelected: isAllSelected(),
         });
       }
     };
 
-    const selectOnly = (row, index) => {
+    // A row hidden by the search or a filter leaves the selection at once: a
+    // selection the administrator can no longer see must not be what a bulk
+    // action then acts on, and the counter must describe only visible rows.
+    const pruneUnselectable = () => {
+      let changed = false;
+      selectedRows.forEach((row) => {
+        if (!isRowSelectable(row)){
+          selectedRows.delete(row);
+          changed = true;
+        }
+      });
+      if (anchorRow && !isRowSelectable(anchorRow)) anchorRow = null;
+      if (changed) syncRowState();
+    };
+
+    const selectOnly = (row) => {
       selectedRows.clear();
       selectedRows.add(row);
-      anchorIndex = index;
+      anchorRow = row;
       syncRowState();
     };
 
+    // `index` is the clicked row's position among the rows selectable NOW; the
+    // range is taken from that same list, so a hidden row can never be inside
+    // it. Without a usable anchor (none yet, or hidden since) the clicked row
+    // becomes the anchor, as on a first click.
     const addRange = (index) => {
-      if (anchorIndex === null){
+      const candidates = selectableRows();
+      const target = candidates[index];
+      if (!target) return;
+      let anchorIndex = anchorRow ? candidates.indexOf(anchorRow) : -1;
+      if (anchorIndex < 0){
+        anchorRow = target;
         anchorIndex = index;
       }
       const start = Math.min(anchorIndex, index);
       const end = Math.max(anchorIndex, index);
       for (let current = start; current <= end; current += 1){
-        selectedRows.add(rows[current]);
+        selectedRows.add(candidates[current]);
       }
       syncRowState();
     };
 
+    // "Selecionar tudo" means every row the administrator can see on this page.
     const selectAllRows = () => {
+      const candidates = selectableRows();
       selectedRows.clear();
-      rows.forEach((row) => selectedRows.add(row));
-      anchorIndex = rows.length ? 0 : null;
+      candidates.forEach((row) => selectedRows.add(row));
+      anchorRow = candidates[0] || null;
       syncRowState();
     };
 
     const toggleAllRows = () => {
-      if (isAllRowsSelected(rows, selectedRows)){
+      if (isAllSelected()){
         clearSelection();
         return;
       }
       selectAllRows();
     };
 
-    rows.forEach((row, index) => {
+    rows.forEach((row) => {
       row.setAttribute('aria-selected', 'false');
+      // Shift+click extends the ROW selection. Its default action would also
+      // extend a native TEXT selection over every name in between, so only that
+      // press is cancelled: a plain press-and-drag still selects text, and
+      // links, buttons and fields keep their own behaviour. Cancelling the press
+      // also cancels its focus move, which is restored by hand.
+      row.addEventListener('mousedown', (event) => {
+        if (event.button !== 0 || !event.shiftKey) return;
+        if (isInteractiveTarget(event.target) || !isRowSelectable(row)) return;
+        event.preventDefault();
+        row.focus?.({ preventScroll: true });
+      });
       row.addEventListener('click', (event) => {
         if (isInteractiveTarget(event.target)) return;
+        if (!isRowSelectable(row)) return;
         if (event.shiftKey){
-          addRange(index);
+          addRange(selectableRows().indexOf(row));
           return;
         }
         if (selectedRows.has(row)){
           selectedRows.delete(row);
-          anchorIndex = null;
+          anchorRow = null;
           syncRowState();
           return;
         }
-        selectOnly(row, index);
+        selectOnly(row);
       });
     });
+
+    // The live search and the filters hide rows by toggling a class (or the
+    // hidden attribute); watching those attributes keeps the invariant for
+    // every way a page hides or disables a row, not only the ones known here.
+    if (typeof MutationObserver === 'function'){
+      new MutationObserver(pruneUnselectable).observe(rowsRoot, {
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'hidden'],
+      });
+    }
 
     selectAllButton?.addEventListener('click', () => {
       toggleAllRows();
@@ -1050,7 +1121,8 @@
     return {
       getSelectedRows: () => Array.from(selectedRows),
       getAllRows: () => Array.from(rows),
-      isAllSelected: () => isAllRowsSelected(rows, selectedRows),
+      getVisibleRows: selectableRows,
+      isAllSelected,
       selectAllRows,
       toggleAllRows,
       clearSelection,

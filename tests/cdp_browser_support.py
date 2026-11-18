@@ -315,6 +315,31 @@ class BrowserSession:
                 {"type": kind, "x": box["x"], "y": box["y"], "button": "left", "clickCount": 1},
             )
 
+    def click_in_view(self, selector: str, *, modifiers: int = 0) -> None:
+        """Scroll ``selector`` into view, then press and release at its centre.
+
+        ``modifiers`` is the CDP bit mask (8 = Shift). The scroll's event is
+        dispatched on a later frame, so it is pumped before the press: pages
+        whose popovers dismiss on scroll would otherwise close the menu this
+        click is about to open.
+        """
+        self.evaluate(
+            "(() => { document.querySelector(%s).scrollIntoView({block: 'center'}); return true; })()"
+            % json.dumps(selector)
+        )
+        self.pump(0.3)
+        box = self.evaluate(
+            "(() => { const r = document.querySelector(%s).getBoundingClientRect();"
+            " return {x: r.left + r.width / 2, y: r.top + r.height / 2}; })()" % json.dumps(selector)
+        )
+        for kind, buttons in (("mousePressed", 1), ("mouseReleased", 0)):
+            self.call(
+                "Input.dispatchMouseEvent",
+                {"type": kind, "x": box["x"], "y": box["y"], "button": "left", "buttons": buttons,
+                 "clickCount": 1, "modifiers": modifiers},
+            )
+        self.pump(0.1)
+
     def close(self) -> None:
         try:
             self._ws.close()

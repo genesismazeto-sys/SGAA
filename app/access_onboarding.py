@@ -67,6 +67,21 @@ from app.status_presentation import (
 from app.sql_dialect import fetch_current_utc_text
 
 
+#: Every state this module derives, in lifecycle order -- the order the Acesso
+#: list offers them as filter values.
+ACCESS_STATUSES = (
+    ACCESS_STATUS_PENDENTE,
+    ACCESS_STATUS_DISPONIBILIZADO,
+    ACCESS_STATUS_EXPIRADO,
+    ACCESS_STATUS_ATIVO,
+    ACCESS_STATUS_REVOGADO,
+)
+
+#: Accounts resolved per ``access_status_map`` call when a whole candidate list
+#: is filtered, so a long list never becomes one unbounded ``IN`` clause.
+_FILTER_BATCH_SIZE = 500
+
+
 #: Selects the newest CONFIRMED-SENT first-access delivery per account, with
 #: the lifecycle of the link it carried. Rows with ``sent_at IS NULL`` are
 #: excluded at the source: an unconfirmed send is not evidence of a send.
@@ -215,8 +230,27 @@ def access_status_for_usuario(conn, usuario_id: int) -> str:
     return access_status_map(conn, [usuario_id])[int(usuario_id)]
 
 
+def filter_usuario_ids_by_access_status(conn, usuario_ids, statuses) -> list[int]:
+    """The accounts among ``usuario_ids`` whose state is one of ``statuses``.
+
+    Order is kept, so a caller can filter an already sorted candidate list and
+    paginate the result. The state is resolved by ``access_status_map`` -- the
+    same derivation the list's pill uses -- rather than re-expressed in SQL, so
+    a filtered list can never disagree with the pills it shows. A value outside
+    ``ACCESS_STATUSES`` matches nothing.
+    """
+    wanted = set(statuses)
+    ordered = list(dict.fromkeys(int(value) for value in usuario_ids))
+    resolved: dict[int, str] = {}
+    for start in range(0, len(ordered), _FILTER_BATCH_SIZE):
+        resolved.update(access_status_map(conn, ordered[start:start + _FILTER_BATCH_SIZE]))
+    return [usuario_id for usuario_id in ordered if resolved.get(usuario_id) in wanted]
+
+
 __all__ = [
+    "ACCESS_STATUSES",
     "access_status_for_usuario",
     "access_status_map",
     "derive_access_status",
+    "filter_usuario_ids_by_access_status",
 ]
