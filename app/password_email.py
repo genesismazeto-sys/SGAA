@@ -118,7 +118,7 @@ def _password_message(
         path = "/primeiro-acesso"
         subject = "Defina sua senha de acesso ao SGAA"
         reason = "Um administrador disponibilizou seu primeiro acesso ao SGAA."
-        expiry = f"Este link é válido por {int(FIRST_ACCESS_TTL.total_seconds() // 3600)} horas."
+        expiry = f"Este link é válido por {FIRST_ACCESS_TTL.days} dias."
         closing = "Se você não esperava este acesso, entre em contato com a administração."
     elif purpose == PURPOSE_PASSWORD_RESET:
         path = "/redefinir-senha"
