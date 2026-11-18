@@ -163,12 +163,6 @@ corrections of 2026-11-18 (identical on the untouched prior head; not fixed):
   -- it expects the caution tone to hold only Pendente and Encerrada; Devolvida
   now shares it.
 
-## Known product defects (not blockers)
-
-- Admin → Reportes: "Selecionar tudo" calls `rowSelectionApi.selectAll`, which
-  the shared row selection does not provide (it offers `selectAllRows`), so the
-  item selects nothing.
-
 ## Roadmap
 
 | Phase | Scope | Status |

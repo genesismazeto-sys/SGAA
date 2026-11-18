@@ -551,10 +551,11 @@
     }
   });
 
+  // A click on a card belongs to the shared row selection, as on every admin
+  // list; the detail opens from the row's "Ver" button or with Enter/Space.
   document.querySelectorAll('#reportes-list .impresso-card:not(.header)').forEach(row => {
     const idx  = parseInt(row.dataset.reporteIdx, 10);
     const open = () => { if (reportes[idx]) openModal(reportes[idx]); };
-    row.addEventListener('click', open);
     row.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); open(); }
     });
@@ -573,18 +574,25 @@ document.addEventListener('DOMContentLoaded', ()=>{
     return headers;
   }
   // Ações button: row selection + bulk delete
-  const rowSelectionApi = window.initToolbarRowSelection?.({
-    toolbarSelector: '#reportes-toolbar',
-    rowsRootSelector: '#reportes-list',
-    enableSelectAllButton: false,
-    enableBulkDelete: false,
-  });
-
   const actBtn    = document.getElementById('btn-reportes-actions');
   const actMenu   = document.getElementById('reportes-actions-menu');
   const hint      = document.getElementById('reportes-actions-hint');
   const itmSelAll = document.getElementById('reportes-action-select-all');
   const itmDel    = document.getElementById('reportes-action-delete');
+
+  // The shared selection anchors on a button of the toolbar's actions; its
+  // default is a "nova" button this screen does not have (and "Novo reporte"
+  // needs edit permission), so it is the Ações button every viewer gets.
+  // Assigned after init: init already reports its first state to syncItems.
+  let rowSelectionApi = null;
+  rowSelectionApi = window.initToolbarRowSelection?.({
+    toolbarSelector: '#reportes-toolbar',
+    rowsRootSelector: '#reportes-list',
+    addButtonSelector: '#btn-reportes-actions',
+    enableSelectAllButton: false,
+    enableBulkDelete: false,
+    onSelectionChange: () => syncItems(),
+  });
   if (!actBtn || !actMenu) return;
 
   // F-7: the popover positioning owner. Was a copy of the shared clamp here,
@@ -599,11 +607,19 @@ document.addEventListener('DOMContentLoaded', ()=>{
     window.lucide?.createIcons?.();
   }
   popoverHelpers.bindDismissOnViewportChange?.(actMenu, closeMenu);
+  // The selection holds only visible cards (the shared component drops a card
+  // a search or filter hides), so the counter and the actions describe those.
   function syncItems(){
     const rows = rowSelectionApi ? rowSelectionApi.getSelectedRows() : [];
-    const hasRows = rows.length > 0;
-    if (itmDel) itmDel.disabled = !hasRows;
-    if (hint) hint.textContent = hasRows ? '' : 'Selecione uma ou mais linhas para habilitar as ações.';
+    const count = rows.length;
+    const allSelected = !!rowSelectionApi?.isAllSelected();
+    const label = itmSelAll?.querySelector('span');
+    if (label) label.textContent = allSelected ? 'Desselecionar' : 'Selecionar tudo';
+    itmSelAll?.setAttribute('aria-label', allSelected ? 'Desselecionar tudo' : 'Selecionar tudo');
+    if (itmDel) itmDel.disabled = !count;
+    if (hint) hint.textContent = count
+      ? `${count} reporte(s) selecionado(s).`
+      : 'Selecione uma ou mais linhas para habilitar as ações.';
   }
 
   actBtn.addEventListener('click', ()=>{ if (actMenu.hidden) openMenu(); else closeMenu(); });
@@ -611,7 +627,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.addEventListener('click', (e)=>{ if (!actMenu.hidden && !e.target.closest('#reportes-actions-menu') && !e.target.closest('#btn-reportes-actions')) closeMenu(); });
   document.addEventListener('keydown', (e)=>{ if (e.key==='Escape' && !actMenu.hidden) closeMenu(); });
 
-  itmSelAll?.addEventListener('click', ()=>{ rowSelectionApi?.selectAll?.(); closeMenu(); syncItems(); });
+  // Toggles between every visible card and none; the menu stays open so the
+  // new label and counter are what the administrator sees next.
+  itmSelAll?.addEventListener('click', ()=>{ rowSelectionApi?.toggleAllRows(); syncItems(); });
 
   itmDel?.addEventListener('click', async ()=>{
     const rows = rowSelectionApi ? rowSelectionApi.getSelectedRows() : [];
