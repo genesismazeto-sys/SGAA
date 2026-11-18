@@ -37,6 +37,7 @@ provisioned database has zero application rows (asserted by the first node).
 from __future__ import annotations
 
 import os
+import re
 import secrets
 import sqlite3
 import traceback
@@ -517,6 +518,65 @@ def test_r4_access_save_create_commits(env, admin_client):
     ).fetchall()
     assert [tuple(row) for row in rows] == [("RSMK Novo", "admin_total", True)]
     assert env.observer.execute("SELECT count(*) FROM usuarios").fetchone()[0] == before + 1
+
+
+def test_r4_situacao_filter_and_all_or_nothing_password_on_postgresql(env, admin_client):
+    """The Situação filter and the locked, all-or-nothing "Nova senha" on PostgreSQL."""
+    ids = {}
+    for key, nome, email in (
+        ("a", "RSMKS Senha A", "rsmks.a@example.test"),
+        ("b", "RSMKS Senha B", "rsmks.b@example.test"),
+        ("r", "RSMKS Revogado", "rsmks.r@example.test"),
+    ):
+        response = admin_client.post(
+            "/admin/acesso/salvar",
+            data={"nome": nome, "email": email, "nivel_acesso": "consultivo", "senha": "Inicial#2026"},
+        )
+        assert response.status_code == 302
+        ids[key] = env.observer.execute("SELECT id FROM usuarios WHERE email = %s", (email,)).fetchone()[0]
+    assert admin_client.post(f"/admin/acesso/{ids['r']}/deletar").status_code == 302
+    _pop_flashes(admin_client)
+
+    def names(query):
+        text = admin_client.get("/admin/acesso" + query).get_data(as_text=True)
+        return re.findall(r'data-user-nome="(RSMKS [^"]*)"', text)
+
+    assert names("?q=rsmks") == ["RSMKS Senha A", "RSMKS Senha B"]
+    assert names("?q=rsmks&situacao=Revogado") == ["RSMKS Revogado"]
+    assert names("?q=rsmks&situacao=Ativo&situacao=Revogado&per_page=2&page=2") == ["RSMKS Senha B"]
+
+    def credentials():
+        return [
+            tuple(row)
+            for row in env.observer.execute(
+                "SELECT u.id, u.senha, c.estado, c.auth_version, c.acesso_ativo FROM usuarios u"
+                " JOIN usuario_credenciais c ON c.usuario_id = u.id WHERE u.id = ANY(%s) ORDER BY u.id",
+                (sorted(ids.values()),),
+            ).fetchall()
+        ]
+
+    before = credentials()
+    ajax = {"X-Requested-With": "XMLHttpRequest"}
+    refused = admin_client.post(
+        "/admin/acesso/definir-senha",
+        data={"usuario_ids": [str(ids["a"]), str(ids["r"])], "nova_senha": "Nova#2026"},
+        headers=ajax,
+    )
+    assert refused.status_code == 409
+    assert refused.get_json() == {"ok": False, "error": "revoked", "revoked_ids": [ids["r"]]}
+    assert credentials() == before
+
+    written = admin_client.post(
+        "/admin/acesso/definir-senha",
+        data={"usuario_ids": [str(ids["a"]), str(ids["b"])], "nova_senha": "Nova#2026"},
+        headers=ajax,
+    )
+    assert written.status_code == 200 and written.get_json() == {"ok": True, "updated": 2}
+    after = {row[0]: row for row in credentials()}
+    for key in ("a", "b"):
+        old = next(row for row in before if row[0] == ids[key])
+        assert after[ids[key]][1] != old[1] and after[ids[key]][3] == old[3] + 1
+    assert after[ids["r"]] == next(row for row in before if row[0] == ids["r"])
 
 
 # ===========================================================================

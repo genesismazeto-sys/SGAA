@@ -43,7 +43,12 @@ from app.auth import (
     normalize_permission_scope,
     permission_scope_label,
 )
-from app.db import get_db_connection, is_integrity_error
+from app.db import (
+    get_db_connection,
+    is_integrity_error,
+    lock_password_account,
+    write_transaction,
+)
 from app.db_maintenance import (
     ensure_usuario_access_schema,
     ensure_usuario_profile_schema,
@@ -667,6 +672,19 @@ def admin_acesso_salvar():
             )
             return redirect(url_for("admin_acesso"))
 
+    # An edit that names a revoked account never writes a credential into it:
+    # reactivation is the explicit path above (Novo acesso with the same
+    # e-mail or matrícula), which states the credential outright. Refused
+    # before any write, so nothing of the edit is applied.
+    if (
+        usuario_id
+        and not reactivating
+        and senha
+        and filter_usuario_ids_by_access_status(conn, [usuario_id], {ACCESS_STATUS_REVOGADO})
+    ):
+        flash("Este acesso está revogado. Reative-o antes de definir uma senha.", "error")
+        return redirect(url_for("admin_acesso"))
+
     turma_label = _turma_label_by_id(conn, turma_id)
 
     try:
@@ -1014,27 +1032,48 @@ def admin_acesso_definir_senha():
         flash("Informe a nova senha.", "error")
         return redirect(url_for("admin_acesso"))
 
+    # Hashed before the transaction: hashing is deliberately slow and must not
+    # run while the write lock is held.
+    senha_hash = hash_password(nova_senha)
     conn = get_db_connection()
-    placeholders = ", ".join("?" for _ in usuario_ids)
-    rows = conn.execute(
-        f"SELECT id, nome FROM usuarios WHERE id IN ({placeholders})",
-        usuario_ids,
-    ).fetchall()
-    found_ids = {row["id"] for row in rows}
-    missing_ids = [usuario_id for usuario_id in usuario_ids if usuario_id not in found_ids]
+    # All or nothing. Every selected account is locked (ascending id, the order
+    # every credential writer takes) and only then checked, so a revocation
+    # cannot land between the check and the write. One missing or revoked
+    # account refuses the whole selection before anything is written: a
+    # revoked login keeps no usable credential (see _revoke_usuario_access).
+    with write_transaction(conn):
+        for usuario_id in usuario_ids:
+            lock_password_account(conn, usuario_id)
+        placeholders = ", ".join("?" for _ in usuario_ids)
+        found_ids = {
+            int(row["id"])
+            for row in conn.execute(
+                f"SELECT id FROM usuarios WHERE id IN ({placeholders})",
+                usuario_ids,
+            ).fetchall()
+        }
+        missing_ids = [usuario_id for usuario_id in usuario_ids if usuario_id not in found_ids]
+        revoked_ids = [] if missing_ids else filter_usuario_ids_by_access_status(
+            conn, usuario_ids, {ACCESS_STATUS_REVOGADO}
+        )
+        if not missing_ids and not revoked_ids:
+            set_usuarios_password_hash(
+                conn,
+                usuario_ids,
+                senha_hash,
+                credential_state=CREDENTIAL_STATE_PERSONAL,
+            )
     if missing_ids:
         if _is_ajax_request():
             return jsonify({"ok": False, "error": "not-found", "missing_ids": missing_ids}), 404
         flash("Um ou mais acessos selecionados não foram encontrados.", "error")
         return redirect(url_for("admin_acesso"))
+    if revoked_ids:
+        if _is_ajax_request():
+            return jsonify({"ok": False, "error": "revoked", "revoked_ids": revoked_ids}), 409
+        flash("Um ou mais acessos selecionados estão revogados. Nenhuma senha foi alterada.", "error")
+        return redirect(url_for("admin_acesso"))
 
-    set_usuarios_password_hash(
-        conn,
-        usuario_ids,
-        hash_password(nova_senha),
-        credential_state=CREDENTIAL_STATE_PERSONAL,
-    )
-    conn.commit()
     if session.get("user_id") in usuario_ids:
         session["auth_version"] = get_usuario_auth_version(conn, session["user_id"])
 

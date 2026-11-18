@@ -326,7 +326,8 @@ def test_student_matrix_error_catalog_delta_is_exact_and_bounded():
                                             governance.catalog_keys_before_version_delete(
     governance.catalog_keys_before_a19_backup_now(
     governance.catalog_keys_before_request_rectification(
-    governance.catalog_keys_before_request_reclassification(catalog))))
+    governance.catalog_keys_before_request_reclassification(
+    governance.catalog_keys_before_revoked_credential_refusal(catalog)))))
                                         )
                                     )
                                 )

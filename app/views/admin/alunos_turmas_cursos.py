@@ -18,6 +18,7 @@ from flask import (
     url_for,
 )
 
+from app.access_onboarding import filter_usuario_ids_by_access_status
 from app.academics import (
     build_turma_aluno_matricula,
     gerar_codigo_turma,
@@ -50,6 +51,7 @@ from app.student_matrix import (
     resolve_student_matrix_for_edit,
 )
 from app.sql_dialect import human_text_order
+from app.status_presentation import ACCESS_STATUS_REVOGADO
 from app.text import ptbr_text_sort_key
 from app.versioning.request_history import list_approved_request_history
 from app.uploads import ALLOWED_STUDENT_IMPORTS, save_upload
@@ -779,6 +781,21 @@ def admin_adicionar_aluno():
     )
 
 
+def _refuse_password_for_revoked_access(conn, usuario_id) -> bool:
+    """True, with the refusal flashed, when this edit would set a password on a revoked access.
+
+    A revoked login keeps no usable credential (Admin > Acesso revokes it with
+    an unusable hash); reactivation is Admin > Acesso > Novo acesso. The check
+    runs before any write, so a refused edit applies nothing.
+    """
+    if not request.form.get("senha"):
+        return False
+    if not filter_usuario_ids_by_access_status(conn, [usuario_id], {ACCESS_STATUS_REVOGADO}):
+        return False
+    flash("Este acesso está revogado. Reative-o antes de definir uma senha.", "error")
+    return True
+
+
 @admin_required
 def admin_editar_aluno(usuario_id, *, force_readonly=False):
     conn = get_db_connection()
@@ -792,7 +809,7 @@ def admin_editar_aluno(usuario_id, *, force_readonly=False):
         flash("Aluno não encontrado.", "error")
         return redirect(url_for("admin_alunos"))
 
-    if request.method == "POST":
+    if request.method == "POST" and not _refuse_password_for_revoked_access(conn, usuario_id):
         nome = request.form["nome"]
         email = request.form["email"]
         matricula = request.form["matricula"]

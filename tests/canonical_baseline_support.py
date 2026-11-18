@@ -270,6 +270,16 @@ CATALOG_LEDGER: tuple[tuple[str, int], ...] = (
         "2 additions, 1 retirement",
         1,
     ),
+    (
+        "UXA1 credential writes refuse a revoked access: setting a password "
+        "on one revoked account (Acesso edit, Alunos edit) is refused with "
+        "'Este acesso está revogado. Reative-o antes de definir uma senha.' "
+        "(msg_ea61102c09890c96) and a 'Nova senha' selection holding any "
+        "revoked account with 'Um ou mais acessos selecionados estão "
+        "revogados. Nenhuma senha foi alterada.' (msg_7096ef53849feb6b). "
+        "2 additions, 0 retirements",
+        2,
+    ),
 )
 
 # Everything before the UT-MX3 term is MX3's exact parent state. Anchored on
@@ -318,9 +328,10 @@ PARENT_CATALOG_KEYS_SHA256 = (
 # under PostgreSQL with its five outcome messages and "Recuperar banco de dados"
 # with its one success message, and the R3 review's CSV warning and policy refusal, to 588; the rereview's
 # uncertain-restore warning, to 589; RECT1 (three additions, one retirement),
-# to 591; RECL1 (two additions, one retirement), to 592.
+# to 591; RECL1 (two additions, one retirement), to 592; UXA1 (two additions),
+# to 594.
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "fa766d66f239cc721fa174576534e32ccba8c42958b0020c5529e1f3a958bebc"
+    "d8bf8cb58903b71e74e51eacc3f071439110d2315c3064d0ff33606b85cbc594"
 )
 
 # Named post-MX3 key sets.  Suites that reconstruct UT-MX3's parent state have
@@ -924,12 +935,30 @@ RECL1_REQUEST_RECLASSIFICATION_RETIRED_KEYS = frozenset(
 def catalog_keys_before_request_reclassification(keys) -> set[str]:
     """Undo the RECL1 term: drop its two keys, put the change-of-activity refusal back.
 
-    RECL1 is the newest term, so a reconstruction walks back through this
-    first, then RECT1, A19, S3-A, U5-E, U5-B and every older term.
+    A reconstruction walks back through UXA1 first, then this, then RECT1,
+    A19, S3-A, U5-E, U5-B and every older term.
     """
     return (set(keys) - set(RECL1_REQUEST_RECLASSIFICATION_KEYS)) | set(
         RECL1_REQUEST_RECLASSIFICATION_RETIRED_KEYS
     )
+
+
+# UXA1 credential writes refuse a revoked access (net +2).
+UXA1_REVOKED_CREDENTIAL_KEYS = frozenset(
+    {
+        "msg_ea61102c09890c96",  # Este acesso está revogado. Reative-o antes de definir uma senha.
+        "msg_7096ef53849feb6b",  # Um ou mais acessos selecionados estão revogados. ...
+    }
+)
+
+
+def catalog_keys_before_revoked_credential_refusal(keys) -> set[str]:
+    """Undo the UXA1 term: drop its two keys (it retired none).
+
+    UXA1 is the newest term, so a reconstruction walks back through this
+    first, then RECL1, RECT1, A19, S3-A, U5-E, U5-B and every older term.
+    """
+    return set(keys) - set(UXA1_REVOKED_CREDENTIAL_KEYS)
 
 
 def catalog_keys_before_s3a_direct_documents(keys) -> set[str]:

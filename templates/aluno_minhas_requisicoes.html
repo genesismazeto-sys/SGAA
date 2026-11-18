@@ -1,4 +1,4 @@
-{% from 'components/pagination.html' import paginate %}
+{% from 'components/pagination.html' import paginate with context %}
 {% extends "base_aluno.html" %}
 {% import 'components/card_list.html' as cl %}
 {% block title %}{{ user_message("Requisições") }}{% endblock %}
@@ -161,7 +161,7 @@
   </div>
   
 </div>
-{{ paginate('aluno_minhas_requisicoes') }}
+{{ paginate('aluno.aluno_minhas_requisicoes') }}
 
 <!-- Popover de Filtrar -->
 <div id="filter-menu" class="popover filter-popover" hidden>

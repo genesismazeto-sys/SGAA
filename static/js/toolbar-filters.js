@@ -27,6 +27,16 @@
     return Array.from(root.querySelectorAll('.impresso-card[role="listitem"]')).filter((row) => !row.classList.contains('header'));
   }
 
+  // A press that travels further than this before its click was a drag.
+  const DRAG_THRESHOLD_PX = 4;
+
+  // Whether the document holds a real (non-empty) text selection touching row.
+  function hasTextSelectionIn(row){
+    const selection = window.getSelection?.();
+    if (!selection || selection.isCollapsed || !selection.rangeCount) return false;
+    return selection.getRangeAt(0).intersectsNode(row);
+  }
+
   // Selectable right now: shown by the live search and filters, and not marked
   // read-only by its page (.toolbar-selection-disabled).
   function isRowSelectable(row){
@@ -1041,6 +1051,9 @@
       selectAllRows();
     };
 
+    // Where the last press on a row began, to tell a click from a drag.
+    let pressPoint = null;
+
     rows.forEach((row) => {
       row.setAttribute('aria-selected', 'false');
       // Shift+click extends the ROW selection. Its default action would also
@@ -1049,6 +1062,7 @@
       // links, buttons and fields keep their own behaviour. Cancelling the press
       // also cancels its focus move, which is restored by hand.
       row.addEventListener('mousedown', (event) => {
+        pressPoint = { x: event.clientX, y: event.clientY };
         if (event.button !== 0 || !event.shiftKey) return;
         if (isInteractiveTarget(event.target) || !isRowSelectable(row)) return;
         event.preventDefault();
@@ -1061,6 +1075,13 @@
           addRange(selectableRows().indexOf(row));
           return;
         }
+        // A press dragged across text to copy it ends in a click on the row;
+        // that click selects text, not the row, so the row is left as it was.
+        // A click that did not travel (a double-click on a word included)
+        // keeps toggling exactly as before.
+        const travelled = pressPoint
+          && Math.hypot(event.clientX - pressPoint.x, event.clientY - pressPoint.y) > DRAG_THRESHOLD_PX;
+        if (travelled && hasTextSelectionIn(row)) return;
         if (selectedRows.has(row)){
           selectedRows.delete(row);
           anchorRow = null;

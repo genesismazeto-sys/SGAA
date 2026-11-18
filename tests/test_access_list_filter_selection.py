@@ -478,6 +478,57 @@ def test_shift_click_does_not_select_text_but_dragging_still_does(page):
     _mouse(page, name["right"] - 1, name["y"], "mouseMoved")
     _mouse(page, name["right"] - 1, name["y"], "mouseReleased", buttons=0)
     assert "Faixa 0" in _text_selection(page)
+    assert _selected(page) == [2, 3, 4, 5, 6]  # the drag left the selection alone
+
+
+def _drag_across(session, selector):
+    """Press at the left edge of selector, drag to its right edge, release."""
+    box = _center(session, selector)
+    _mouse(session, box["left"] + 1, box["y"], "mousePressed")
+    _mouse(session, (box["left"] + box["right"]) / 2, box["y"], "mouseMoved")
+    _mouse(session, box["right"] - 1, box["y"], "mouseMoved")
+    _mouse(session, box["right"] - 1, box["y"], "mouseReleased", buttons=0)
+    session.pump(0.1)
+
+
+def _double_click(session, selector):
+    box = _center(session, selector)
+    for count in (1, 2):
+        session.call("Input.dispatchMouseEvent", {"type": "mousePressed", "x": box["x"], "y": box["y"], "button": "left", "buttons": 1, "clickCount": count})
+        session.call("Input.dispatchMouseEvent", {"type": "mouseReleased", "x": box["x"], "y": box["y"], "button": "left", "buttons": 0, "clickCount": count})
+    session.pump(0.1)
+
+
+@browser_only
+def test_dragging_to_copy_text_never_marks_or_unmarks_the_card(page):
+    page.goto("/admin/acesso?nome=Faixa")
+    name = lambda n: f'#acesso-list [data-user-id="{page.ids[n]}"] .cell:nth-child(1) strong'
+    email = lambda n: f'#acesso-list [data-user-id="{page.ids[n]}"] .cell:nth-child(2)'
+    # An unselected card stays unselected; the text is really selected.
+    _drag_across(page, name(3))
+    assert _text_selection(page).strip() == "Faixa 03"
+    assert _selected(page) == []
+    # A selected card stays selected.
+    _click_row(page, 5)
+    assert _selected(page) == [5]
+    _drag_across(page, email(5))
+    assert "faixa05" in _text_selection(page)
+    assert _selected(page) == [5]
+    # A drag over another card neither adds it nor drops the current one.
+    _drag_across(page, name(6))
+    assert _selected(page) == [5]
+    # A plain click still toggles; Shift still ranges from the anchor.
+    _click_row(page, 5)
+    assert _selected(page) == []
+    _click_row(page, 2)
+    _click_row(page, 4, shift=True)
+    assert _selected(page) == [2, 3, 4]
+    # A double-click on a word selects the word and stays two ordinary clicks
+    # for the cards, exactly as before: the first selects only row 7, the
+    # second toggles it off. Only a press that travelled is treated as copying.
+    _double_click(page, name(7))
+    assert _text_selection(page).strip() in {"Faixa", "07"}
+    assert _selected(page) == []
 
 
 @browser_only
@@ -559,6 +610,19 @@ def test_another_screen_keeps_click_toggle_shift_and_select_all(cursos_page):
     )
     page.pump(0.1)
     assert _selected_cursos(page) == [4]
+    # Dragging across a row's text to copy it does not toggle that row here
+    # either (the shared component owns it).
+    page.evaluate(
+        "(() => { const i = document.querySelector('#busca-impressoes'); i.value = '';"
+        " i.dispatchEvent(new Event('input', {bubbles: true})); return true; })()"
+    )
+    box = _center(page, _curso(2) + " .cell:nth-child(2)")
+    _mouse(page, box["left"] + 1, box["y"], "mousePressed")
+    _mouse(page, box["right"] - 1, box["y"], "mouseMoved")
+    _mouse(page, box["right"] - 1, box["y"], "mouseReleased", buttons=0)
+    page.pump(0.1)
+    assert page.evaluate("window.getSelection().toString()").strip()
+    assert _selected_cursos(page) == [4]
     assert page.evaluate("window.__errors") == []
 
 
@@ -591,3 +655,151 @@ def test_the_row_bar_is_read_only_on_a_revoked_row_and_its_hints_follow_the_row(
     again = _hover_row(page, 2)
     assert again["edit"] == {"disabled": False, "tooltip": "Editar", "label": "Editar acesso"}
     assert again["reset"]["tooltip"] == "Aplicar senha padrão"
+
+
+# --------------------------------------------------------------------------
+# Pagination: the shared navigation renders and keeps every filter value
+# --------------------------------------------------------------------------
+
+
+def _seed_pages(conn):
+    """28 Pendente and 3 Expirado accounts, all named "Pagina", + one Ativo."""
+    for number in range(1, 29):
+        _pending(conn, f"Pagina Pendente {number:02d}", f"pg.pend{number:02d}@example.test")
+    for number in range(1, 4):
+        usuario_id = _pending(conn, f"Pagina Expirado {number:02d}", f"pg.exp{number:02d}@example.test")
+        _sent_link(conn, usuario_id, expired=True)
+    create_usuario_with_access_level(
+        conn, "Pagina Ativo 01", "pg.ativo@example.test", "test-hash", "admin", "consultivo",
+        credential_state="personal",
+    )
+
+
+@pytest.fixture
+def paged(env):
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        _seed_pages(conn)
+        conn.commit()
+    return env
+
+
+def _nav(html):
+    match = re.search(r'<nav class="pagination"[^>]*>(.*?)</nav>', html, re.S)
+    if not match:
+        return None
+    body = match.group(1)
+    links = {rel: href.replace("&amp;", "&") for href, rel in re.findall(r'<a class="btn" href="([^"]+)" rel="(prev|next)">', body)}
+    summary = re.search(r"Página (\d+) de (\d+) • Total (\d+)", body)
+    return {"links": links, "summary": tuple(int(value) for value in summary.groups())}
+
+
+def test_the_navigation_renders_with_more_than_one_page(paged):
+    html = _html(paged, "?nome=Pagina&situacao=Pendente&situacao=Expirado&per_page=25&page=1")
+    # One ordered list: the three Expirado sort before the Pendente ones.
+    assert _names(html) == [f"Pagina Expirado {n:02d}" for n in range(1, 4)] + [
+        f"Pagina Pendente {n:02d}" for n in range(1, 23)
+    ]
+    nav = _nav(html)
+    assert nav["summary"] == (1, 2, 31)
+    assert set(nav["links"]) == {"next"}
+    # Every filter value -- both situações included -- reaches the next page.
+    next_link = nav["links"]["next"]
+    for fragment in ("nome=Pagina", "situacao=Pendente", "situacao=Expirado", "page=2", "per_page=25"):
+        assert fragment in next_link, (fragment, next_link)
+
+    second = _html(paged, next_link[len("/admin/acesso"):])
+    assert _names(second) == [f"Pagina Pendente {n:02d}" for n in range(23, 29)]
+    nav = _nav(second)
+    assert nav["summary"] == (2, 2, 31) and set(nav["links"]) == {"prev"}
+    back = _html(paged, nav["links"]["prev"][len("/admin/acesso"):])
+    assert _names(back) == _names(html)
+
+
+def test_a_single_page_and_the_default_list_render_no_navigation(paged):
+    assert _nav(_html(paged, "?nome=Pagina&situacao=Expirado&per_page=25&page=1")) is None
+    # Without page/per_page the list is not paginated at all, as before.
+    default = _html(paged, "?nome=Pagina")
+    assert _nav(default) is None and len(_names(default)) == 32
+
+
+@pytest.mark.parametrize("path", [
+    "/admin/alunos", "/admin/turmas", "/admin/requisicoes", "/admin/reportes",
+    "/admin/alertas", "/admin/arquivos",
+])
+def test_other_screens_render_with_the_macro_in_context(env, path):
+    # Paged with one row per page: the navigation appears wherever the view
+    # has more than one page, and no screen fails to render.
+    response = env["client"].get(path + "?per_page=1&page=1")
+    assert response.status_code == 200, path
+    html = response.get_data(as_text=True)
+    nav = _nav(html)
+    if nav is not None:
+        assert nav["summary"][0] == 1 and set(nav["links"]) == {"next"}
+    assert _nav(env["client"].get(path).get_data(as_text=True)) is None, path
+
+
+@pytest.fixture
+def paged_page(tmp_path):
+    with isolated_versioned_app_env(tmp_path, "access-pages.db") as environment:
+        with main.app.app_context():
+            conn = main.get_db_connection()
+            _seed_pages(conn)
+            conn.commit()
+        login_admin(environment["client"])
+        session = cdp.BrowserSession(environment["client"], BINARY)
+        try:
+            yield session
+        finally:
+            session.close()
+
+
+PAGE_STATE = """(() => ({
+  search: location.search,
+  rows: document.querySelectorAll('#acesso-list .impresso-card[role=listitem]').length,
+  first: document.querySelector('#acesso-list .impresso-card[role=listitem]')?.dataset.userNome,
+  summary: document.querySelector('nav.pagination [data-pagination-summary]')?.textContent.trim(),
+  filterBadge: document.querySelector('#filter-badge')?.textContent.trim(),
+}))()"""
+
+
+def _follow(session, selector):
+    before = session.evaluate("location.href")
+    session.click_in_view(selector)
+    session.wait_for("location.href !== %s && document.readyState === 'complete'" % json.dumps(before))
+    session.pump(0.2)
+    return session.evaluate(PAGE_STATE)
+
+
+@browser_only
+def test_the_browser_moves_between_filtered_pages_and_keeps_the_filter(paged_page):
+    page = paged_page
+    page.goto("/admin/acesso?nome=Pagina&situacao=Pendente&situacao=Expirado&per_page=25&page=1")
+    first = page.evaluate(PAGE_STATE)
+    assert (first["rows"], first["first"], first["summary"]) == (25, "Pagina Expirado 01", "Página 1 de 2 • Total 31")
+    second = _follow(page, 'nav.pagination a[rel="next"]')
+    assert "situacao=Pendente" in second["search"] and "situacao=Expirado" in second["search"]
+    assert "page=2" in second["search"]
+    assert (second["rows"], second["first"], second["summary"]) == (6, "Pagina Pendente 23", "Página 2 de 2 • Total 31")
+    # The filter menu still reads both situações (plus the name) as applied.
+    assert second["filterBadge"] == "3"
+    back = _follow(page, 'nav.pagination a[rel="prev"]')
+    assert (back["rows"], back["first"], back["summary"]) == (25, "Pagina Expirado 01", "Página 1 de 2 • Total 31")
+
+
+def test_every_pagination_call_names_a_real_endpoint_and_reads_its_context():
+    # The macro never rendered before (imported without context), so a wrong
+    # endpoint name could sit unnoticed; with it rendering, one is a
+    # BuildError the moment a list has a second page.
+    from pathlib import Path
+
+    endpoints = {rule.endpoint for rule in main.app.url_map.iter_rules()}
+    calls = []
+    for template in sorted((Path(main.app.root_path).parent / "templates").glob("*.html")):
+        source = template.read_text(encoding="utf-8")
+        names = re.findall(r"paginate\('([^']+)'\)", source)
+        if names:
+            assert "import paginate with context" in source, template.name
+        calls.extend((template.name, name) for name in names)
+    assert len(calls) >= 9, calls
+    assert [call for call in calls if call[1] not in endpoints] == []

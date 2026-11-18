@@ -1,25 +1,32 @@
+{#- Reads page, per_page, total and total_pages from the calling template, so
+    it must be imported `with context`: imported without it, those names are
+    undefined here and the navigation never renders.
+    Built from DS parts only: the links are the shared .btn, the summary uses
+    the secondary text tokens. -#}
 {% macro paginate(endpoint) -%}
   {% if total_pages and total_pages > 1 %}
-  {% set args = request.args.to_dict() %}
-  <nav class="pagination" style="display:flex; gap:.75rem; align-items:center; margin-top:1rem; flex-wrap:wrap;">
+  {#- flat=False keeps every value of a repeated parameter: a multi-value
+      filter (two turmas, two situações) must reach the next page whole. -#}
+  {% set args = request.args.to_dict(flat=False) %}
+  <nav class="pagination" aria-label="Paginação" style="display:flex; gap:12px; align-items:center; margin:12px 0; flex-wrap:wrap;">
     {# Anterior #}
     {% if page > 1 %}
       {% set prev = args.copy() %}
       {% set _ = prev.update({'page': page-1, 'per_page': per_page}) %}
-      <a href="{{ url_for(endpoint, **prev) }}" rel="prev">« Anterior</a>
+      <a class="btn" href="{{ url_for(endpoint, **prev) }}" rel="prev">« Anterior</a>
     {% else %}
-      <span style="opacity:.5;">« Anterior</span>
+      <span class="btn" aria-disabled="true" style="opacity:.5; pointer-events:none;">« Anterior</span>
     {% endif %}
 
-    <span>Página {{ page }} de {{ total_pages }} • Total {{ total }}</span>
+    <span data-pagination-summary style="color:var(--text-secondary); font-size:var(--font-size-small);">Página {{ page }} de {{ total_pages }} • Total {{ total }}</span>
 
     {# Próxima #}
     {% if page < total_pages %}
       {% set nxt = args.copy() %}
       {% set _ = nxt.update({'page': page+1, 'per_page': per_page}) %}
-      <a href="{{ url_for(endpoint, **nxt) }}" rel="next">Próxima »</a>
+      <a class="btn" href="{{ url_for(endpoint, **nxt) }}" rel="next">Próxima »</a>
     {% else %}
-      <span style="opacity:.5;">Próxima »</span>
+      <span class="btn" aria-disabled="true" style="opacity:.5; pointer-events:none;">Próxima »</span>
     {% endif %}
   </nav>
   {% endif %}
