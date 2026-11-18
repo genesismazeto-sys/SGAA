@@ -138,11 +138,41 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
 
 Baseline full suite is not green: six `xlwt` collection errors plus
 `tests/test_pytest_runtime_isolation.py::TestSentinelSurvival` (same cause);
-`tests/test_ut_mx3_matrix_validation_debt_closure.py::test_student_matrix_error_catalog_delta_is_exact_and_bounded`
-(549 vs 548); `tests/test_request_version_display_authority.py`
+`tests/test_request_version_display_authority.py`
 `[canonical-v1-snapshot-v3]`, non-hermetic (random CSRF token containing `v3`);
 `tests/test_ut5_backup_package.py::test_cli_backup_sync_runs_isolated_with_app_context_only`
 needs the gitignored `database.db`, so it fails in a clean worktree.
+
+Eight guards fail on the development branch since before the Acesso
+corrections of 2026-11-18 (identical on the untouched prior head; not fixed):
+
+- `tests/test_b11_category_a_tokenization.py`:
+  `test_field_fills_accent_primary_hover_and_focus_use_their_tokens`,
+  `test_surface_layer_fills_use_the_surface_token`,
+  `test_info_and_danger_families_are_used_at_their_current_values` -- the
+  selectors they read (`#req-presets-modal …`, `.presets-ph:hover`) no longer exist;
+- `tests/test_ds_pill_radius.py::test_no_stylesheet_restores_a_fully_rounded_pill`
+  -- `.presets-ph` in `static/css/components/request-presets.css` uses `999px`;
+- `tests/test_pg_readiness_unit5d_ptbr_portability.py`:
+  `test_control_u5a_current_state_authority_untouched` and
+  `test_control_u5a_guard_still_detects_an_undeclared_change` -- the baseline
+  version list now ends at v18, the guard expects it to end at v17;
+- `tests/test_pg_readiness_unit5f_untyped_null_query.py::test_production_sql_has_no_placeholder_is_null_predicate`
+  -- `app/storage/copy_registry.py:108` `SELECT to_regclass(?) IS NOT NULL`;
+- `tests/test_status_badge_semantics_ui_b02_b03.py::test_b4_shared_tones_are_only_within_one_semantic_category`
+  -- it expects the caution tone to hold only Pendente and Encerrada; Devolvida
+  now shares it.
+
+## Known product defects (not blockers)
+
+- Admin → Reportes: "Selecionar tudo" calls `rowSelectionApi.selectAll`, which
+  the shared row selection does not provide (it offers `selectAllRows`), so the
+  item selects nothing.
+- Public recovery (`/esqueci-minha-senha`,
+  `app/views/passwords.py::_eligible_recovery_user`) does not check
+  `acesso_ativo`: a revoked account can be sent a reset link and set a
+  password. Login stays refused while revoked, and reactivation states the
+  credential outright.
 
 ## Roadmap
 
