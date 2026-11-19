@@ -26,6 +26,8 @@ from tests.versioned_test_support import isolated_versioned_app_env
 DECLARACAO = make_docx("Declaração do responsável")
 FREQUENCIA = make_docx("Folha de frequência")
 RETIRADO = make_docx("Modelo antigo")
+# What versions held before the list existed: a regulation sentence, not a proof.
+OLDER_TEXT = "A validação será feita mediante certificado emitido pela instituição promotora do evento."
 
 
 def insert_template(conn, version_id, title, content, *, slot, status="ativo"):
@@ -69,9 +71,14 @@ def env(tmp_path):
             with_docs, plain, templates_only = own[0], own[1], own[2]
             conn.execute(
                 "UPDATE atividade_versao SET documentos_json = ? WHERE id = ?",
-                (json.dumps(["Certificado de participação", "Declaração do responsável"], ensure_ascii=False), with_docs),
+                (json.dumps({"comprovantes_exigidos": ["Certificado de participação", "Declaração do responsável"]},
+                            ensure_ascii=False), with_docs),
             )
-            conn.execute("UPDATE atividade_versao SET documentos_json = '[]' WHERE id IN (?, ?)", (plain, templates_only))
+            conn.execute(
+                "UPDATE atividade_versao SET documentos_json = ? WHERE id = ?",
+                (json.dumps([OLDER_TEXT], ensure_ascii=False), plain),
+            )
+            conn.execute("UPDATE atividade_versao SET documentos_json = '[]' WHERE id = ?", (templates_only,))
             ids = {
                 "declaracao": insert_template(conn, with_docs, "Declaração do responsável", DECLARACAO, slot=1),
                 "frequencia": insert_template(conn, with_docs, "Folha de frequência", FREQUENCIA, slot=2),
@@ -115,7 +122,9 @@ def test_the_form_gets_the_guidance_of_each_version_and_nothing_for_versions_wit
     assert only["documentos"] == [] and [m["id"] for m in only["modelos"]] == [env["templates"]["vigente"]]
     # A foreign matrix's template is never offered, and no bytes travel with the page.
     assert str(env["foreign"]) not in guidance
-    assert all(set(m) == {"id", "titulo", "nome_arquivo", "tamanho"} for g in guidance.values() for m in g["modelos"])
+    assert all(set(m) == {"id", "titulo"} for g in guidance.values() for m in g["modelos"])
+    # The older regulation sentence is not a proof name: never listed.
+    assert OLDER_TEXT not in html
 
 
 @pytest.mark.parametrize("name", ["declaracao", "frequencia", "vigente"])

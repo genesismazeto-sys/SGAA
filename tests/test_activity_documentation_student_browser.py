@@ -52,11 +52,16 @@ def _seed_student_catalogue():
         with_docs, plain, templates_only = by_group[group][:3]
         conn.execute(
             "UPDATE atividade_versao SET documentos_json = ? WHERE id = ?",
-            (json.dumps(["Certificado de participação", "Declaração assinada pelo responsável"], ensure_ascii=False),
-             with_docs["id"]),
+            (json.dumps({"comprovantes_exigidos": ["Certificado de participação", "Declaração assinada pelo responsável"]},
+                        ensure_ascii=False), with_docs["id"]),
         )
-        conn.execute("UPDATE atividade_versao SET documentos_json = '[]' WHERE id IN (?, ?)",
-                     (plain["id"], templates_only["id"]))
+        # What versions held before the list existed: a sentence, never shown as a proof.
+        conn.execute(
+            "UPDATE atividade_versao SET documentos_json = ? WHERE id = ?",
+            (json.dumps(["A validação será feita mediante certificado emitido pela instituição promotora."],
+                        ensure_ascii=False), plain["id"]),
+        )
+        conn.execute("UPDATE atividade_versao SET documentos_json = '[]' WHERE id = ?", (templates_only["id"],))
         insert_template(conn, with_docs["id"], "Declaração do responsável", DECLARACAO, slot=1)
         insert_template(conn, templates_only["id"], "Folha de frequência", FREQUENCIA, slot=1)
         conn.commit()
@@ -108,6 +113,15 @@ def test_student_sees_the_selected_activity_guidance_and_downloads_its_template(
             "documentos": ["Certificado de participação", "Declaração assinada pelo responsável"],
             "modelos": ["Declaração do responsável"], "documentsHidden": False, "templatesHidden": False,
         }
+        # The lead is justified like the field notes above it; a template row is
+        # its title and "Baixar modelo", nothing else.
+        assert session.evaluate(
+            "[getComputedStyle(document.querySelector('.doc-guidance-lead')).textAlign,"
+            " getComputedStyle(document.querySelector('#data-evento-orientacao > span')).textAlign]"
+        ) == ["justify", "justify"]
+        assert session.evaluate(
+            "document.querySelector('.doc-guidance-template-text').innerText.trim()"
+        ) == "Declaração do responsável"
         session.screenshot("aluno-nova-requisicao-orientacao-desktop")
         # Phone width. The student shell keeps its 240 px sidebar at every width
         # (the content track scrolls sideways -- pre-existing, every field alike),

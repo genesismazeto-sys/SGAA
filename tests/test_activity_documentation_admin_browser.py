@@ -22,6 +22,7 @@ import pytest
 from werkzeug.serving import make_server
 
 import main
+from app.activity_documentation import read_required_documents
 from tests.canonical_matrix_test_support import login_admin
 from tests.docx_test_support import make_docx
 from tests.versioned_test_support import isolated_versioned_app_env
@@ -201,7 +202,7 @@ def _stored(version_id):
             " JOIN modelo_documento_arquivos a ON a.id = m.arquivo_id WHERE m.atividade_versao_id = ? ORDER BY m.id",
             (version_id,),
         ).fetchall()
-    return json.loads(version["documentos_json"]), [tuple(row) for row in rows]
+    return read_required_documents(version["documentos_json"]), [tuple(row) for row in rows]
 
 
 def _sha(content):

@@ -17,9 +17,12 @@ of the version, so it follows the canonical freeze policy
 (`app.activity_catalog.can_activity_version_be_mutated_in_place`): the version
 form edits it in place only on an unreferenced draft, a frozen version changes
 only through Nova versão, and Matrices and requests keep the version they
-reference. `app/activity_documentation.py` owns the rule: new writes store a JSON
-array in the administrator's order; older shapes are read through the tolerant
-`parse_documentos_json`; an unchanged list keeps the stored text byte for byte.
+reference. `app/activity_documentation.py` owns the rule: the list is stored as
+`{"comprovantes_exigidos": [...]}`, in the administrator's order, each item a
+proof name of at most 60 characters. What the column held before -- one
+regulation sentence per version -- is not a proof name: it is never listed (to
+the student or in the version form), an unchanged list keeps the stored text
+byte for byte, and the first saved list keeps it under `"texto_anterior"`.
 
 ## Templates (B) and their storage: prod-1/v19
 

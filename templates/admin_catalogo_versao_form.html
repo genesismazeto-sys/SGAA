@@ -211,7 +211,7 @@
               {% for item in documentos_exigidos %}
               <li class="field-card doc-list-item" data-doc-item>
                 <div class="field-chip doc-list-index" aria-hidden="true">{{ loop.index }}</div>
-                <input class="control" type="text" name="documentos_exigidos" value="{{ item }}" maxlength="300" aria-label="Comprovante exigido {{ loop.index }}" aria-describedby="documentacao-exigida-orientacao">
+                <input class="control" type="text" name="documentos_exigidos" value="{{ item }}" maxlength="60" aria-label="Comprovante exigido {{ loop.index }}" aria-describedby="documentacao-exigida-orientacao">
                 {% if not readonly %}
                 <div class="doc-list-actions">
                   <button type="button" class="file-list-action" data-doc-move="-1" aria-label="Mover para cima"><i class="lucide" data-lucide="arrow-up" aria-hidden="true"></i></button>
@@ -228,7 +228,7 @@
             <template id="documento-exigido-template">
               <li class="field-card doc-list-item" data-doc-item>
                 <div class="field-chip doc-list-index" aria-hidden="true"></div>
-                <input class="control" type="text" name="documentos_exigidos" value="" maxlength="300" placeholder="Ex.: Certificado de participação" aria-describedby="documentacao-exigida-orientacao">
+                <input class="control" type="text" name="documentos_exigidos" value="" maxlength="60" placeholder="Ex.: Certificado de participação" aria-describedby="documentacao-exigida-orientacao">
                 <div class="doc-list-actions">
                   <button type="button" class="file-list-action" data-doc-move="-1" aria-label="Mover para cima"><i class="lucide" data-lucide="arrow-up" aria-hidden="true"></i></button>
                   <button type="button" class="file-list-action" data-doc-move="1" aria-label="Mover para baixo"><i class="lucide" data-lucide="arrow-down" aria-hidden="true"></i></button>

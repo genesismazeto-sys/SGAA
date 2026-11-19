@@ -148,6 +148,7 @@
   font-size:var(--font-size-small);
   line-height:1.45;
   color:var(--text-secondary);
+  text-align:justify;
 }
 .doc-guidance-part{ display:grid; row-gap:6px; min-width:0; }
 .doc-guidance-subtitle{
@@ -184,10 +185,13 @@
 }
 .doc-guidance-template-icon{ width:18px; height:18px; color:var(--accent-blue); }
 .doc-guidance-template-text{ display:grid; min-width:0; row-gap:2px; }
-.doc-guidance-template-title,
-.doc-guidance-template-meta{ overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
-.doc-guidance-template-title{ font-weight:600; font-size:var(--font-size-small); }
-.doc-guidance-template-meta{ font-size:12px; color:var(--text-secondary); }
+.doc-guidance-template-title{
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  font-weight:600;
+  font-size:var(--font-size-small);
+}
 .doc-guidance-download{ white-space:nowrap; }
 
 @media (max-width:720px){

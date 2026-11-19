@@ -299,7 +299,7 @@ def test_the_student_read_path_on_postgresql(database):
         assert [m["id"] for m in by_version[requested]] == [ids["requested"]]
         assert by_version[999999] == []
         guidance = student_guidance_by_version(conn, [
-            {"id": offered, "documentos_json": '["Certificado"]'},
+            {"id": offered, "documentos_json": '{"comprovantes_exigidos": ["Certificado"]}'},
             {"id": foreign, "documentos_json": None},
             {"id": 999999, "documentos_json": "[]"},
         ])

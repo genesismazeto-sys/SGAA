@@ -514,10 +514,7 @@
         const title = document.createElement('span');
         title.className = 'doc-guidance-template-title';
         title.textContent = modelo.titulo;
-        const meta = document.createElement('span');
-        meta.className = 'doc-guidance-template-meta';
-        meta.textContent = modelo.nome_arquivo + ' · ' + modelo.tamanho;
-        text.append(title, meta);
+        text.append(title);
         const link = document.createElement('a');
         link.className = 'btn doc-guidance-download';
         link.href = downloadUrl.replace('/0/', '/' + encodeURIComponent(modelo.id) + '/');
