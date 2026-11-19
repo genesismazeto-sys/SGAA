@@ -21,13 +21,12 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   v19 adds the DOCX fill-in templates of activity versions, purely additive).
   The processing repairs and controlled recovery are documented in `docs/request-processing-corrections.md`;
   the activity documentation guidance and templates in `docs/activity-document-guidance.md`.
-  PROD PostgreSQL is v18: the GF1 of `5b989cd` (2026-10-20, ledger seq 190-199) upgraded it
-  from v17, and the GF1 of `a5b912a` (seq 202-209, the code in production) kept it; the daily
-  governed generations, which validate the exact version, run from the v18 worktree of
-  `5b989cd`. v19 reaches PROD only through a separately authorized GF1 that runs
-  `python -m app.pg_schema upgrade` (exactly v16, v17 or v18 -> v19) before the v19 code is
-  deployed and repins the daily backup worktree in the same session
-  (`docs/activity-document-guidance.md`, Publication).
+  PROD PostgreSQL 17 is v19 (41 tables): the GF1-V19 of `4087eaf` (2026-11-19, ledger seq
+  239-250) upgraded it from v18 with `python -m app.pg_schema upgrade` in one transaction, after
+  a preserved, restore-drilled pre-migration generation; earlier, the GF1 of `5b989cd` (seq
+  190-199) took it from v17 to v18. The daily governed generations, which validate the exact
+  version, run from the v19 worktree of `4087eaf` (`docs/activity-document-guidance.md`,
+  Publication).
 - PostgreSQL schema authority, runtime dialect and transaction semantics are in
   place. The production database is hosted in Supabase PostgreSQL 17; Path-B
   migration, governed Layer-2 backup/restore and the production cutover are recorded.
@@ -100,12 +99,49 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
 - MP-3 A22 (`docs/specs/MP-3-A22-request-reclassification.md`): a student or administrator
   corrects the activity of an editable request in place (schema v17). In PROD since gate G1
   on 2026-10-19 (upgrade to v17, then the GF1 deploy of `f559e3d`, ledger seq 173-181).
+- GF1-V19 (2026-11-19, owner-authorized, completed and accepted): published `4087eaf`
+  (UX-ACCESS-01, SEC-REVOCATION-01, 7-day first-access links, UX-REPORTES-01, COMPROVANTES-01,
+  MOBILE-01) with the v18 -> v19 upgrade. Ledger seq 239 pre-migration v18 generation (preserved
+  outside rotation), 240 its PostgreSQL 17 restore drill, 241 the GF1 grant, 242 post-migration v19
+  generation, 243 daily v19 generation, 244-249 deployment, authorize-code and promotion (both
+  COMMITTED), 250 restore drill of the v19 generation 242 (41 tables). Every generation and both
+  drills VERIFIED; the strict v19 proof matched the rehearsed catalog. Anonymous production smoke
+  (`tools/hosted_smoke.py`) PASS 10/10. The authenticated manual smoke (`SMOKE_V19.md` in the GF1
+  folder) is PENDING with the owner. C14 and the historical visual-gate exception (baselines
+  stale since 2026-08-14, none re-approved; `docs/design-system/README.md` §8, Harness) are
+  unchanged by this operation. Three operational failures, none of them in PROD, are recorded with their
+  resolutions in the GF1 folder's README (outside the repository):
+  1. Run 1 died silently at the drill wait, before the grant (PROD unchanged): Windows PowerShell
+     5.1 `Add-Content` opens a file without sharing reads, an executor's `tail -F` observer held
+     `execution.log`, and `Write-Log` threw on the main path and again inside the catch, losing
+     the STOPPED line. Resolution: `Write-Log` in `run_gf1_v19.ps1` and `drill_terminal.ps1` appends
+     with shared read/write access, retries for 5 s, continues in a fallback file and stops only
+     when no file takes the line (validated locally against the observers involved). The anchor
+     check admits only backup entries, so the owner re-anchored `$InitialHead` to the head after
+     run 1's generation (seq 237) and drill (seq 238); both stay in the ledger and the seq-237
+     preserved copy is kept aside, hash-verified.
+  2. Run 2 committed the upgrade, validated v19 and took generation 242, then stopped with
+     `DAILY_V19_GENERATION_NOT_NEW` before any deployment: the laptop was on battery, the daily
+     task has `DisallowStartIfOnBatteries`, so `Start-ScheduledTask` left it Queued, and the wait
+     loop took any state but Running for finished. Resolution: a resume script, on AC power, whose
+     constants, functions and deploy-to-final-status block are byte copies of `run_gf1_v19.ps1`,
+     with a wait that requires state Ready, result 0 and a new verified ledger generation.
+  3. Resume 1 stopped with `DAILY_V19_RUN_FAILED` (no deployment): a defect of the resume script
+     itself, since PowerShell 5.1 returns a single row as a bare object whose `.Count` is `$null`,
+     while the queued task had already produced generation 243. Resolution: the calls wrapped in
+     `@(...)`, validated against the real ledger; resume 2 completed.
 
 ## Production
 
 - Web runtime: Vercel Hobby project `sgaa` (`https://sgaa.vercel.app`), Supabase Free PROD
   `sgaa-prod` (`uckadhcwfknklmdktuyi`) holding the migrated data, canonical storage bucket and the
   Google Drive mirror (proven at C11). Every PROD action follows the runbook and the ledger.
+- Code in production: `4087eaf7353f3d3effff40255c73f8221ce20f74`, deployment
+  `dpl_2PX2spzLjgTeNgrN9taFFSM9tsJo` (served code digest `902a0be4…`, verified at the public
+  address), schema v19. The Vercel project has no Git connection: pushes deploy nothing; every
+  deployment is `tools/deploy_audit.py deploy` under a GF1.
+- Cutover ledger (outside the repository): C13, 250 entries, chain OK, head `149e52dc…`, no
+  unresolved operation and no write barrier (2026-11-19).
 - Backups: the production A20 scheduler runs on the hosted platform; it records
   complete deliveries to every connected drive. The separate operator-run governed
   Layer-2 generations (`tools/ops_backup.py --ledger-dir`) and off-platform copies
@@ -118,6 +154,15 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   generation, NOT the separate A20-generated hosted snapshot. The drill
   receipt is in the cutover ledger; its publication to the PROD Banco de dados
   posture remains pending via the governed `ops_backup publish` procedure.
+- The daily governed backup task (Windows Task Scheduler, 20:00) runs
+  `daily_governed_backup.ps1` from the v19 worktree of `4087eaf` since GF1-V19; its last run
+  (2026-11-19, generation seq 243, schema 19) succeeded. It does not start on battery
+  (`DisallowStartIfOnBatteries`): it waits, queued, for AC power.
+- Operational follow-up, OPEN (not resolved): `daily_governed_backup.ps1` still logs with
+  Windows PowerShell 5.1 `Add-Content`, so any process holding its log open (a tail, an editor,
+  a scanner) makes a write throw -- the defect that stopped GF1-V19 run 1, fixed only in that
+  GF1's scripts. Until the script appends with shared access and a fallback like them, nothing
+  may hold its log open while it runs.
 - The workstation SQLite runtime is stopped and frozen: the rollback asset until the window
   closes (C14); its contraction is MP-4.
 - Residuals recorded by MP-2 (no hosting impact today): `main.py` still attaches a file handler
@@ -125,6 +170,8 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   directory; a report `descricao` is bounded only by the request size.
 - Agreed outside MP-1…MP-4, no recorded execution: reconcile/import the official
   deferred-hours spreadsheet.
+- Owner-requested, not started: remove the user-visible distinction between Indeferida and
+  Encerrada (`docs/backlog/UI_ACCEPTANCE_BACKLOG.md`, UI-B40).
 
 ## Environment facts
 
@@ -150,7 +197,7 @@ Baseline full suite is not green: six `xlwt` collection errors plus
 needs the gitignored `database.db`, so it fails in a clean worktree.
 
 Eight guards fail on the development branch since before the Acesso
-corrections of 2026-11-18 (identical on `a5b912a`, the code in production; not fixed):
+corrections of 2026-11-18 (identical on `a5b912a`, the code in production before GF1-V19; not fixed):
 
 - `tests/test_b11_category_a_tokenization.py`:
   `test_field_fills_accent_primary_hover_and_focus_use_their_tokens`,
@@ -181,5 +228,5 @@ gets one HTTP 500 (`InternalError`) among overlapping mirror invocations.
 | MP-0 | Spec-driven governance transition | CLOSED |
 | MP-1 | Storage convergence — Drive mirror worker (S4); legacy-migration tooling, census, DEV rehearsal (S5); storage reconciliation | CLOSED |
 | MP-2 | Hosting readiness — read-only filesystem, environment-only secrets, scheduler trigger (mirror worker included), object-byte backup (S7, part of S6) | CLOSED |
-| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | C13 PONR_RECORDED; admission OPEN, A19 deployed, A20 S5 operational with first hosted backup verified; autonomous due wake and C14 pending |
+| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | C13 PONR_RECORDED; admission OPEN, A19 deployed, A20 S5 operational with first hosted backup verified; GF1-V19 (`4087eaf`, schema v19) in PROD since 2026-11-19, authenticated manual smoke pending; autonomous due wake and C14 pending |
 | MP-4 | Legacy contraction after the rollback window — legacy document paths and bytes, SQLite file backup, Windows scheduler, purge policy (rest of S6) | NOT STARTED |
