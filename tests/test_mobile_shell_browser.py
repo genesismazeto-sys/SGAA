@@ -9,12 +9,20 @@ in phone emulation (mobile viewport, touch) at 320, 360, 390 and 430px.
 Horizontal scrolling is allowed only where it is intended: the list grids
 (``.impressoes-cards-scroll``) scroll sideways inside their own box. Nothing
 else may run past the viewport, and the content column never does.
+
+The direct comprovante upload runs end to end on the phone too: the browser's
+signed-TUS request goes to the synthetic storage host of
+tests/canonical_request_documents_support.py, answered by the session into the
+in-memory canonical store -- no real host, key, account or document.
 """
 from __future__ import annotations
 
+import base64
 import json
 
 import main
+from app.storage.supabase_store import storage_browser_origin
+from tests.canonical_request_documents_support import TEST_SUPABASE_URL, canonical_documents
 from tests.canonical_matrix_test_support import login_admin
 from tests.canonical_request_test_support import login_student, student_identity
 from tests.test_activity_documentation_admin_browser import (
@@ -28,6 +36,7 @@ from tests.test_activity_documentation_admin_browser import (
     workspace,  # noqa: F401  (pytest fixture)
 )
 from tests.test_activity_documentation_student_browser import _choose, _seed_student_catalogue
+from tests.test_comprovantes_google_drive import PDF, FakeStorage
 
 PHONES = ((320, 640), (360, 740), (390, 844), (430, 932))
 
@@ -296,3 +305,101 @@ def test_from_768_the_desktop_shell_is_unchanged(workspace):
                 "SGAA - Sistema de Gerenciamento de Atividades Acadêmicas")
     finally:
         session.close()
+
+
+STORAGE_ORIGIN = storage_browser_origin(TEST_SUPABASE_URL)
+
+
+class _TusSession(Session):
+    """The live-server session that also answers the synthetic storage host.
+
+    The browser's signed-TUS upload (``direct-upload.js``) goes to the synthetic
+    Supabase project of tests/canonical_request_documents_support.py; this session
+    answers its CORS preflight and its creation-with-upload POST and hands the bytes
+    to the in-memory canonical store, so no real host, key or account is involved.
+    """
+
+    def __init__(self, *args, store, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.store = store
+        self.tus = []
+        self.call("Fetch.enable", {"patterns": [{"urlPattern": STORAGE_ORIGIN + "/*", "requestStage": "Request"}]})
+
+    def _serve(self, params):
+        request = params["request"]
+        headers = {k.lower(): v for k, v in request.get("headers", {}).items()}
+        body = b"".join(base64.b64decode(e.get("bytes", "")) for e in request.get("postDataEntries") or [])
+        self.tus.append(request["method"])
+        response_headers = [
+            {"name": "Access-Control-Allow-Origin", "value": self.base_url},
+            {"name": "Access-Control-Allow-Methods", "value": "POST, PATCH, HEAD, OPTIONS"},
+            {"name": "Access-Control-Allow-Headers", "value": "*"},
+            {"name": "Access-Control-Expose-Headers", "value": "Location, Upload-Offset, Upload-Length, Tus-Resumable"},
+            {"name": "Tus-Resumable", "value": "1.0.0"},
+        ]
+        code = 204
+        if request["method"] == "POST":
+            metadata = dict(item.split(" ", 1) for item in headers["upload-metadata"].split(","))
+            metadata = {key: base64.b64decode(value).decode() for key, value in metadata.items()}
+            self.store.complete_resumable_upload(
+                token=headers["x-signature"], bucket=metadata["bucketName"], object_name=metadata["objectName"],
+                content=body, content_type=metadata["contentType"])
+            code = 201
+            response_headers += [{"name": "Location", "value": STORAGE_ORIGIN + "/upload/resumable/test-1"},
+                                 {"name": "Upload-Offset", "value": str(len(body))}]
+        self.send("Fetch.fulfillRequest", {"requestId": params["requestId"], "responseCode": code,
+                                           "responseHeaders": response_headers, "body": ""})
+
+
+@browser_only
+def test_on_a_phone_a_comprovante_uploads_directly_and_the_request_goes_through(workspace):
+    """The direct upload of a comprovante from a 390px phone, end to end and isolated."""
+    catalogue = _seed_student_catalogue()
+    original_storage = main.app.extensions.get("comprovante_storage")
+    original_csp = main.app.config["CONTENT_SECURITY_POLICY"]
+    main.app.extensions["comprovante_storage"] = FakeStorage()
+    pdf = workspace["files"] / "comprovante.pdf"
+    pdf.write_bytes(PDF)
+    try:
+        with canonical_documents(main.app) as store:
+            # Production composes connect-src with the configured storage origin at
+            # startup; this app started before the synthetic configuration existed.
+            main.app.config["CONTENT_SECURITY_POLICY"] = original_csp.replace(
+                "connect-src 'self'", f"connect-src 'self' {STORAGE_ORIGIN}", 1)
+            login_student(workspace["client"])
+            session = _TusSession(workspace["client"], BINARY, workspace["downloads"], workspace["base_url"],
+                                  store=store)
+            try:
+                _viewport(session, 390, 844)
+                _open(session, "/aluno/nova-requisicao")
+                _choose(session, catalogue["group"], catalogue["with_docs"]["id"])
+                session.set_files("#comprovantes_files", pdf)
+                session.wait_for("document.querySelector('[data-direct-upload-list] li')?.dataset.state === 'verified'",
+                                 timeout=20)
+                assert session.tus == ["OPTIONS", "POST"]
+                _assert_phone_page(_layout(session))
+                _evidence(session, "mobile-aluno-comprovante-enviado-390")
+                _type(session, "input[name='nome_evento']", "Palestra com comprovante no celular")
+                _type(session, "input[name='horas_solicitadas']", "2")
+                _type(session, "input[name='data_evento']", "2026-09-06")
+                assert session.evaluate("window.__errors") == []
+                session.evaluate("window.__leaving = true; true")
+                session.click_in_view("form[data-direct-upload] button[type='submit']")
+                session.wait_for("!window.__leaving && document.readyState === 'complete'", timeout=20)
+                assert "Requisição enviada com sucesso." in session.evaluate("document.body.innerText")
+            finally:
+                session.close()
+            with main.app.app_context():
+                conn = main.get_db_connection()
+                request = conn.execute("SELECT id, status FROM requisicoes WHERE nome_evento = ?",
+                                       ("Palestra com comprovante no celular",)).fetchone()
+                attachments = conn.execute("SELECT count(*) FROM requisicao_arquivos WHERE requisicao_id = ?",
+                                           (request["id"],)).fetchone()[0]
+            assert (request["status"], attachments) == ("Pendente", 1)
+            assert [content for content, _mime in store.objects.values()] == [PDF]
+    finally:
+        main.app.config["CONTENT_SECURITY_POLICY"] = original_csp
+        if original_storage is None:
+            main.app.extensions.pop("comprovante_storage", None)
+        else:
+            main.app.extensions["comprovante_storage"] = original_storage

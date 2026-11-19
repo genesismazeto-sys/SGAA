@@ -293,12 +293,20 @@ def test_form_note_hidden_rule_changes_no_existing_consumer():
     # Before batch 3 no template rendered a hidden .form-note and no script hid one
     # (a hidden .form-note would have stayed visible: .form-note is display:flex).
     # The only consumer of the new rule is the Requisições upload status line.
+    # Since then two notes start hidden and are shown by their own page script, and
+    # both rely on this rule being there: the replacement notice of the Acesso e-mail
+    # batch (UX-ACCESS-01) and the version form's unsaved-changes notice for the DOCX
+    # templates (COMPROVANTES-01). Any other hidden .form-note needs the same review.
     hidden_notes = []
     for path in (ROOT / "templates").rglob("*.html"):
         for tag in re.findall(r"<[a-z]+\b[^>]*\bform-note\b[^>]*>", path.read_text(encoding="utf-8")):
             if re.search(r"\shidden(\s|>|=)", tag):
-                hidden_notes.append((path.name, tag))
-    assert hidden_notes == []
+                marker = re.search(r"\b(access-email-replace|doc-templates-dirty)\b", tag)
+                hidden_notes.append((path.name, marker.group(1) if marker else tag))
+    assert sorted(hidden_notes) == [
+        ("admin_acesso.html", "access-email-replace"),
+        ("admin_catalogo_versao_form.html", "doc-templates-dirty"),
+    ]
     togglers = [p.name for p in (ROOT / "templates").rglob("*.html") if "[data-upload-feedback]" in p.read_text(encoding="utf-8")]
     assert togglers == ["admin_requisicoes.html"]
     assert not any("form-note" in p.read_text(encoding="utf-8") for p in (ROOT / "static/js").rglob("*.js"))

@@ -150,7 +150,7 @@ Baseline full suite is not green: six `xlwt` collection errors plus
 needs the gitignored `database.db`, so it fails in a clean worktree.
 
 Eight guards fail on the development branch since before the Acesso
-corrections of 2026-11-18 (identical on the untouched prior head; not fixed):
+corrections of 2026-11-18 (identical on `a5b912a`, the code in production; not fixed):
 
 - `tests/test_b11_category_a_tokenization.py`:
   `test_field_fills_accent_primary_hover_and_focus_use_their_tokens`,
@@ -168,13 +168,7 @@ corrections of 2026-11-18 (identical on the untouched prior head; not fixed):
 - `tests/test_status_badge_semantics_ui_b02_b03.py::test_b4_shared_tones_are_only_within_one_semantic_category`
   -- it expects the caution tone to hold only Pendente and Encerrada; Devolvida
   now shares it.
-
-A ninth fails identically on `a8922ad`:
-`tests/test_ui_corrections_batch3.py::test_form_note_hidden_rule_changes_no_existing_consumer`
--- `admin_acesso.html`'s e-mail batch notes (`#access-email-replace` and one
-more) start `hidden`, which the guard expects no consumer to do.
-
-Three real-PostgreSQL tests fail too, identically on the untouched prior head:
+Three real-PostgreSQL tests fail too, identically on `a5b912a`:
 `tests/test_storage_s2_real_pg.py::test_fresh_v14_authority_validates_and_is_empty`
 and `tests/test_storage_s3a_real_pg.py::test_pg_authority_is_v15` still pin head
 v16; `tests/test_mp2_scheduler_real_pg.py::test_overlapping_invocations_mirror_each_object_exactly_once`
