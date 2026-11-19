@@ -1,0 +1,60 @@
+/* =============================================================
+   components/activity-documentation.css  —  DOCUMENTAÇÃO EXIGIDA
+
+   The informative documentation of an activity version: the ordered list of
+   required proofs an administrator maintains on the version form. It is
+   guidance, never a validation state, so it uses the accent and neutral
+   families only (no --danger-* / --field-invalid-*).
+
+   Built from existing primitives: every row is a .field-card (chip, control,
+   trailing actions) and the row buttons are the .file-list-action /
+   .file-list-remove icon buttons of components/form.css. Nothing here
+   overrides those primitives; it only adds the third grid track and the
+   section rhythm.
+   ============================================================= */
+
+/* The section sits in the form grid like any other block: same 12px rhythm
+   as .form-fieldset, separated from the fields above by a hairline. */
+.doc-section{
+  display:grid;
+  row-gap:12px;
+  min-width:0;
+  margin-top:4px;
+  padding-top:16px;
+  border-top:1px solid var(--border);
+}
+.doc-section-title{
+  margin:0;
+  font-size:var(--font-size-base);
+  font-weight:600;
+  color:var(--text-primary);
+}
+.doc-section > .form-note.form-note--guide{ margin:0; }
+
+/* ---- Comprovantes exigidos: the ordered list editor ---- */
+.doc-list{ display:grid; row-gap:8px; min-width:0; }
+.doc-list-items{
+  display:grid;
+  row-gap:6px;
+  margin:0;
+  padding:0;
+  list-style:none;
+}
+.doc-list-items:empty{ display:none; }
+.field-card.doc-list-item{ grid-template-columns:40px minmax(0, 1fr) auto; }
+.doc-list-index{
+  font-size:var(--font-size-small);
+  font-weight:600;
+  font-variant-numeric:tabular-nums;
+  color:var(--text-secondary);
+}
+.doc-list-actions{
+  display:inline-flex;
+  align-items:center;
+  gap:2px;
+  padding:0 6px 0 4px;
+}
+.doc-list-actions .file-list-action:disabled{ opacity:.35; cursor:default; background:transparent; }
+.doc-list-empty{ margin:0; }
+.doc-list-empty[hidden]{ display:none; }
+.doc-list-add{ justify-self:start; }

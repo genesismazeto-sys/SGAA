@@ -3,6 +3,7 @@
 {% block title %}{{ form_title }} — {{ base.nome_conceito }}{% endblock %}
 
 {% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/activity-documentation.css', v=static_asset_version) }}">
 <style>
   .form-fieldset[disabled]{ opacity:1; }
   .form-cards-narrow .row-label{ right:calc(100% + var(--form-gap)); width:var(--form-label-w); }
@@ -192,6 +193,53 @@
           {% endif %}
         </div>
       </div>
+
+      {#- Documentação exigida: what the student is told to attach. Informative
+          only -- nothing reads it to check a proof (app.activity_documentation).
+          The items are version data, so the disabled fieldset of a frozen
+          version shows them read-only like every other field. -#}
+      <section class="doc-section" id="documentacao-exigida" aria-labelledby="documentacao-exigida-titulo">
+        <h2 class="doc-section-title" id="documentacao-exigida-titulo">Documentação exigida</h2>
+        <div class="form-note form-note--guide" id="documentacao-exigida-orientacao"><i class="lucide" data-lucide="info" aria-hidden="true"></i><span>Orientações informativas exibidas ao aluno na Nova requisição, logo antes dos comprovantes. Não bloqueiam o envio e não substituem a análise da coordenação.</span></div>
+        <div class="form-row" data-visible-field="documentos_exigidos">
+          <label class="row-label" id="documentos-exigidos-label">Comprovantes exigidos</label>
+          <div class="doc-list" data-doc-list>
+            {#- Marks that this form carries the list: a list emptied on purpose
+                submits no item at all, and an absent field keeps the stored one. -#}
+            <input type="hidden" name="documentos_exigidos_presente" value="1">
+            <ol class="doc-list-items" id="documentos-exigidos-list" aria-labelledby="documentos-exigidos-label">
+              {% for item in documentos_exigidos %}
+              <li class="field-card doc-list-item" data-doc-item>
+                <div class="field-chip doc-list-index" aria-hidden="true">{{ loop.index }}</div>
+                <input class="control" type="text" name="documentos_exigidos" value="{{ item }}" maxlength="300" aria-label="Comprovante exigido {{ loop.index }}" aria-describedby="documentacao-exigida-orientacao">
+                {% if not readonly %}
+                <div class="doc-list-actions">
+                  <button type="button" class="file-list-action" data-doc-move="-1" aria-label="Mover para cima"><i class="lucide" data-lucide="arrow-up" aria-hidden="true"></i></button>
+                  <button type="button" class="file-list-action" data-doc-move="1" aria-label="Mover para baixo"><i class="lucide" data-lucide="arrow-down" aria-hidden="true"></i></button>
+                  <button type="button" class="file-list-remove" data-doc-remove aria-label="Remover comprovante exigido"><i class="lucide" data-lucide="x" aria-hidden="true"></i></button>
+                </div>
+                {% endif %}
+              </li>
+              {% endfor %}
+            </ol>
+            <p class="form-note doc-list-empty" data-doc-empty{% if documentos_exigidos %} hidden{% endif %}>Nenhum comprovante exigido cadastrado.</p>
+            {% if not readonly %}
+            <button type="button" class="btn doc-list-add" data-doc-add><i class="lucide" data-lucide="plus" aria-hidden="true"></i><span class="btn-label">Adicionar comprovante</span></button>
+            <template id="documento-exigido-template">
+              <li class="field-card doc-list-item" data-doc-item>
+                <div class="field-chip doc-list-index" aria-hidden="true"></div>
+                <input class="control" type="text" name="documentos_exigidos" value="" maxlength="300" placeholder="Ex.: Certificado de participação" aria-describedby="documentacao-exigida-orientacao">
+                <div class="doc-list-actions">
+                  <button type="button" class="file-list-action" data-doc-move="-1" aria-label="Mover para cima"><i class="lucide" data-lucide="arrow-up" aria-hidden="true"></i></button>
+                  <button type="button" class="file-list-action" data-doc-move="1" aria-label="Mover para baixo"><i class="lucide" data-lucide="arrow-down" aria-hidden="true"></i></button>
+                  <button type="button" class="file-list-remove" data-doc-remove aria-label="Remover comprovante exigido"><i class="lucide" data-lucide="x" aria-hidden="true"></i></button>
+                </div>
+              </li>
+            </template>
+            {% endif %}
+          </div>
+        </div>
+      </section>
     </fieldset>
 
     {#- Read-only mode has no form action left: navigation moved to the header
@@ -332,10 +380,72 @@ document.addEventListener('DOMContentLoaded', function(){
     if (v === '') return null;
     const parsed = Number(v); return Number.isNaN(parsed) ? null : parsed;
   }
+  // Documentação exigida: an ordered list edited in place. The server
+  // normalizes the same way (app.activity_documentation), so an unchanged
+  // list compares equal and keeps the stored text.
+  const docList = document.getElementById('documentos-exigidos-list');
+  const docEmpty = document.querySelector('[data-doc-empty]');
+  const docTemplate = document.getElementById('documento-exigido-template');
+  function documentosExigidos(){
+    const items = [];
+    docList?.querySelectorAll('input[name="documentos_exigidos"]').forEach(input => {
+      const text = String(input.value || '').split(/\s+/).filter(Boolean).join(' ');
+      if (text && !items.includes(text)) items.push(text);
+    });
+    return items;
+  }
+  function renumberDocs(){
+    if (!docList) return;
+    const rows = Array.from(docList.querySelectorAll('[data-doc-item]'));
+    rows.forEach((row, index) => {
+      const chip = row.querySelector('.doc-list-index');
+      if (chip) chip.textContent = String(index + 1);
+      const input = row.querySelector('input');
+      if (input) input.setAttribute('aria-label', `Comprovante exigido ${index + 1}`);
+      const up = row.querySelector('[data-doc-move="-1"]');
+      const down = row.querySelector('[data-doc-move="1"]');
+      if (up) up.disabled = index === 0;
+      if (down) down.disabled = index === rows.length - 1;
+    });
+    if (docEmpty) docEmpty.hidden = rows.length > 0;
+  }
+  document.querySelector('[data-doc-add]')?.addEventListener('click', () => {
+    if (!docList || !docTemplate) return;
+    const row = docTemplate.content.firstElementChild.cloneNode(true);
+    docList.appendChild(row);
+    if (window.lucide) lucide.createIcons();
+    renumberDocs();
+    row.querySelector('input')?.focus();
+    refresh();
+  });
+  docList?.addEventListener('click', event => {
+    const button = event.target.closest('button');
+    const row = button?.closest('[data-doc-item]');
+    if (!button || !row) return;
+    if (button.hasAttribute('data-doc-remove')){
+      const next = row.nextElementSibling || row.previousElementSibling;
+      row.remove();
+      renumberDocs();
+      (next?.querySelector('input') || document.querySelector('[data-doc-add]'))?.focus();
+    } else if (button.dataset.docMove === '-1' && row.previousElementSibling){
+      docList.insertBefore(row, row.previousElementSibling);
+      renumberDocs();
+      button.focus();
+    } else if (button.dataset.docMove === '1' && row.nextElementSibling){
+      docList.insertBefore(row.nextElementSibling, row);
+      renumberDocs();
+      button.focus();
+    }
+    refresh();
+  });
+  docList?.addEventListener('input', () => refresh());
+  renumberDocs();
+
   function currentPayload(){
     const prev = document.getElementById('versao_anterior_id');
     const prevValue = (prev?.value || '').trim();
     return {
+      documentos_exigidos: documentosExigidos(),
       tipo_atividade: normText(tipoSel?.value),
       grupo: normText(groupHidden?.value),
       nome: normText(document.getElementById('nome')?.value),
@@ -353,7 +463,9 @@ document.addEventListener('DOMContentLoaded', function(){
   function refresh(){
     if (!snapshot || !submitBtn) return;
     const current = currentPayload();
-    submitBtn.disabled = Object.keys(snapshot).every(key => current[key] === snapshot[key]);
+    submitBtn.disabled = Object.keys(snapshot).every(
+      key => JSON.stringify(current[key] ?? null) === JSON.stringify(snapshot[key] ?? null)
+    );
   }
   function autoGrow(el){ el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }
 

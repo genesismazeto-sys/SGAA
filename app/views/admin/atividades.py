@@ -18,6 +18,14 @@ from flask import (
 )
 
 from app import import_previews
+from app.activity_documentation import (
+    RequiredDocumentsInvalid,
+    documentos_json_for_write,
+    normalize_required_documents,
+    parse_required_documents_form,
+    read_required_documents,
+    submitted_required_documents,
+)
 from app.activity_catalog import (
     _build_grupo_label,
     _canonicalize_tipo_limitacao,
@@ -264,7 +272,7 @@ def _limitation_form_values(values) -> tuple[str, str]:
 
 
 def _normalized_version_form_payload(values) -> dict:
-    """Normalize exactly the eight visible R4 field concepts."""
+    """Normalize the visible R4 field concepts and the required-document list."""
     values = dict(values)
 
     def _num(value):
@@ -307,6 +315,7 @@ def _normalized_version_form_payload(values) -> dict:
         "ch_por_evento": _num(values.get("ch_por_evento")) if ch_enabled else None,
         "observacoes": _txt(values.get("observacoes")),
         "versao_anterior_id": versao_anterior_id,
+        "documentos_exigidos": normalize_required_documents(values.get("documentos_exigidos")),
     }
 
 
@@ -323,6 +332,7 @@ def _build_version_form_initial_payload(base, version, *, predecessor_id=None) -
             "ch_por_evento": version["ch_por_evento"],
             "observacoes": _canonical_version_observacoes(version),
             "versao_anterior_id": predecessor_id,
+            "documentos_exigidos": read_required_documents(version["documentos_json"]),
         }
     )
 
@@ -378,6 +388,7 @@ def _resolve_nova_versao_prefill(conn, base_id: int, from_raw) -> tuple[dict, st
         "ch_por_evento": "",
         "observacoes": "",
         "versao_anterior_id": "",
+        "documentos_exigidos": [],
     }
     raw = (from_raw or "").strip()
     if not raw:
@@ -402,6 +413,7 @@ def _resolve_nova_versao_prefill(conn, base_id: int, from_raw) -> tuple[dict, st
         "ch_por_evento": _display_number(origem["ch_por_evento"]),
         "observacoes": _canonical_version_observacoes(origem),
         "versao_anterior_id": str(origem["id"]),
+        "documentos_exigidos": read_required_documents(origem["documentos_json"]),
     }, None)
 
 
@@ -1278,6 +1290,7 @@ def admin_catalogo_nova_versao(base_id: int):
             ch_por_evento=values["ch_por_evento"],
             ch_por_evento_enabled=ch_por_evento_enabled,
             observacoes=values["observacoes"],
+            documentos_exigidos=values.get("documentos_exigidos") or [],
             versao_anterior_id=values["versao_anterior_id"],
             is_clone_create=True,
             versao_anterior_label=versao_anterior_label,
@@ -1304,6 +1317,9 @@ def admin_catalogo_nova_versao(base_id: int):
             "ch_por_evento_mode": request.form.get("ch_por_evento_mode"),
             "observacoes": (request.form.get("observacoes") or "").strip(),
             "versao_anterior_id": (request.form.get("versao_anterior_id") or "").strip(),
+            "documentos_exigidos": submitted_required_documents(
+                request.form, source["documentos_json"] if source is not None else None
+            ),
         }
 
         def _render(msg):
@@ -1312,6 +1328,10 @@ def admin_catalogo_nova_versao(base_id: int):
         eixo = _eixo_from_tipo_atividade(values["tipo_atividade"])
         if eixo is None:
             return _render("Selecione um Tipo válido.")
+        try:
+            documentos_exigidos = parse_required_documents_form(values["documentos_exigidos"])
+        except RequiredDocumentsInvalid as exc:
+            return _render(str(exc))
         grupo = _normalize_atividade_grupo(values["tipo_atividade"], values["grupo"])
         values["grupo"] = grupo or ""
         if not grupo:
@@ -1413,7 +1433,9 @@ def admin_catalogo_nova_versao(base_id: int):
                         base_id, eixo, grupo or None,
                         ch_por_evento, limite_semestre, limite_total,
                         observacao_aluno, observacao_admin,
-                        source["documentos_json"] if source else "[]",
+                        documentos_json_for_write(
+                            source["documentos_json"] if source else None, documentos_exigidos
+                        ),
                         source["vigencia_inicio"] if source else None,
                         source["vigencia_fim"] if source else None,
                         next_num,
@@ -1548,6 +1570,7 @@ def admin_catalogo_editar_versao(
             "" if versao["versao_anterior_id"] is None
             else str(versao["versao_anterior_id"])
         ),
+        "documentos_exigidos": read_required_documents(versao["documentos_json"]),
     }
     initial_payload = _normalized_version_form_payload(initial_values)
 
@@ -1575,6 +1598,7 @@ def admin_catalogo_editar_versao(
             ch_por_evento=values["ch_por_evento"],
             ch_por_evento_enabled=ch_por_evento_enabled,
             observacoes=values["observacoes"],
+            documentos_exigidos=values.get("documentos_exigidos") or [],
             versao_anterior_id=values["versao_anterior_id"],
             form_action=form_action,
             form_title=form_title,
@@ -1621,6 +1645,7 @@ def admin_catalogo_editar_versao(
             "ch_por_evento_mode": request.form.get("ch_por_evento_mode"),
             "observacoes": (request.form.get("observacoes") or "").strip(),
             "versao_anterior_id": (request.form.get("versao_anterior_id") or "").strip(),
+            "documentos_exigidos": submitted_required_documents(request.form, versao["documentos_json"]),
         }
 
         def _render(msg):
@@ -1629,6 +1654,10 @@ def admin_catalogo_editar_versao(
         eixo = _eixo_from_tipo_atividade(values["tipo_atividade"])
         if eixo != versao["eixo"]:
             return _render("Para alterar o Tipo, crie uma nova versão a partir desta versão.")
+        try:
+            documentos_exigidos = parse_required_documents_form(values["documentos_exigidos"])
+        except RequiredDocumentsInvalid as exc:
+            return _render(str(exc))
         grupo = _normalize_atividade_grupo(values["tipo_atividade"], values["grupo"])
         values["grupo"] = grupo or ""
         if not grupo:
@@ -1704,6 +1733,8 @@ def admin_catalogo_editar_versao(
             "limite_semestre": limite_semestre,
             "limite_total": limite_total,
             "versao_anterior_id": versao_anterior_id,
+            # Unchanged guidance keeps the stored text, so it is no change at all.
+            "documentos_json": documentos_json_for_write(versao["documentos_json"], documentos_exigidos),
         }
         if observacoes_changed:
             observacoes = values["observacoes"] or None
