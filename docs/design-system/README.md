@@ -440,7 +440,10 @@ number is wrong by an amount that changes with the platform.
 
 **Supported width.** `768px` is the floor of the desktop shell and of the list
 and dashboard contracts below; from 768 up nothing in this section changed
-with the phone shell (MOBILE-01 compared 768 and 1366 renders pixel for pixel).
+with the phone shell. MOBILE-01 compared 768 and 1366 renders pixel for pixel
+with Inter loaded (identical); in the harness's fallback font the only
+difference on the 80 desktop shots is the antialiasing of two letters of the
+header title (a 22×8px box), because the title is now two inline runs.
 
 **Phone shell (MOBILE-01), below 768px, supported down to 320px.** The binding
 box here IS the viewport: what changes is the shell itself, so the query is
@@ -1073,10 +1076,12 @@ review. These were recorded and deliberately left in the tree.
 * ~~**`openMenu()` hidden-width measurement.**~~ Fixed by F-7, which had to
   measure the same opener for the vertical axis anyway.
 * ~~**Mobile shell / C5.**~~ Fixed by MOBILE-01: below 768px the sidebar is a
-  drawer and the content takes the whole width (§2.7, Phone shell). The
-  Playwright baselines rendered below 768 (`form_responsive_640`,
-  `form_responsive_720`, `form_responsive_wide_720`) predate it and must be
-  re-approved with the harness (§5.1); MOBILE-01 did not run it.
+  drawer and the content takes the whole width (§2.7, Phone shell). Its effect
+  on the catalogue was measured (RELEASE-CANDIDATE-01, 2026-11-19) by
+  capturing it at `fffee38` and `790467f`: the three shots below 768
+  (`form_responsive_640`, `form_responsive_720`, `form_responsive_wide_720`)
+  change to the phone shell; every other shot changes only in the title box
+  above. No baseline was re-approved: see Harness below.
 * ~~**Residual narrow-form geometry below the supported floor.**~~ Between the
   720 stacking breakpoint and 768 the `--gutter-wide` surfaces were squeezed
   far enough that field cards could exceed the form box. Under the phone shell
@@ -1086,6 +1091,21 @@ review. These were recorded and deliberately left in the tree.
 
 **Harness**
 
+* **The baselines are stale since August and await a decision to re-approve
+  the catalogue.** From 2026-08-21 (prod-1 made `turmas.ano_inicio` and
+  `semestre_inicio` required) `tools/seed_demo_data.py` could not seed the
+  harness database, so the gate could not run and later approved interface
+  work was never re-approved. With the seed fixed (RELEASE-CANDIDATE-01),
+  all 85 captured shots already differ from their 2026-08-14 baselines before
+  MOBILE-01: for example the "Backup de dados" icon, course names shown as
+  formatted text, list row borders and new version-form fields. Re-approving a
+  shot would accept all of that at once, so none was re-approved; doing so is
+  the owner's call (`python -m tools.visual.harness`, then review every shot).
+  Three baselines have no shot any more (`page_admin_catalogo_versoes`,
+  `page_admin_mapeamento_legado`, `page_admin_normas_atividade`).
+* A shot can be disturbed by the previous one: one full run captured
+  `page_admin_arquivos` 25px taller, with the list's floating action bar shown
+  below the page; it did not recur in four reruns.
 * `full_page=True` cannot reach below `.app-main`'s internal fold (§5.1), so
   content below the first viewport is unpinned on every shot except
   `toolbar_acesso_768`.

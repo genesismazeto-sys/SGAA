@@ -46,8 +46,8 @@ def seed():
                 nome_turma = f"{cod}-T01"
                 conn.execute(
                     """
-                    INSERT INTO turmas (nome, status, numero, curso_id, codigo)
-                    VALUES (?, 'Ativa', 1, ?, ?)
+                    INSERT INTO turmas (nome, status, numero, curso_id, codigo, ano_inicio, semestre_inicio)
+                    VALUES (?, 'Ativa', 1, ?, ?, 2025, 1)
                     """,
                     (nome_turma, cid, nome_turma),
                 )
