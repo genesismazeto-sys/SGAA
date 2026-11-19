@@ -291,6 +291,12 @@ CATALOG_LEDGER: tuple[tuple[str, int], ...] = (
         "aplicada.' (msg_8610ce6bbe0e7ae4). 4 additions, 0 retirements",
         4,
     ),
+    (
+        "UI-B40 a closed request reads as Indeferida: the student list no "
+        "longer shows 'Encerrada' (msg_621d09d9caa3cddc). 0 additions, "
+        "1 retirement",
+        -1,
+    ),
 )
 
 # Everything before the UT-MX3 term is MX3's exact parent state. Anchored on
@@ -340,9 +346,9 @@ PARENT_CATALOG_KEYS_SHA256 = (
 # with its one success message, and the R3 review's CSV warning and policy refusal, to 588; the rereview's
 # uncertain-restore warning, to 589; RECT1 (three additions, one retirement),
 # to 591; RECL1 (two additions, one retirement), to 592; UXA1 (two additions),
-# to 594; TPL1 (four additions), to 598.
+# to 594; TPL1 (four additions), to 598; UI-B40 (one retirement), to 597.
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "821dc8e9a7154226fb885d6420238739124df6ac1072fae8a967e89773c05ca3"
+    "8f9b272c5de08bb4beeea8471a6d86c242a4a86930654e7d06cc04fdb5339ab6"
 )
 
 # Named post-MX3 key sets.  Suites that reconstruct UT-MX3's parent state have
@@ -991,10 +997,27 @@ TPL1_DOCUMENT_TEMPLATE_KEYS = frozenset(
 def catalog_keys_before_document_templates(keys) -> set[str]:
     """Undo the TPL1 term: drop its four keys (it retired none).
 
-    TPL1 is the newest term, so a reconstruction walks back through this
-    first, then UXA1, RECL1, RECT1 and every older term.
+    A reconstruction walks back through UI-B40 first, then this, then UXA1,
+    RECL1, RECT1 and every older term.
     """
     return set(keys) - set(TPL1_DOCUMENT_TEMPLATE_KEYS)
+
+
+# UI-B40 a closed request reads as Indeferida (net -1).
+UIB40_STATUS_DISPLAY_RETIRED_KEYS = frozenset(
+    {
+        "msg_621d09d9caa3cddc",  # Encerrada
+    }
+)
+
+
+def catalog_keys_before_status_display(keys) -> set[str]:
+    """Undo the UI-B40 term: put the retired 'Encerrada' label back.
+
+    UI-B40 is the newest term, so a reconstruction walks back through this
+    first, then TPL1, UXA1 and every older term.
+    """
+    return set(keys) | set(UIB40_STATUS_DISPLAY_RETIRED_KEYS)
 
 
 def catalog_keys_before_s3a_direct_documents(keys) -> set[str]:

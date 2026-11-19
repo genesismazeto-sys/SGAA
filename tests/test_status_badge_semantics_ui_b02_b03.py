@@ -316,6 +316,8 @@ def test_d6_status_pills_carry_no_second_colour_vocabulary():
 # ---------------------------------------------------------------------------
 
 
+#: Stored status -> the tone class of its pill. The pill text is
+#: ``status_label``: since UI-B40 a stored Encerrada reads Indeferida.
 EXPECTED_REQUEST_PILLS = {
     "Pendente": "status-caution",
     "Devolvida": "status-caution",
@@ -343,9 +345,11 @@ def test_e1_admin_list_renders_the_shared_tone(tmp_path, status):
 
         html = client.get("/admin/requisicoes").get_data(as_text=True)
         pills = _pills(html)
-        assert pills.get(status) == EXPECTED_REQUEST_PILLS[status], (
-            f"admin list rendered {status!r} as {pills.get(status)!r}"
+        label = status_label("requisicao", status)
+        assert pills.get(label) == EXPECTED_REQUEST_PILLS[status], (
+            f"admin list rendered {status!r} as {pills.get(label)!r}"
         )
+        assert "Encerrada" not in pills
 
 
 @pytest.mark.parametrize("status", sorted(EXPECTED_REQUEST_PILLS))
@@ -359,10 +363,12 @@ def test_e2_aluno_list_renders_the_same_tone_as_the_admin_list(tmp_path, status)
         login_student(client)
         html = client.get("/aluno/requisicoes").get_data(as_text=True)
         pills = _pills(html)
-        assert pills.get(status) == EXPECTED_REQUEST_PILLS[status], (
-            f"aluno list rendered {status!r} as {pills.get(status)!r}; the same "
+        label = status_label("requisicao", status)
+        assert pills.get(label) == EXPECTED_REQUEST_PILLS[status], (
+            f"aluno list rendered {status!r} as {pills.get(label)!r}; the same "
             "domain status must take the same tone on every surface"
         )
+        assert "Encerrada" not in pills
 
 
 def test_e3_partial_approval_is_not_an_unknown_status_on_the_aluno_list(tmp_path):

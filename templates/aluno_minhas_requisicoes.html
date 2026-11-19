@@ -316,12 +316,11 @@
               <span class="badge status-badge status-pill status-{{ tone }}">{{ user_message("Deferida") }}</span>
             {% elif st in ['deferida parcialmente','deferido parcialmente','parcialmente deferida','parcialmente deferido','partially approved'] %}
               <span class="badge status-badge status-pill status-{{ tone }}">{{ status_label('requisicao', r.status) }}</span>
-            {% elif st in ['indeferido','indeferida','rejeitada','rejeitado'] %}
+            {% elif st in ['indeferido','indeferida','rejeitada','rejeitado','encerrada','encerrado','closed'] %}
+              {#- UI-B40: a closed request reads as Indeferida (status_presentation.REQUEST_STATUS_DISPLAY). -#}
               <span class="badge status-badge status-pill status-{{ tone }}">{{ user_message("Indeferida") }}</span>
             {% elif st in ['devolvida','devolvido'] %}
               <span class="badge status-badge status-pill status-{{ tone }}">{{ user_message("Devolvida") }}</span>
-            {% elif st in ['encerrada','encerrado','closed'] %}
-              <span class="badge status-badge status-pill status-{{ tone }}">{{ user_message("Encerrada") }}</span>
             {% else %}
               <span class="badge status-badge status-pill status-{{ tone }}">{{ r.status or '-' }}</span>
             {% endif %}

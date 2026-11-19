@@ -79,6 +79,7 @@ from app.requisition_policy import (
     open_return_window,
 )
 from app.settings import get_return_response_days
+from app.status_presentation import DOMAIN_REQUISICAO, request_statuses_shown_as, status_label
 from app.student_hour_progress import AxisProgress, read_student_hour_progress
 from app.student_request_edit import (
     StudentEditConflict,
@@ -749,7 +750,7 @@ def aluno_dashboard():
 
     corrigiveis = len(corrigiveis_lista)
     deferidas = sum(1 for req in requisicoes if req["status"] in ("Deferida", "Deferida Parcialmente"))
-    indeferidas = sum(1 for req in requisicoes if req["status"] == "Indeferida")
+    indeferidas = sum(1 for req in requisicoes if req["status"] in request_statuses_shown_as("Indeferida"))
     horas_deferidas_total = sum(req["horas_aprovadas"] for req in requisicoes if req["status"] in ("Deferida", "Deferida Parcialmente"))
     aprov_pct = (deferidas / total_reqs * 100.0) if total_reqs else 0.0
     pend_pct = (pendentes / total_reqs * 100.0) if total_reqs else 0.0
@@ -1429,9 +1430,14 @@ def aluno_minhas_requisicoes():
     params: list[Any] = [aluno_id]
     where_parts: list[str] = []
     if status_filters:
-        placeholders = ", ".join("?" for _ in status_filters)
+        # The options are the labels users see (UI-B40): Indeferida also
+        # selects the closed requests shown under it.
+        stored_statuses = list(dict.fromkeys(
+            stored for value in status_filters for stored in request_statuses_shown_as(value)
+        ))
+        placeholders = ", ".join("?" for _ in stored_statuses)
         where_parts.append(f"COALESCE(r.status, '') IN ({placeholders})")
-        params.extend(status_filters)
+        params.extend(stored_statuses)
     if data_evento_min:
         where_parts.append(date_compare(conn, "r.data_evento", ">="))
         params.append(data_evento_min)
@@ -1552,23 +1558,10 @@ def aluno_minhas_requisicoes():
     tipos_disponiveis = sorted({row.tipo_atividade for row in filter_history if row.tipo_atividade}, key=ptbr_text_sort_key)
     grupos_disponiveis = sorted({row.grupo for row in filter_history if row.grupo}, key=ptbr_text_sort_key)
     atividades_disponiveis = sorted({row.nome for row in filter_history if row.nome}, key=ptbr_text_sort_key)
+    status_order = ["Pendente", "Deferida", "Deferida Parcialmente", "Indeferida", "Devolvida"]
     status_disponiveis = sorted(
-        {row.status for row in filter_history if row.status},
-        key=lambda value: [
-            "Pendente",
-            "Deferida",
-            "Deferida Parcialmente",
-            "Indeferida",
-            "Devolvida",
-            "Encerrada",
-        ].index(value) if value in {
-            "Pendente",
-            "Deferida",
-            "Deferida Parcialmente",
-            "Indeferida",
-            "Devolvida",
-            "Encerrada",
-        } else 999,
+        {status_label(DOMAIN_REQUISICAO, row.status) for row in filter_history if row.status},
+        key=lambda value: status_order.index(value) if value in status_order else 999,
     )
 
     filter_schema = [

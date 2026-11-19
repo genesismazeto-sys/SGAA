@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 
+from app.status_presentation import DOMAIN_REQUISICAO, status_label
 from app.text import human_text_key
 from app.versioning.snapshots import (
     SnapshotProcessingAuthority,
@@ -128,7 +129,8 @@ def filter_historical_request_rows(rows: Iterable[object], *, conn, tipo_filters
         if tipos and history.tipo_atividade not in tipos: continue
         if grupos and history.grupo not in grupos: continue
         if atividades and history.nome not in atividades: continue
-        values = [history.nome, history.tipo_atividade, history.grupo, history.status]
+        # The status as users see it (UI-B40): a closed request is found as Indeferida.
+        values = [history.nome, history.tipo_atividade, history.grupo, status_label(DOMAIN_REQUISICAO, history.status)]
         if extra_search_values: values.extend(extra_search_values(row))
         if needle and not any(needle in human_text_key(v) for v in values): continue
         selected.append((row, history))

@@ -12,7 +12,7 @@
   <div class="help" style="margin-bottom:8px;">
     Atividade: <strong>{{ requisicao.atividade_nome }}</strong> &bull;
     Aluno: <strong>{{ requisicao.aluno_nome or '-' }}</strong> &bull;
-    Status atual: <strong>{{ requisicao.status }}</strong>
+    Status atual: <strong>{{ status_label('requisicao', requisicao.status) }}</strong>
   </div>
 
   {% if anexos and anexos|length %}

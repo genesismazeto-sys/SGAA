@@ -63,7 +63,8 @@ DOMAIN_ACESSO = "acesso"
 #       A denial and an administrative closure. Same category -- the request
 #       is over and no hours were awarded -- and the admin UI already groups
 #       them (the "Encerrar" action carries `btn-indeferir` and the same
-#       circle-x icon). The distinction is carried by the pill text.
+#       circle-x icon). Users are shown both as Indeferida
+#       (REQUEST_STATUS_DISPLAY below).
 #       -> negative.
 #
 REQUEST_STATUS_TONES: dict[str, str] = {
@@ -73,6 +74,15 @@ REQUEST_STATUS_TONES: dict[str, str] = {
     "Deferida Parcialmente": "info",
     "Indeferida": "negative",
     "Encerrada": "negative",
+}
+
+#: What users are shown for a canonical status, where it differs (UI-B40): an
+#: administrative closure reads as a denial on every surface. Presentation
+#: only -- the stored value, the rules that read it (the Encerrar action, the
+#: e-mail rules, the refusal to return or reclassify a closed request) and the
+#: history are unchanged.
+REQUEST_STATUS_DISPLAY: dict[str, str] = {
+    "Encerrada": "Indeferida",
 }
 
 #: Lowercased spellings accepted for each canonical status. These preserve the
@@ -277,13 +287,31 @@ def deadline_tone(remaining_days, total_days) -> str | None:
 
 
 def status_label(domain: str, status) -> str:
-    """Return the canonical display label, falling back to the raw value.
+    """Return the label users are shown, falling back to the raw value.
 
-    An unrecognised non-empty value is shown verbatim rather than hidden --
-    the same thing both list templates already did.
+    A recognised status shows its canonical name, except a request status in
+    :data:`REQUEST_STATUS_DISPLAY`. An unrecognised non-empty value is shown
+    verbatim rather than hidden -- the same thing both list templates already
+    did.
     """
     canonical = canonical_status(domain, status)
     if canonical is not None:
+        if domain == DOMAIN_REQUISICAO:
+            return REQUEST_STATUS_DISPLAY.get(canonical, canonical)
         return canonical
     raw = str(status or "").strip()
     return raw or "-"
+
+
+def request_statuses_shown_as(label) -> tuple[str, ...]:
+    """The canonical request statuses users see as ``label``, in ladder order.
+
+    A filter or a count by a shown label reads all of them: ``Indeferida``
+    covers ``Encerrada`` too. A label no status is shown as is returned as
+    the only value, so an older link filtering by a stored value still works.
+    """
+    shown = tuple(
+        status for status in REQUEST_STATUS_TONES
+        if REQUEST_STATUS_DISPLAY.get(status, status) == label
+    )
+    return shown or (str(label),)

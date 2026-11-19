@@ -9,7 +9,7 @@
     <div><span class="help">Atividade</span><div>{{ requisicao.AtividadeNome }}</div></div>
     <div><span class="help">Data do Evento</span><div>{{ requisicao.data_evento }}</div></div>
     <div><span class="help">Horas Solicitadas</span><div>{{ requisicao.horas_solicitadas }}</div></div>
-    <div><span class="help">Status</span><div>{{ requisicao.status }}</div></div>
+    <div><span class="help">Status</span><div>{{ status_label('requisicao', requisicao.status) }}</div></div>
     <div><span class="help">Horas Deferidas</span><div>{{ requisicao.horas_deferidas or '-' }}</div></div>
     <div><span class="help">Observação</span><div>{{ requisicao.observacao or '-' }}</div></div>
     {% if anexos and anexos|length %}

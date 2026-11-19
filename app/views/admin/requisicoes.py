@@ -458,12 +458,15 @@ def admin_requisicoes():
                 status_clauses.append("LOWER(COALESCE(r.status, '')) IN ('deferido', 'deferida', 'aprovado', 'aprovada', 'approved')")
             elif status_filter == 'deferida_parcialmente':
                 status_clauses.append("LOWER(COALESCE(r.status, '')) IN ('deferida parcialmente', 'deferido parcialmente', 'parcialmente deferida', 'partially approved')")
-            elif status_filter == 'indeferida':
-                status_clauses.append("LOWER(COALESCE(r.status, '')) IN ('indeferido', 'indeferida', 'rejeitado', 'rejeitada')")
+            elif status_filter in ('indeferida', 'encerrada'):
+                # UI-B40: Indeferida is what users see for both outcomes (an
+                # older link may still ask for encerrada).
+                status_clauses.append(
+                    "LOWER(COALESCE(r.status, '')) IN "
+                    "('indeferido', 'indeferida', 'rejeitado', 'rejeitada', 'encerrado', 'encerrada', 'closed')"
+                )
             elif status_filter == 'devolvida':
                 status_clauses.append("LOWER(COALESCE(r.status, '')) IN ('devolvido', 'devolvida')")
-            elif status_filter == 'encerrada':
-                status_clauses.append("LOWER(COALESCE(r.status, '')) IN ('encerrado', 'encerrada', 'closed')")
             else:
                 status_clauses.append("LOWER(COALESCE(r.status, '')) = ?")
                 params.append(status_filter)
@@ -684,7 +687,6 @@ def admin_requisicoes():
                 {"value": "deferida_parcialmente", "label": "Deferida Parcialmente"},
                 {"value": "indeferida", "label": "Indeferida"},
                 {"value": "devolvida", "label": "Devolvida"},
-                {"value": "encerrada", "label": "Encerrada"},
             ],
         },
     ]

@@ -170,8 +170,11 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   directory; a report `descricao` is bounded only by the request size.
 - Agreed outside MP-1…MP-4, no recorded execution: reconcile/import the official
   deferred-hours spreadsheet.
-- Owner-requested, not started: remove the user-visible distinction between Indeferida and
-  Encerrada (`docs/backlog/UI_ACCEPTANCE_BACKLOG.md`, UI-B40).
+- Next GF1 release candidate (owner hold, 2026-11-19: not deployed, no migration): the
+  development-branch head, carrying the COMPROVANTES-01 correction (required proofs are short
+  names; the older regulation sentence is never listed) and UI-B40 (a closed request reads
+  Indeferida; `docs/backlog/UI_ACCEPTANCE_BACKLOG.md`). Schema stays v19, so its GF1 has no
+  upgrade step. PROD keeps the v19 artifact of `4087eaf` until then.
 
 ## Environment facts
 
