@@ -187,6 +187,10 @@ SOURCE_TABLE_POLICIES = {
     # meaningless after a cutover, so the target starts with both empty.
     "auth_throttle_events": TablePolicy(OMIT_EPHEMERAL, (OMITTED_EPHEMERAL,)),
     "admin_import_previews": TablePolicy(OMIT_EPHEMERAL, (OMITTED_EPHEMERAL,)),
+    # v19 document templates: the verified DOCX bytes travel with their row
+    # (like the v13 images) and every association with its version.
+    "modelo_documento_arquivos": _EXACT,
+    "atividade_versao_modelos": _EXACT,
     SQLITE_SEQUENCE_TABLE: TablePolicy(OMIT_EPHEMERAL, (OMITTED_SQLITE_INTERNAL,)),
 }
 
@@ -1065,6 +1069,22 @@ def _image_domain_checks():
 
 
 DOMAIN_CHECKS.update(_image_domain_checks())
+
+#: v19 document templates (counts that must be zero): content length and
+#: digest against the recorded metadata, and the association lifecycle.
+DOMAIN_CHECKS.update({
+    "modelo_documento_arquivos_content_mismatch": (
+        "SELECT count(*) FROM modelo_documento_arquivos WHERE octet_length(conteudo) <> size_bytes "
+        "OR encode(sha256(conteudo), 'hex') <> sha256"
+    ),
+    "atividade_versao_modelos_lifecycle_invalid": (
+        "SELECT count(*) FROM atividade_versao_modelos WHERE (status = 'ativo') <> (encerrado_em IS NULL)"
+    ),
+    "atividade_versao_modelos_slot_reused": (
+        "SELECT count(*) FROM (SELECT atividade_versao_id, ordem FROM atividade_versao_modelos "
+        "WHERE status = 'ativo' GROUP BY atividade_versao_id, ordem HAVING count(*) > 1) reused"
+    ),
+})
 
 #: v14 canonical-custody invariants (counts that must be zero).  They restate
 #: the table CHECKs as an independent post-load / backup proof, plus the

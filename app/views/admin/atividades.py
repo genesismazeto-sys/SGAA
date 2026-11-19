@@ -18,6 +18,10 @@ from flask import (
 )
 
 from app import import_previews
+from app.activity_document_templates import (
+    copy_active_templates,
+    list_version_templates,
+)
 from app.activity_documentation import (
     RequiredDocumentsInvalid,
     documentos_json_for_write,
@@ -70,6 +74,12 @@ from app.uploads import ALLOWED_CSV, save_upload
 from app.sql_dialect import ascii_nocase_order, human_text_order
 from app.text import normalize_header
 from app.views.admin import LegacyRouteSpec, configure_legacy_routes
+from app.views.admin.activity_templates import (
+    admin_catalogo_adicionar_modelo,
+    admin_catalogo_atualizar_modelo,
+    admin_catalogo_baixar_modelo,
+    admin_catalogo_retirar_modelo,
+)
 from app.views.admin.activity_version_delete import admin_catalogo_excluir_versao
 from app.web.filters import (
     append_conditions_sql,
@@ -1291,6 +1301,11 @@ def admin_catalogo_nova_versao(base_id: int):
             ch_por_evento_enabled=ch_por_evento_enabled,
             observacoes=values["observacoes"],
             documentos_exigidos=values.get("documentos_exigidos") or [],
+            # The source's templates: the new version starts with a copy of them.
+            modelos=list_version_templates(conn, source["id"]) if source is not None else [],
+            modelos_versao_id=source["id"] if source is not None else None,
+            modelos_editaveis=False,
+            modelos_herdados=source is not None,
             versao_anterior_id=values["versao_anterior_id"],
             is_clone_create=True,
             versao_anterior_label=versao_anterior_label,
@@ -1442,6 +1457,10 @@ def admin_catalogo_nova_versao(base_id: int):
                         None if cross_axis else versao_anterior_id,
                     ),
                 ).fetchone()[0]
+                if source is not None:
+                    copy_active_templates(
+                        conn, from_versao_id=int(source["id"]), to_versao_id=int(new_version_id)
+                    )
                 if cross_axis:
                     conn.execute(
                         """
@@ -1540,7 +1559,8 @@ def admin_catalogo_editar_versao(
     view_mode = force_readonly or (request.args.get("view") or "").strip().lower() in {
         "1", "true", "yes", "on",
     }
-    readonly = view_mode or not can_activity_version_be_mutated_in_place(conn, versao_id)
+    frozen = not can_activity_version_be_mutated_in_place(conn, versao_id)
+    readonly = view_mode or frozen
 
     versoes_anteriores = [
         v
@@ -1599,6 +1619,10 @@ def admin_catalogo_editar_versao(
             ch_por_evento_enabled=ch_por_evento_enabled,
             observacoes=values["observacoes"],
             documentos_exigidos=values.get("documentos_exigidos") or [],
+            modelos=list_version_templates(conn, versao_id, include_ended=True),
+            modelos_versao_id=versao_id,
+            modelos_editaveis=not (readonly or force_readonly),
+            modelos_congelados=frozen,
             versao_anterior_id=values["versao_anterior_id"],
             form_action=form_action,
             form_title=form_title,
@@ -2187,6 +2211,30 @@ LEGACY_ROUTE_SPECS = configure_legacy_routes(
             'admin_catalogo_substituir_versao',
             admin_catalogo_substituir_versao,
             ('POST',),
+        ),
+        LegacyRouteSpec(
+            '/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/modelos',
+            'admin_catalogo_adicionar_modelo',
+            admin_catalogo_adicionar_modelo,
+            ('POST',),
+        ),
+        LegacyRouteSpec(
+            '/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/modelos/<int:modelo_id>/atualizar',
+            'admin_catalogo_atualizar_modelo',
+            admin_catalogo_atualizar_modelo,
+            ('POST',),
+        ),
+        LegacyRouteSpec(
+            '/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/modelos/<int:modelo_id>/retirar',
+            'admin_catalogo_retirar_modelo',
+            admin_catalogo_retirar_modelo,
+            ('POST',),
+        ),
+        LegacyRouteSpec(
+            '/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/modelos/<int:modelo_id>/baixar',
+            'admin_catalogo_baixar_modelo',
+            admin_catalogo_baixar_modelo,
+            ('GET',),
         ),
     ),
 )

@@ -29,6 +29,7 @@ from app.request_reclassification import (
     prepare_reclassification,
 )
 from app.versioning.snapshots import SnapshotProcessingAuthority, read_requisicao_snapshot_for_processing
+from tests.prod1_v19_support import drop_pg_v19_objects
 from tests.storage_mp1_pg_support import PG_URL, Registry, adapter, raw_connection
 from tests.storage_mp1_support import REQUEST_ID, STUDENT_ID
 
@@ -269,9 +270,11 @@ def test_a_decision_committed_while_a_correction_waits_wins(database, conn):
 
 
 def _as_frozen_v16(url):
-    """Turn a provisioned v17 database into the frozen v16 contract: the only three differences."""
+    """Turn a provisioned head into the frozen v16 contract: without the v19 tables, the
+    v18 CHECK and the v17 trigger body."""
     raw = raw_connection(url)
     try:
+        drop_pg_v19_objects(raw)
         definition = pg_schema.PG_TRIGGER_FUNCTIONS["fn_requisicoes_snapshot_immutable"].strip()
         v16 = definition.replace(pg_schema._function_body(definition), pg_schema._PG_V16_SNAPSHOT_FUNCTION_BODY)
         raw.execute(v16.replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION", 1))
@@ -307,9 +310,9 @@ def test_the_upgrade_moves_the_frozen_v16_contract_to_v17_once(database, conn):
             apply_reclassification(conn, prepared)
 
     result = pg_schema.upgrade_database(database)
-    assert (result["status"], result["from_version"], result["schema_version"]) == ("upgraded", 16, 18)
-    assert _meta(database) == (18, pg_schema.PG_CONTRACT_SHA256)
-    assert pg_schema.validate_database(database)["schema_version"] == 18
+    assert (result["status"], result["from_version"], result["schema_version"]) == ("upgraded", 16, 19)
+    assert _meta(database) == (19, pg_schema.PG_CONTRACT_SHA256)
+    assert pg_schema.validate_database(database)["schema_version"] == 19
     assert pg_schema.upgrade_database(database)["status"] == "already_current"
     # The rows are untouched and the new rule is live.
     with write_transaction(conn):

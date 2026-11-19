@@ -9,7 +9,13 @@ from app.prod1_storage_v14 import _columns, _data_digest, _sequences, _table_nam
 
 
 def migrate_prod1_v17_to_v18(conn):
-    from app.prod1_schema import Prod1SchemaError, _validate_prod1_v17_schema, validate_prod1_schema
+    from app.prod1_schema import (
+        BASELINE_MARKER,
+        SCHEMA_EPOCH,
+        Prod1SchemaError,
+        _validate_prod1_v17_schema,
+        _validate_prod1_v18_schema,
+    )
 
     if conn.in_transaction:
         raise Prod1SchemaError("prod-1/v18 migration requires a clean connection")
@@ -30,10 +36,13 @@ def migrate_prod1_v17_to_v18(conn):
             raise Prod1SchemaError("prod-1/v18 migration changed existing rows or counters")
         if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
             raise Prod1SchemaError("prod-1/v18 integrity check failed")
-        validate_prod1_schema(conn)
+        _validate_prod1_v18_schema(conn)
         conn.execute("COMMIT")
     except Exception:
         if conn.in_transaction:
             conn.execute("ROLLBACK")
         raise
-    return {**validate_prod1_schema(conn), "return_notifications": "enabled", "backfill": "none"}
+    _validate_prod1_v18_schema(conn)
+    status = {"schema_epoch": SCHEMA_EPOCH, "schema_version": 18,
+              "baseline_marker": BASELINE_MARKER, "table_count": len(_table_names(conn))}
+    return {**status, "return_notifications": "enabled", "backfill": "none"}

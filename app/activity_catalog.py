@@ -627,6 +627,11 @@ def apply_activity_version_semantic_changes(
         f"INSERT INTO atividade_versao ({','.join(columns)}) VALUES ({placeholders}) RETURNING id",
         values,
     ).fetchone()[0]
+    # The successor is the same documentation too: its DOCX templates carry over.
+    # (Imported here: the template owner itself reads this module's freeze policy.)
+    from app.activity_document_templates import copy_active_templates
+
+    copy_active_templates(conn, from_versao_id=int(versao_id), to_versao_id=int(successor_id))
     return {
         "mode": "successor",
         "version_id": int(successor_id),

@@ -36,6 +36,8 @@ import pytest
 
 from app import pg_migrate_from_sqlite as pathb
 from app import pg_schema
+from app.prod1_document_templates_ddl import DOCX_MIME_TYPE
+from tests.docx_test_support import make_docx
 
 PG_URL = os.environ.get("SGAA_PG_TEST_URL", "").strip()
 REHEARSAL_SOURCE = os.environ.get("SGAA_PATHB_SOURCE", "").strip()
@@ -64,6 +66,15 @@ IMAGE_ROWS = {
     "alunos_foto": ("aluno_id", 11, "image/jpeg", b"\xff\xd8\xff" + BLOB_MARKER * 4 + b"\x00\xff" * 200),
     "reportes_captura": ("reporte_id", 4, "image/webp", b"RIFF\x00\x00\x00\x00WEBP" + BLOB_MARKER + bytes(2048)),
 }
+
+#: v19 document template: one stored DOCX shared by a replaced and an active association.
+TEMPLATE_CONTENT = make_docx("Modelo sintético")
+TEMPLATE_ROWS = (
+    dict(id=4, atividade_versao_id=45, arquivo_id=6, titulo="Declaração", nome_arquivo="declaracao.docx", ordem=1,
+         status="substituido", criado_em=TS, criado_por_usuario_id=3, encerrado_em=TS, encerrado_por_usuario_id=3),
+    dict(id=9, atividade_versao_id=45, arquivo_id=6, titulo="Declaração 2026", nome_arquivo="declaracao.docx",
+         ordem=1, status="ativo", criado_em=TS, criado_por_usuario_id=3),
+)
 
 #: Synthetic ``sqlite_sequence`` high-waters, all above the rows' max(id).
 HIGH_WATER = {
@@ -203,6 +214,10 @@ def build_synthetic_source(directory: Path, *, tentativas=1, extra_sql=()) -> tu
           sha256=_sha256(content), width=64, height=48, conteudo=content, atualizado_em=TS)
     for row in STORAGE_OBJECTS:
         i(conn, "storage_objects", **row)
+    i(conn, "modelo_documento_arquivos", id=6, sha256=_sha256(TEMPLATE_CONTENT), mime_type=DOCX_MIME_TYPE,
+      size_bytes=len(TEMPLATE_CONTENT), conteudo=TEMPLATE_CONTENT, criado_em=TS)
+    for row in TEMPLATE_ROWS:
+        i(conn, "atividade_versao_modelos", **row)
     conn.execute("UPDATE requisicao_arquivos SET storage_object_id = 9 WHERE id = 6")
     # Terminal intent history (consumed / expired) is ephemeral: never copied.
     i(conn, "storage_upload_intents", id="1" * 32, actor_user_id=7, purpose="comprovante",
@@ -725,6 +740,11 @@ def test_synthetic_migration_preserves_ids_lineage_and_high_water(tmp_path, targ
         ).fetchall()
         assert len(row) == 1 and tuple(row[0][:4]) == (owner_id, mime_type, len(content), _sha256(content)), table
         assert bytes(row[0][4]) == content, table
+    # v19 template bytes and both associations (replaced and active) arrive exactly.
+    assert bytes(observer.execute("SELECT conteudo FROM modelo_documento_arquivos WHERE id = 6").fetchone()[0]) ==         TEMPLATE_CONTENT
+    assert observer.execute(
+        "SELECT id, status, ordem FROM atividade_versao_modelos ORDER BY id"
+    ).fetchall() == [(4, "substituido", 1), (9, "ativo", 1)]
     # Every exact table equals the source, row by row.
     source_conn = pathb.open_source_readonly(source)
     try:

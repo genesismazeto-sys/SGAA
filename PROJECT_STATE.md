@@ -16,12 +16,14 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
 
 - Flask; composition root `app/__init__.py::create_app`; `main.py` is a frozen
   compatibility facade. Structural refactor complete.
-- Logical schema `prod-1` v18 in the repository on SQLite and PostgreSQL (v17 permits activity
-  correction; v18 expands the notification decision CHECK to include Devolvida, with no backfill).
-  The processing repairs and controlled recovery are documented in `docs/request-processing-corrections.md`.
+- Logical schema `prod-1` v19 in the repository on SQLite and PostgreSQL (v17 permits activity
+  correction; v18 expands the notification decision CHECK to include Devolvida, with no backfill;
+  v19 adds the DOCX fill-in templates of activity versions, purely additive).
+  The processing repairs and controlled recovery are documented in `docs/request-processing-corrections.md`;
+  the activity documentation guidance and templates in `docs/activity-document-guidance.md`.
   PROD PostgreSQL is v16 until a separately authorized gate runs `python -m app.pg_schema
-  upgrade`; governed tooling validates the exact version, so the daily backup worktree is repinned
-  in the same session.
+  upgrade` (v16, v17 or v18 -> v19); governed tooling validates the exact version, so the daily
+  backup worktree is repinned in the same session.
 - PostgreSQL schema authority, runtime dialect and transaction semantics are in
   place. The production database is hosted in Supabase PostgreSQL 17; Path-B
   migration, governed Layer-2 backup/restore and the production cutover are recorded.
@@ -156,12 +158,18 @@ corrections of 2026-11-18 (identical on the untouched prior head; not fixed):
 - `tests/test_pg_readiness_unit5d_ptbr_portability.py`:
   `test_control_u5a_current_state_authority_untouched` and
   `test_control_u5a_guard_still_detects_an_undeclared_change` -- the baseline
-  version list now ends at v18, the guard expects it to end at v17;
+  version list now ends at v19, the guard expects it to end at v17;
 - `tests/test_pg_readiness_unit5f_untyped_null_query.py::test_production_sql_has_no_placeholder_is_null_predicate`
   -- `app/storage/copy_registry.py:108` `SELECT to_regclass(?) IS NOT NULL`;
 - `tests/test_status_badge_semantics_ui_b02_b03.py::test_b4_shared_tones_are_only_within_one_semantic_category`
   -- it expects the caution tone to hold only Pendente and Encerrada; Devolvida
   now shares it.
+
+Three real-PostgreSQL tests fail too, identically on the untouched prior head:
+`tests/test_storage_s2_real_pg.py::test_fresh_v14_authority_validates_and_is_empty`
+and `tests/test_storage_s3a_real_pg.py::test_pg_authority_is_v15` still pin head
+v16; `tests/test_mp2_scheduler_real_pg.py::test_overlapping_invocations_mirror_each_object_exactly_once`
+gets one HTTP 500 (`InternalError`) among overlapping mirror invocations.
 
 ## Roadmap
 

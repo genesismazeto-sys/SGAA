@@ -55,7 +55,7 @@ def test_prod1_v2_has_no_norma_schema_or_routes(tmp_path):
             assert not tables & REMOVED_SCHEMA_NAMES
             assert REMOVED_FIELDS.isdisjoint({row[1] for row in conn.execute("PRAGMA table_info(atividade_versao)")})
             assert "codigo_normativo_snapshot" not in {row[1] for row in conn.execute("PRAGMA table_info(requisicoes)")}
-            assert conn.execute("PRAGMA user_version").fetchone()[0] == 18
+            assert conn.execute("PRAGMA user_version").fetchone()[0] == 19
         assert env["client"].get("/admin/normas-atividade").status_code == 404
         assert env["client"].get("/admin/normas-atividade/nova").status_code == 404
 
@@ -306,8 +306,8 @@ def test_canonical_v1_migrates_through_v2_to_v3(tmp_path):
     from app.prod1_schema import bootstrap_prod1_schema
 
     result = bootstrap_prod1_schema(conn)
-    assert result["schema_version"] == 18
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 18
+    assert result["schema_version"] == 19
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 19
     assert _markers(conn) == [
         (1, "first_production_baseline", "prod-1"),
         (2, "remove_norma_domain", "prod-1"),
@@ -327,6 +327,7 @@ def test_canonical_v1_migrates_through_v2_to_v3(tmp_path):
         (16, "ephemeral_state", "prod-1"),
         (17, "request_reclassification", "prod-1"),
         (18, "return_notifications", "prod-1"),
+        (19, "document_templates", "prod-1"),
     ]
     assert not _table_names(conn) & REMOVED_SCHEMA_NAMES
     assert REMOVED_FIELDS.isdisjoint(_columns(conn, "atividade_versao"))

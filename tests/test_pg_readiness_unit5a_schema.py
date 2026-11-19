@@ -71,21 +71,25 @@ _CANONICAL_PARTIAL_UNIQUE_INDEXES = {
 }
 
 #: STORAGE S2 (v14) adds storage_objects, the only new identity table; v16 adds
-#: auth_throttle_events (admin_import_previews is keyed by its token digest).
-_IDENTITY_PK_COUNT = 23
+#: auth_throttle_events (admin_import_previews is keyed by its token digest);
+#: v19 adds modelo_documento_arquivos and atividade_versao_modelos.
+_IDENTITY_PK_COUNT = 25
 #: 30 application tables through v12; STORAGE S1 (v13) adds the three
 #: one-to-one image side tables, which have no identity column; STORAGE S2
 #: (v14) adds storage_objects, storage_upload_intents, storage_worker_status;
-#: v16 adds auth_throttle_events and admin_import_previews.
-_CANONICAL_APP_TABLE_COUNT = 38
+#: v16 adds auth_throttle_events and admin_import_previews; v19 adds
+#: modelo_documento_arquivos and atividade_versao_modelos.
+_CANONICAL_APP_TABLE_COUNT = 40
 #: v14: +2 storage_objects, +1 storage_upload_intents, +2 business
 #: storage_object_id partial uniques, +1 Drive file partial unique, +1
 #: cloud_accounts logical-identity (credential resolution) index; v16: +2
-#: auth_throttle_events (lookup, expiry), +1 admin_import_previews (expiry).
-_CANONICAL_EXPLICIT_INDEX_COUNT = 59
+#: auth_throttle_events (lookup, expiry), +1 admin_import_previews (expiry);
+#: v19: +1 atividade_versao_modelos (version, status, slot).
+_CANONICAL_EXPLICIT_INDEX_COUNT = 60
 #: v14: +4 storage-object exclusivity triggers, +1 intent transition trigger,
-#: +1 bound-Drive-account trigger.
-_CANONICAL_TRIGGER_COUNT = 17
+#: +1 bound-Drive-account trigger; v19: +1 template-content immutability,
+#: +1 template-association history.
+_CANONICAL_TRIGGER_COUNT = 19
 
 
 def _pg():
@@ -671,7 +675,7 @@ def test_sqlite_v12_authority_is_unchanged():
     conn = _canonical_sqlite()
     status = validate_prod1_schema(conn)
     assert status["schema_epoch"] == SCHEMA_EPOCH
-    assert status["schema_version"] == SCHEMA_VERSION == 18
+    assert status["schema_version"] == SCHEMA_VERSION == 19
     assert len(_sqlite_explicit_indexes(conn)) == _CANONICAL_EXPLICIT_INDEX_COUNT
     assert len(_sqlite_triggers(conn)) == _CANONICAL_TRIGGER_COUNT
     tables = {

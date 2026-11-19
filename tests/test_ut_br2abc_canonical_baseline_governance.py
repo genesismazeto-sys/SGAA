@@ -37,37 +37,37 @@ def test_catalog_ledger_arithmetic_is_the_only_source_of_the_canonical_count():
     assert governance.PARENT_CATALOG_COUNT == 548, (
         "UT-MX3's exact parent state is the ledger up to the UT-MX3 term"
     )
-    assert governance.CANONICAL_CATALOG_COUNT == 594
+    assert governance.CANONICAL_CATALOG_COUNT == 598
     assert governance.CATALOG_LEDGER[governance.MX3_LEDGER_INDEX][1] == 6, (
         "the UT-MX3 StudentMatrixError ownership delta is exactly +6"
     )
-    assert governance.CATALOG_LEDGER[-20][1] == 1, (
+    assert governance.CATALOG_LEDGER[-21][1] == 1, (
         "the TMA1 Turma-Matrix authority delta is exactly +1"
     )
-    assert governance.CATALOG_LEDGER[-19][1] == 3 == len(
+    assert governance.CATALOG_LEDGER[-20][1] == 3 == len(
         governance.CR1_CLOUD_CREDENTIAL_RECOVERY_KEYS
     ), (
         "the CR1 cloud-credential recovery delta is exactly +3, one term per "
         "declared key"
     )
-    assert governance.CATALOG_LEDGER[-18][1] == 22 == len(
+    assert governance.CATALOG_LEDGER[-19][1] == 22 == len(
         governance.REN1_REQUEST_EMAIL_KEYS
     ), (
         "the REN1 request e-mail notification delta is exactly +22, one term "
         "per declared key"
     )
-    assert governance.CATALOG_LEDGER[-17][1] == (
+    assert governance.CATALOG_LEDGER[-18][1] == (
         len(governance.PASSWORD_FOUNDATION_ADDED_KEYS)
         - len(governance.PASSWORD_FOUNDATION_RETIRED_KEYS)
     ) == 0
-    assert governance.CATALOG_LEDGER[-16][1] == (
+    assert governance.CATALOG_LEDGER[-17][1] == (
         len(governance.AR1_ACCESS_REPAIR_KEYS)
         - len(governance.AR1_ACCESS_REPAIR_RETIRED_KEYS)
     ) == 2, (
         "the AR1 Acesso repair delta is exactly +2: three additions against the "
         "retired raw-SQLite delete flash"
     )
-    assert governance.CATALOG_LEDGER[-15][1] == (
+    assert governance.CATALOG_LEDGER[-16][1] == (
         len(governance.RA1_ROOT_ADMIN_KEYS)
         - len(governance.RA1_ROOT_ADMIN_RETIRED_KEYS)
     ) == 5, (
@@ -76,7 +76,7 @@ def test_catalog_ledger_arithmetic_is_the_only_source_of_the_canonical_count():
         "break-glass path itself is invisible in the product, so it "
         "contributes no catalogued message"
     )
-    assert governance.CATALOG_LEDGER[-14][1] == (
+    assert governance.CATALOG_LEDGER[-15][1] == (
         len(governance.CP1_CREDENTIAL_PENDING_KEYS)
         - len(governance.CP1_CREDENTIAL_PENDING_RETIRED_KEYS)
     ) == -4, (
@@ -84,14 +84,14 @@ def test_catalog_ledger_arithmetic_is_the_only_source_of_the_canonical_count():
         "default-password switch takes its refusal flash and the three "
         "blank-password help texts that promised the shared default with it"
     )
-    assert governance.CATALOG_LEDGER[-13][1] == (
+    assert governance.CATALOG_LEDGER[-14][1] == (
         len(governance.UIB19_PHOTO_LABEL_KEYS)
         - len(governance.UIB19_PHOTO_LABEL_RETIRED_KEYS)
     ) == -1, (
         "the UI-B19 photo-label delta is exactly -1: the add-student 'Foto' "
         "row label was that literal's only consumer"
     )
-    assert governance.CATALOG_LEDGER[-12][1] == (
+    assert governance.CATALOG_LEDGER[-13][1] == (
         len(governance.UIC11_BACKUP_RESULT_KEYS)
         - len(governance.UIC11_BACKUP_RESULT_RETIRED_KEYS)
     ) == 0, (
@@ -99,28 +99,28 @@ def test_catalog_ledger_arithmetic_is_the_only_source_of_the_canonical_count():
         "replace the four that were derived from the legacy cloud-folder step "
         "and the external server alone"
     )
-    assert governance.CATALOG_LEDGER[-11][1] == (
+    assert governance.CATALOG_LEDGER[-12][1] == (
         len(governance.UIC14_ERROR_PAGES_KEYS)
         - len(governance.UIC14_ERROR_PAGES_RETIRED_KEYS)
     ) == 1, (
         "the UI-C14 error-pages delta is exactly +1: the 403 handler's minimal "
         "fallback, symmetric with the 404/500 fallbacks"
     )
-    assert governance.CATALOG_LEDGER[-10][1] == (
+    assert governance.CATALOG_LEDGER[-11][1] == (
         len(governance.UIC06_ALUNO_HEADER_KEYS)
         - len(governance.UIC06_ALUNO_HEADER_RETIRED_KEYS)
     ) == -1, (
         "the UI-C06 Aluno-header delta is exactly -1: the header Back replaces "
         "the bottom 'Voltar', which was that literal's only consumer"
     )
-    assert governance.CATALOG_LEDGER[-9][1] == (
+    assert governance.CATALOG_LEDGER[-10][1] == (
         len(governance.UIC13_BACKUP_LOCK_KEYS)
         - len(governance.UIC13_BACKUP_LOCK_RETIRED_KEYS)
     ) == 1, (
         "the UI-C13 backup-lock delta is exactly +1: one refusal shared by the "
         "manual backup and both restore routes"
     )
-    assert governance.CATALOG_LEDGER[-8][1] == (
+    assert governance.CATALOG_LEDGER[-9][1] == (
         len(governance.AVD1_VERSION_DELETE_KEYS)
         - len(governance.AVD1_VERSION_DELETE_RETIRED_KEYS)
     ) == -2, (
@@ -128,32 +128,32 @@ def test_catalog_ledger_arithmetic_is_the_only_source_of_the_canonical_count():
         "naming the real Requisição/Matriz dependency replaces the "
         "predecessor refusal and the two generic 'vinculada a' refusals"
     )
-    assert governance.CATALOG_LEDGER[-7][1] == (
+    assert governance.CATALOG_LEDGER[-8][1] == (
         -len(governance.U5B_RUNTIME_DIALECT_RETIRED_KEYS)
     ) == -1, (
         "the U5-B runtime-dialect delta is exactly -1: the unreachable "
         "atividade_versao.grupo classifier message retires"
     )
-    assert governance.CATALOG_LEDGER[-6][1] == (
+    assert governance.CATALOG_LEDGER[-7][1] == (
         len(governance.U5E_MAINTENANCE_BOUNDARY_KEYS)
         - len(governance.U5E_MAINTENANCE_BOUNDARY_RETIRED_KEYS)
     ) == 1, (
         "the U5-E maintenance-boundary delta is exactly +1: one refusal shared "
         "by every SQLite file backup/restore route under PostgreSQL"
     )
-    assert governance.CATALOG_LEDGER[-5][1] == (
+    assert governance.CATALOG_LEDGER[-6][1] == (
         len(governance.S3A_DIRECT_DOCUMENTS_KEYS)
         - len(governance.S3A_DIRECT_DOCUMENTS_RETIRED_KEYS)
     ) == -1, (
         "the STORAGE S3-A direct-documents delta is exactly -1: the request "
         "create / edit flows no longer reach Google Drive"
     )
-    assert governance.CATALOG_LEDGER[-4][1] == len(governance.A19_BACKUP_NOW_KEYS) == 9, (
+    assert governance.CATALOG_LEDGER[-5][1] == len(governance.A19_BACKUP_NOW_KEYS) == 9, (
         "the MP-3 A19 delta is exactly +9: the outcomes of 'Gerar backup agora', the restore "
         "success, the CSV warning, the unverifiable-cadence refusal and the uncertain-restore "
         "warning under PostgreSQL"
     )
-    assert governance.CATALOG_LEDGER[-3][1] == (
+    assert governance.CATALOG_LEDGER[-4][1] == (
         len(governance.RECT1_REQUEST_RECTIFICATION_KEYS)
         - len(governance.RECT1_REQUEST_RECTIFICATION_RETIRED_KEYS)
     ) == 2, (
@@ -161,16 +161,20 @@ def test_catalog_ledger_arithmetic_is_the_only_source_of_the_canonical_count():
         "justification, the resubmission confirmation and the deadline-neutral "
         "edit refusal replace the fixed 14-day refusal"
     )
-    assert governance.CATALOG_LEDGER[-2][1] == (
+    assert governance.CATALOG_LEDGER[-3][1] == (
         len(governance.RECL1_REQUEST_RECLASSIFICATION_KEYS)
         - len(governance.RECL1_REQUEST_RECLASSIFICATION_RETIRED_KEYS)
     ) == 1, (
         "the RECL1 delta is exactly +1: the refusal to change an editable "
         "request's activity retires; two changed-meanwhile refusals arrive"
     )
-    assert governance.CATALOG_LEDGER[-1][1] == len(governance.UXA1_REVOKED_CREDENTIAL_KEYS) == 2, (
+    assert governance.CATALOG_LEDGER[-2][1] == len(governance.UXA1_REVOKED_CREDENTIAL_KEYS) == 2, (
         "the UXA1 delta is exactly +2: the single-account and the batch "
         "refusal to set a password on a revoked access"
+    )
+    assert governance.CATALOG_LEDGER[-1][1] == len(governance.TPL1_DOCUMENT_TEMPLATE_KEYS) == 4, (
+        "the TPL1 delta is exactly +4: adding, replacing and withdrawing a "
+        "DOCX template, and the safe failure of any of them"
     )
     # Parent + every term from UT-MX3 onward reconstructs the canonical total.
     assert (
@@ -188,9 +192,10 @@ def test_derived_projections_agree_with_the_versioned_artifacts():
     # STORAGE S1 adds two GET rules with their own endpoints (images.*).
     # STORAGE S3-A: +2 POST routes (the direct request-document upload intents).
     # Access-mail batch: +1 POST rule and endpoint, with (acesso, full).
-    assert governance.CANONICAL_ROUTE_ENTRY_COUNT == 138
-    assert governance.CANONICAL_ROUTE_ENDPOINT_COUNT == 137
-    assert governance.CANONICAL_ROUTE_RULE_COUNT == 137
+    # Document templates: +4 admin rules and endpoints (three POSTs, one GET download).
+    assert governance.CANONICAL_ROUTE_ENTRY_COUNT == 142
+    assert governance.CANONICAL_ROUTE_ENDPOINT_COUNT == 141
+    assert governance.CANONICAL_ROUTE_RULE_COUNT == 141
     assert governance.CANONICAL_CSRF_ROW_COUNT == 78
     assert governance.CANONICAL_CSRF_PAGE_STATUS_COUNT == 68
     assert sum(governance.CANONICAL_CSRF_OWNER_PARTITIONS.values()) == 78
@@ -267,7 +272,8 @@ governance.catalog_keys_before_password_foundation(
     governance.catalog_keys_before_a19_backup_now(
     governance.catalog_keys_before_request_rectification(
     governance.catalog_keys_before_request_reclassification(
-    governance.catalog_keys_before_revoked_credential_refusal(catalog)))))
+    governance.catalog_keys_before_revoked_credential_refusal(
+    governance.catalog_keys_before_document_templates(catalog))))))
                                         )
                                     )
                                 )

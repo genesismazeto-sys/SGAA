@@ -139,11 +139,12 @@ def test_exact_eight_field_contract_and_forbidden_fields_absent(client):
     _login_admin(client)
     seed = _seed(client)
     html = _get(client, seed).get_data(as_text=True)
-    # The eight R4 fields, then the version's required-document guidance
-    # (Documentação exigida, app.activity_documentation) -- nothing else.
+    # The eight R4 fields, then the version's Documentação exigida: the
+    # required documents and the DOCX templates -- nothing else.
     assert re.findall(r'data-visible-field="([^"]+)"', html) == [
         "tipo", "grupo", "nome", "descricao", "limitacao",
         "ch_por_evento", "observacoes", "versao_anterior", "documentos_exigidos",
+        "modelos_preenchimento",
     ]
     for forbidden in (
         "Observação para o aluno", "Observação administrativa",
@@ -316,15 +317,15 @@ def test_existing_exact_version_uses_same_form_and_switcher_lifecycle(client):
     _login_admin(client)
     draft = _seed(client)
     draft_html = _get(client, draft, edit=True).get_data(as_text=True)
-    # The eight R4 fields and the required-document guidance.
-    assert len(re.findall(r'data-visible-field="', draft_html)) == 9
+    # The eight R4 fields, the required documents and the templates.
+    assert len(re.findall(r'data-visible-field="', draft_html)) == 10
     assert 'id="versao-switcher"' in draft_html
     assert 'id="btn-salvar-versao"' in draft_html
     assert '<select id="versao_anterior_id"' in draft_html
 
     immutable = _seed(client, status="ativa")
     view_html = _get(client, immutable, edit=True).get_data(as_text=True)
-    assert len(re.findall(r'data-visible-field="', view_html)) == 9
+    assert len(re.findall(r'data-visible-field="', view_html)) == 10
     assert 'id="versao-switcher"' in view_html
     assert 'id="btn-salvar-versao"' not in view_html
     assert 'id="versao_anterior_meta"' in view_html

@@ -239,6 +239,99 @@
             {% endif %}
           </div>
         </div>
+
+        {#- Modelos para preenchimento: DOCX files the student may download
+            (app.activity_document_templates). Their controls belong to the
+            small forms after this one (form="..."), because a form cannot
+            nest: each action posts on its own and returns here. -#}
+        {% set modelos_ativos = (modelos or [])|selectattr('status', 'equalto', 'ativo')|list %}
+        {% set modelos_encerrados = (modelos or [])|rejectattr('status', 'equalto', 'ativo')|list %}
+        <div class="form-row" data-visible-field="modelos_preenchimento" id="modelos-preenchimento">
+          <label class="row-label" id="modelos-preenchimento-label">Modelos para preenchimento</label>
+          <div class="doc-templates" data-doc-templates>
+            {% if modelos_herdados %}
+            <p class="form-note doc-templates-note">Os modelos abaixo são da versão de origem e serão vinculados à nova versão. Para alterá-los, salve a nova versão e edite o rascunho.</p>
+            {% elif modelos_congelados %}
+            <p class="form-note doc-templates-note">Esta versão está ativa ou em uso: os modelos permanecem como estão. Para alterá-los, crie uma nova versão.</p>
+            {% endif %}
+            <ul class="doc-template-list" aria-labelledby="modelos-preenchimento-label"{% if not modelos_ativos %} hidden{% endif %}>
+              {% for m in modelos_ativos %}
+              <li class="doc-template" data-modelo-id="{{ m.id }}">
+                <div class="doc-template-row">
+                  <i class="lucide doc-template-icon" data-lucide="file-text" aria-hidden="true"></i>
+                  <div class="doc-template-text">
+                    <span class="doc-template-title">{{ m.titulo }}</span>
+                    <span class="doc-template-meta">{{ m.nome_arquivo }} · {{ m.tamanho_label }}</span>
+                  </div>
+                  <div class="doc-template-actions">
+                    <a class="btn" href="{{ url_for('admin_catalogo_baixar_modelo', base_id=base.id, versao_id=modelos_versao_id, modelo_id=m.id) }}" aria-label="Baixar modelo {{ m.titulo }}"><i class="lucide" data-lucide="download" aria-hidden="true"></i><span class="btn-label">Baixar</span></a>
+                    {% if modelos_editaveis %}
+                    <button type="button" class="btn" data-template-toggle aria-expanded="false" aria-controls="modelo-editor-{{ m.id }}"><i class="lucide" data-lucide="file-pen" aria-hidden="true"></i><span class="btn-label">Substituir</span></button>
+                    <button type="submit" class="btn danger" form="modelo-retirar-{{ m.id }}" data-template-action aria-label="Retirar modelo {{ m.titulo }}"><i class="lucide" data-lucide="archive-x" aria-hidden="true"></i><span class="btn-label">Retirar</span></button>
+                    {% endif %}
+                  </div>
+                </div>
+                {% if modelos_editaveis %}
+                <div class="doc-template-editor" id="modelo-editor-{{ m.id }}" hidden>
+                  <div class="field-card">
+                    <div class="field-chip"><i class="lucide" data-lucide="type" aria-hidden="true"></i></div>
+                    <input class="control" type="text" name="modelo_titulo" form="modelo-atualizar-{{ m.id }}" value="{{ m.titulo }}" maxlength="160" aria-label="Título do modelo {{ m.titulo }}">
+                  </div>
+                  <label class="field-card file-card" data-template-file>
+                    <span class="field-chip"><i class="lucide" data-lucide="file-up" aria-hidden="true"></i></span>
+                    <input class="file-input" type="file" name="modelo_arquivo" form="modelo-atualizar-{{ m.id }}" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" aria-label="Novo arquivo do modelo {{ m.titulo }} (opcional)">
+                    <span class="control file-name" data-file-name>Manter o arquivo atual</span>
+                    <span class="field-chip chip-right"><i class="lucide" data-lucide="upload" aria-hidden="true"></i><span>Selecionar</span></span>
+                  </label>
+                  <button type="submit" class="btn primary doc-template-submit" form="modelo-atualizar-{{ m.id }}" data-template-action><i class="lucide" data-lucide="check" aria-hidden="true"></i><span class="btn-label">Salvar modelo</span></button>
+                </div>
+                {% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+            {% if not modelos_ativos %}
+            <p class="form-note doc-list-empty">Nenhum modelo para preenchimento cadastrado.</p>
+            {% endif %}
+            {% if modelos_editaveis %}
+            <div class="doc-template-new" aria-label="Adicionar modelo">
+              <div class="field-card">
+                <div class="field-chip"><i class="lucide" data-lucide="type" aria-hidden="true"></i></div>
+                <input class="control" type="text" name="modelo_titulo" form="modelo-novo-form" maxlength="160" placeholder="Título apresentado ao aluno" aria-label="Título do novo modelo">
+              </div>
+              <label class="field-card file-card" data-template-file>
+                <span class="field-chip"><i class="lucide" data-lucide="file-up" aria-hidden="true"></i></span>
+                <input class="file-input" type="file" name="modelo_arquivo" form="modelo-novo-form" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required aria-label="Arquivo do novo modelo (.docx)">
+                <span class="control file-name" data-file-name>Nenhum arquivo selecionado</span>
+                <span class="field-chip chip-right"><i class="lucide" data-lucide="upload" aria-hidden="true"></i><span>Selecionar</span></span>
+              </label>
+              <button type="submit" class="btn doc-template-submit" form="modelo-novo-form" data-template-action><i class="lucide" data-lucide="plus" aria-hidden="true"></i><span class="btn-label">Adicionar modelo</span></button>
+              <p class="form-note doc-templates-note">Somente documentos Word (.docx) sem macros, até 4 MiB.</p>
+            </div>
+            <p class="form-note doc-templates-dirty" data-templates-dirty hidden>Salve ou descarte as alterações do formulário antes de alterar os modelos.</p>
+            {% endif %}
+            {% if modelos_encerrados %}
+            <details class="doc-template-history">
+              <summary>Histórico de modelos ({{ modelos_encerrados|length }})</summary>
+              <ul class="doc-template-list">
+                {% for m in modelos_encerrados %}
+                <li class="doc-template doc-template--ended" data-modelo-id="{{ m.id }}">
+                  <div class="doc-template-row">
+                    <i class="lucide doc-template-icon" data-lucide="file-clock" aria-hidden="true"></i>
+                    <div class="doc-template-text">
+                      <span class="doc-template-title">{{ m.titulo }}</span>
+                      <span class="doc-template-meta">{{ m.nome_arquivo }} · {{ 'Substituído' if m.status == 'substituido' else 'Retirado' }} em {{ m.encerrado_em_label }}</span>
+                    </div>
+                    <div class="doc-template-actions">
+                      <a class="btn" href="{{ url_for('admin_catalogo_baixar_modelo', base_id=base.id, versao_id=modelos_versao_id, modelo_id=m.id) }}" aria-label="Baixar modelo encerrado {{ m.titulo }}"><i class="lucide" data-lucide="download" aria-hidden="true"></i><span class="btn-label">Baixar</span></a>
+                    </div>
+                  </div>
+                </li>
+                {% endfor %}
+              </ul>
+            </details>
+            {% endif %}
+          </div>
+        </div>
       </section>
     </fieldset>
 
@@ -255,6 +348,21 @@
   </div>
   <script id="grupos-por-tipo-json" type="application/json">{{ (grupos_por_tipo or {}) | tojson | safe }}</script>
 </form>
+
+{% if modelos_editaveis %}
+{#- The template actions: one small form each, outside the version form. -#}
+<form id="modelo-novo-form" class="doc-template-form" method="post" enctype="multipart/form-data" action="{{ url_for('admin_catalogo_adicionar_modelo', base_id=base.id, versao_id=modelos_versao_id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+{% for m in (modelos or [])|selectattr('status', 'equalto', 'ativo') %}
+<form id="modelo-atualizar-{{ m.id }}" class="doc-template-form" method="post" enctype="multipart/form-data" action="{{ url_for('admin_catalogo_atualizar_modelo', base_id=base.id, versao_id=modelos_versao_id, modelo_id=m.id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+<form id="modelo-retirar-{{ m.id }}" class="doc-template-form" method="post" action="{{ url_for('admin_catalogo_retirar_modelo', base_id=base.id, versao_id=modelos_versao_id, modelo_id=m.id) }}" data-confirm="Retirar o modelo “{{ m.titulo }}” desta versão? O arquivo continuará no histórico.">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+{% endfor %}
+{% endif %}
 
 {% if form_snapshot_json %}
 <script id="versao-form-snapshot" type="application/json">{{ form_snapshot_json|safe }}</script>
@@ -460,12 +568,47 @@ document.addEventListener('DOMContentLoaded', function(){
   }
   let snapshot = null;
   try { snapshot = snapshotEl ? JSON.parse(snapshotEl.textContent || '{}') : null; } catch (_e) { snapshot = null; }
+  // Modelos para preenchimento. Each action posts its own small form and
+  // reloads this page, so it is held while the version form has unsaved
+  // changes: those would be lost.
+  const templatesDirtyNote = document.querySelector('[data-templates-dirty]');
+  function syncTemplateActions(dirty){
+    if (templatesDirtyNote) templatesDirtyNote.hidden = !dirty;
+    document.querySelectorAll('[data-template-action], [data-template-toggle], [data-template-file] input')
+      .forEach(control => { control.disabled = dirty; });
+  }
+  document.querySelectorAll('[data-template-file]').forEach(card => {
+    const input = card.querySelector('input[type="file"]');
+    const label = card.querySelector('[data-file-name]');
+    const empty = label ? label.textContent : '';
+    input?.addEventListener('change', () => {
+      const file = input.files && input.files[0];
+      if (label) label.textContent = file ? file.name : empty;
+      card.classList.toggle('has-file', Boolean(file));
+    });
+  });
+  document.querySelectorAll('[data-template-toggle]').forEach(button => {
+    button.addEventListener('click', () => {
+      const editor = document.getElementById(button.getAttribute('aria-controls'));
+      if (!editor) return;
+      editor.hidden = !editor.hidden;
+      button.setAttribute('aria-expanded', String(!editor.hidden));
+      if (!editor.hidden) editor.querySelector('input')?.focus();
+    });
+  });
+  document.querySelectorAll('form.doc-template-form[data-confirm]').forEach(form => {
+    form.addEventListener('submit', event => {
+      if (!window.confirm(form.dataset.confirm)) event.preventDefault();
+    });
+  });
+
   function refresh(){
     if (!snapshot || !submitBtn) return;
     const current = currentPayload();
     submitBtn.disabled = Object.keys(snapshot).every(
       key => JSON.stringify(current[key] ?? null) === JSON.stringify(snapshot[key] ?? null)
     );
+    syncTemplateActions(!submitBtn.disabled);
   }
   function autoGrow(el){ el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }
 

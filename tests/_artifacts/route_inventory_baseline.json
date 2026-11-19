@@ -410,6 +410,34 @@
       "rule": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/inativar"
     },
     {
+      "endpoint": "admin_catalogo_adicionar_modelo",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/modelos"
+    },
+    {
+      "endpoint": "admin_catalogo_atualizar_modelo",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/modelos/<int:modelo_id>/atualizar"
+    },
+    {
+      "endpoint": "admin_catalogo_baixar_modelo",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/modelos/<int:modelo_id>/baixar"
+    },
+    {
+      "endpoint": "admin_catalogo_retirar_modelo",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/catalogo-versoes/<int:base_id>/versoes/<int:versao_id>/modelos/<int:modelo_id>/retirar"
+    },
+    {
       "endpoint": "admin_catalogo_substituir_versao",
       "methods": [
         "POST"

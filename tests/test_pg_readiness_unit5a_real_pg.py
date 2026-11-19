@@ -384,7 +384,8 @@ def test_provisioning_completes_and_second_provision_is_idempotent(schema_conn):
         ).fetchall()
     }
     assert tables == set(pg.PG_SCHEMA_TABLES)
-    assert len(tables) == 39  # v13: +3 image tables; v14: +3 canonical-storage tables; v16: +2 ephemeral-state tables
+    # v13: +3 image tables; v14: +3 canonical-storage tables; v16: +2 ephemeral-state tables; v19: +2 templates
+    assert len(tables) == 41
     triggers = {
         row[0]
         for row in connection.execute(

@@ -58,9 +58,12 @@ from tests.versioned_test_support import isolated_versioned_app_env
 
 _BASE_LOCK_RE = re.compile(r"FOR\s+NO\s+KEY\s+UPDATE", re.IGNORECASE)
 _MAX_RE = re.compile(r"MAX\s*\(\s*NUMERO_VERSAO\s*\)", re.IGNORECASE)
-_VERSION_INSERT_RE = re.compile(r"INSERT\s+INTO\s+ATIVIDADE_VERSAO", re.IGNORECASE)
+# Word boundaries: a version write is a write to atividade_versao or
+# atividade_transicao themselves, not to a table that shares the prefix
+# (atividade_versao_modelos, the v19 document templates of a version).
+_VERSION_INSERT_RE = re.compile(r"INSERT\s+INTO\s+ATIVIDADE_VERSAO\b", re.IGNORECASE)
 _VERSION_DESTRUCTIVE_RE = re.compile(
-    r"(?:UPDATE|DELETE\s+FROM|INSERT\s+INTO)\s+ATIVIDADE_(?:VERSAO|TRANSICAO)",
+    r"(?:UPDATE|DELETE\s+FROM|INSERT\s+INTO)\s+ATIVIDADE_(?:VERSAO|TRANSICAO)\b",
     re.IGNORECASE,
 )
 _XID_PROBE_RE = re.compile(r"pg_current_xact_id_if_assigned", re.IGNORECASE)
@@ -142,6 +145,22 @@ def _is_version_insert(sql):
 
 def _is_destructive(sql):
     return bool(_VERSION_DESTRUCTIVE_RE.search(sql))
+
+
+def test_version_write_classifiers_see_version_and_transition_tables_only():
+    """Negative control for the word boundaries above."""
+    for sql in ("UPDATE atividade_versao SET grupo = ? WHERE id = ?",
+                "DELETE FROM atividade_versao WHERE id = ?",
+                "INSERT INTO atividade_versao (atividade_base_id) VALUES (?)",
+                "INSERT INTO atividade_transicao (from_atividade_versao_id) VALUES (?)",
+                "update ATIVIDADE_VERSAO set status='ativa'"):
+        assert _is_destructive(sql), sql
+    assert _is_version_insert("INSERT INTO atividade_versao (atividade_base_id) VALUES (?)")
+    for sql in ("INSERT INTO atividade_versao_modelos (atividade_versao_id) SELECT ?",
+                "UPDATE atividade_versao_modelos SET status = 'retirado' WHERE id = ?",
+                "SELECT * FROM atividade_versao WHERE id = ?"):
+        assert not _is_destructive(sql), sql
+    assert not _is_version_insert("INSERT INTO atividade_versao_modelos (atividade_versao_id) SELECT ?")
 
 
 def _login_admin(client):

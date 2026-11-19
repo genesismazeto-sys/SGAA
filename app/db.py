@@ -438,6 +438,24 @@ def lock_activity_base(connection, base_id: int) -> bool:
     return row is not None
 
 
+def lock_activity_version(connection, versao_id: int) -> bool:
+    """Lock one ``atividade_versao`` row against a concurrent state change (PostgreSQL).
+
+    A write that is allowed only while the version can still be changed in
+    place (its document templates) takes the base lock, then this row lock,
+    then re-reads the version: an activation or status change committed
+    first is seen, one that comes later waits for this transaction.  SQLite
+    needs no explicit lock: ``BEGIN IMMEDIATE`` already serializes writers.
+    """
+    if database_engine(connection) != _BACKEND_POSTGRES:
+        return True
+    row = connection.execute(
+        "SELECT id FROM atividade_versao WHERE id = ? FOR UPDATE",
+        (int(versao_id),),
+    ).fetchone()
+    return row is not None
+
+
 def lock_password_account(connection, usuario_id: int) -> bool:
     """Serialize credential and token mutations of one account (PostgreSQL).
 

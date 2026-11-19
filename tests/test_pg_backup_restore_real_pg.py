@@ -52,6 +52,8 @@ import pytest
 from app import pg_migrate_from_sqlite as pathb
 from app import pg_schema
 from app.cloud_account_identity import google_account_key
+from app.prod1_document_templates_ddl import DOCX_MIME_TYPE
+from tests.docx_test_support import make_docx
 from tools import pg_backup as tool
 
 PG_URL = os.environ.get("SGAA_PG_TEST_URL", "").strip()
@@ -77,6 +79,7 @@ HIGH_WATER = {
     "matriz_atividade_versao_item": 14, "requisicoes": 25, "requisicao_arquivos": 6,
     "requisicao_alerta_receipts": 2, "admin_arquivos": 4, "admin_alertas": 1, "email_envios": 3,
     "reportes": 5, "storage_objects": 20, "cloud_accounts": 4,
+    "modelo_documento_arquivos": 7, "atividade_versao_modelos": 10,
 }
 #: Synthetic Google OIDC subject: only its logical key may reach the database;
 #: the raw value must never appear in any manifest or output.
@@ -97,6 +100,8 @@ EXPECTED_IDENTITIES = {
     **{t: (1, False) for t in ("senha_tokens", "cloud_drive_settings",
                                "requisicao_email_eventos")},
 }
+#: v19 document template content (a synthetic DOCX), restored byte for byte.
+TEMPLATE_CONTENT = make_docx("Modelo de backup")
 #: v13 image content: a recognisable marker that must never reach any output.
 BLOB_MARKER = b"PGBK-BLOB-MARKER"
 IMAGE_BLOBS = {
@@ -248,6 +253,14 @@ def populate_source(conn):
         _insert(conn, table, **{owner_column: owner_id}, mime_type=mime_type, size_bytes=len(content),
                 sha256=hashlib.sha256(content).hexdigest(), width=64, height=48, conteudo=content,
                 atualizado_em=TS)
+    # v19 document templates: one stored DOCX, a replaced and an active association.
+    i("modelo_documento_arquivos", id=6, sha256=hashlib.sha256(TEMPLATE_CONTENT).hexdigest(),
+      mime_type=DOCX_MIME_TYPE, size_bytes=len(TEMPLATE_CONTENT), conteudo=TEMPLATE_CONTENT, criado_em=TS)
+    i("atividade_versao_modelos", id=4, atividade_versao_id=45, arquivo_id=6, titulo="Declaração",
+      nome_arquivo="declaracao.docx", ordem=1, status="substituido", criado_em=TS, criado_por_usuario_id=3,
+      encerrado_em=TS, encerrado_por_usuario_id=3)
+    i("atividade_versao_modelos", id=9, atividade_versao_id=45, arquivo_id=6, titulo="Declaração 2026",
+      nome_arquivo="declaracao.docx", ordem=1, status="ativo", criado_em=TS, criado_por_usuario_id=3)
     # v14 canonical custody.  The Drive account row (identity restarted with
     # the other high-waters below) holds no address and no real token.
     i("cloud_accounts", id=4, provider="google", account_email=None, token_json="{}", connected_at=TS,
@@ -468,12 +481,12 @@ def test_backup_writes_exactly_the_artifact_set_and_a_value_free_manifest(regist
     assert manifest["schema"]["epoch"] == pg_schema.PG_SCHEMA_EPOCH
     assert manifest["schema"]["version"] == pg_schema.PG_SCHEMA_VERSION
     assert manifest["schema"]["contract_sha256"] == pg_schema.PG_CONTRACT_SHA256
-    assert manifest["schema"]["latest_migration"]["version"] == 18  # return notification CHECK
+    assert manifest["schema"]["latest_migration"]["version"] == 19  # document templates
     schema_only = set(tool.SCHEMA_ONLY_TABLE_POLICIES)
     assert {t: v for t, v in manifest["tables"].items() if t not in schema_only} == {
         t: v for t, v in backup_set["before"].tables.items() if t not in schema_only
     }
-    assert len(manifest["tables"]) == 39
+    assert len(manifest["tables"]) == 41  # v19: +2 document-template tables
     # v14: schema-only tables are recorded as what a restore yields -- empty --
     # with their policy and a value-free source census.
     for table in schema_only:
@@ -508,17 +521,20 @@ def test_backup_writes_exactly_the_artifact_set_and_a_value_free_manifest(regist
         assert entry["observed_in_snapshot_transaction"]["predicted_next_id"] == entry["predicted_next_id"]
     assert manifest["identities"]["backup_logs"]["predicted_next_id"] == 2
     assert manifest["identities"]["backup_logs"]["max_id"] == 0
+    # v19: +3 constraints (two keys, one unique), +4 FKs, +2 functions, +1 index,
+    # +2 identity sequences, +2 tables archived with data, +2 triggers.
     assert manifest["toc"]["classes"] == {
-        "CONSTRAINT": 60, "FK CONSTRAINT": 41, "FUNCTION": 15, "INDEX": 59, "SEQUENCE": 23,
-        "SEQUENCE SET": 23, "TABLE": 39, "TABLE DATA": 35, "TRIGGER": 17,
+        "CONSTRAINT": 63, "FK CONSTRAINT": 45, "FUNCTION": 17, "INDEX": 60, "SEQUENCE": 25,
+        "SEQUENCE SET": 25, "TABLE": 41, "TABLE DATA": 37, "TRIGGER": 19,
     }
     # The omission is proven from the archive itself.
     _listing, entries = tool.read_toc(tool.discover_native_tools(), dump)
     data_tags = {entry.tag for entry in entries if entry.desc == "TABLE DATA"}
     assert "storage_objects" in data_tags and not data_tags & schema_only
     assert manifest["toc"]["public_schema_entries"] == 2
-    assert manifest["domain_validation"]["checks"] == 64 and manifest["domain_validation"]["failing"] == 0
-    assert manifest["triggers"] == {"expected": 17, "enabled": 17}
+    # v19: +3 template domain checks and +4 template FK orphans; +2 template triggers.
+    assert manifest["domain_validation"]["checks"] == 71 and manifest["domain_validation"]["failing"] == 0
+    assert manifest["triggers"] == {"expected": 19, "enabled": 19}
     assert manifest["accounts"]["usuarios"] == 2 and manifest["accounts"]["full_admins"] == 1
     assert manifest["tool"]["sha256"] == tool.file_sha256(Path(tool.__file__))[1]
 
@@ -602,11 +618,13 @@ def test_restore_into_a_new_empty_database_matches_manifest_and_source(registry,
         ).fetchone()[0]
     finally:
         observer.close()
-    assert fks == 41 and enabled == 17
+    assert fks == 45 and enabled == 19  # v19: +4 template FKs, +2 template triggers
     # Binary content survives byte for byte, not only by digest.
     assert _image_contents(target_url) == _image_contents(source_url) == {
         table: content for table, (_owner, _mime, content) in IMAGE_BLOBS.items()
     }
+    assert bytes(_connect(target_url).execute(
+        "SELECT conteudo FROM modelo_documento_arquivos WHERE id = 6").fetchone()[0]) == TEMPLATE_CONTENT
     assert checks == sum(len(pg_schema.PG_TABLE_SPECS[t]["checks"]) for t in pg_schema.PG_SCHEMA_TABLES)
     assert partial == sum(1 for index in pg_schema.PG_EXPLICIT_INDEXES.values() if index["predicate"])
 

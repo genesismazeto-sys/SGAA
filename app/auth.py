@@ -485,6 +485,7 @@ def get_admin_permission_requirement(endpoint: str | None, method: str = "GET") 
     if endpoint in {
         "admin_catalogo_versao_detalhe",      # R2 GET /admin/catalogo-versoes/<base_id>
         "admin_catalogo_visualizar_versao",   # GET .../versoes/<versao_id>/visualizar
+        "admin_catalogo_baixar_modelo",       # GET .../versoes/<versao_id>/modelos/<modelo_id>/baixar
     }:
         return _permission("atividades", "view")
     if endpoint in {
@@ -496,6 +497,9 @@ def get_admin_permission_requirement(endpoint: str | None, method: str = "GET") 
         "admin_catalogo_descontinuar_versao",  # R15 POST .../descontinuar
         "admin_catalogo_excluir_versao",       # POST .../excluir
         "admin_catalogo_substituir_versao",    # R16 POST .../substituir
+        "admin_catalogo_adicionar_modelo",     # POST .../versoes/<versao_id>/modelos
+        "admin_catalogo_atualizar_modelo",     # POST .../modelos/<modelo_id>/atualizar
+        "admin_catalogo_retirar_modelo",       # POST .../modelos/<modelo_id>/retirar
     }:
         return _permission("atividades", "edit")
     if endpoint in {

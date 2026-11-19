@@ -39,9 +39,13 @@ from app.prod1_return_notifications_ddl import (
     RETURN_NOTIFICATIONS_V18_SCHEMA_OBJECTS_SQL,
     RETURN_NOTIFICATIONS_V18_MARKER_SQL,
 )
+from app.prod1_document_templates_ddl import (
+    DOCUMENT_TEMPLATES_V19_MARKER_SQL,
+    DOCUMENT_TEMPLATES_V19_SCHEMA_OBJECTS_SQL,
+)
 
 SCHEMA_EPOCH = "prod-1"
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 BASELINE_MARKER = "first_production_baseline"
 NORMA_REMOVAL_MARKER = "remove_norma_domain"
 MATRIX_VERSION_REMOVAL_MARKER = "remove_matrix_version_metadata"
@@ -60,7 +64,8 @@ CANONICAL_DOCUMENT_CUSTODY_MARKER = "canonical_document_custody"
 EPHEMERAL_STATE_MARKER = "ephemeral_state"
 REQUEST_RECLASSIFICATION_MARKER = "request_reclassification"
 RETURN_NOTIFICATIONS_MARKER = "return_notifications"
-LATEST_MIGRATION_MARKER = RETURN_NOTIFICATIONS_MARKER
+DOCUMENT_TEMPLATES_MARKER = "document_templates"
+LATEST_MIGRATION_MARKER = DOCUMENT_TEMPLATES_MARKER
 REQUEST_STATUSES = (
     "Pendente", "Deferida", "Deferida Parcialmente",
     "Indeferida", "Devolvida", "Encerrada",
@@ -69,11 +74,11 @@ REQUEST_STATUSES = (
 EXPECTED_TABLES = frozenset({
     "admin_alertas", "admin_arquivos", "admin_import_previews", "alunos", "alunos_foto",
     "atividade_base", "auth_throttle_events",
-    "atividade_transicao", "atividade_versao", "backup_logs", "cloud_accounts",
+    "atividade_transicao", "atividade_versao", "atividade_versao_modelos", "backup_logs", "cloud_accounts",
     "cloud_drive_settings", "configuracoes_acesso", "configuracoes_app",
     "configuracoes_backup", "configuracoes_presets", "cursos", "email_envios",
     "grupos_def", "matriz_atividade_versao_item", "matrizes_atividades",
-    "mensagens_editaveis", "reportes", "reportes_captura",
+    "mensagens_editaveis", "modelo_documento_arquivos", "reportes", "reportes_captura",
     "requisicao_alerta_receipts", "requisicao_arquivos",
     "requisicao_email_eventos", "requisicoes",
     "schema_migrations", "senha_tokens", "storage_objects",
@@ -317,6 +322,7 @@ __DOCUMENT_CUSTODY_V15_SCHEMA_OBJECTS__
 __EPHEMERAL_STATE_V16_SCHEMA_OBJECTS__
 __REQUEST_RECLASSIFICATION_V17_SCHEMA_OBJECTS__
 __RETURN_NOTIFICATIONS_V18_SCHEMA_OBJECTS__
+__DOCUMENT_TEMPLATES_V19_SCHEMA_OBJECTS__
 
 INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(1,'first_production_baseline','prod-1','{"schema_epoch":"prod-1"}');
@@ -353,7 +359,8 @@ VALUES(16,'ephemeral_state','prod-1','__EPHEMERAL_STATE_V16_DETAILS__');
 INSERT INTO schema_migrations(version,name,schema_epoch,details_json)
 VALUES(17,'request_reclassification','prod-1','__REQUEST_RECLASSIFICATION_V17_DETAILS__');
 __RETURN_NOTIFICATIONS_V18_MARKER__
-PRAGMA user_version=18;
+__DOCUMENT_TEMPLATES_V19_MARKER__
+PRAGMA user_version=19;
 """.replace(
     "__CONFIGURACOES_PRESETS_TABLE__", CONFIGURACOES_PRESETS_TABLE_SQL
 ).replace(
@@ -392,10 +399,22 @@ PRAGMA user_version=18;
     "__RETURN_NOTIFICATIONS_V18_SCHEMA_OBJECTS__", RETURN_NOTIFICATIONS_V18_SCHEMA_OBJECTS_SQL
 ).replace(
     "__RETURN_NOTIFICATIONS_V18_MARKER__", RETURN_NOTIFICATIONS_V18_MARKER_SQL
+).replace(
+    "__DOCUMENT_TEMPLATES_V19_SCHEMA_OBJECTS__", DOCUMENT_TEMPLATES_V19_SCHEMA_OBJECTS_SQL
+).replace(
+    "__DOCUMENT_TEMPLATES_V19_MARKER__", DOCUMENT_TEMPLATES_V19_MARKER_SQL
 )
 
 
-_PRE_V18_SCHEMA_SQL = PROD1_SCHEMA_SQL.replace(RETURN_NOTIFICATIONS_V18_SCHEMA_OBJECTS_SQL, "", 1).replace(
+#: The head script without the v19 additions (two tables, one index, three
+#: triggers and migration row 19, each one contiguous block): the frozen v18
+#: object authority.
+assert PROD1_SCHEMA_SQL.count(DOCUMENT_TEMPLATES_V19_SCHEMA_OBJECTS_SQL) == 1
+_PRE_V19_SCHEMA_SQL = PROD1_SCHEMA_SQL.replace(DOCUMENT_TEMPLATES_V19_SCHEMA_OBJECTS_SQL, "", 1).replace(
+    DOCUMENT_TEMPLATES_V19_MARKER_SQL, "", 1
+).replace("PRAGMA user_version=19;", "PRAGMA user_version=18;", 1)
+
+_PRE_V18_SCHEMA_SQL = _PRE_V19_SCHEMA_SQL.replace(RETURN_NOTIFICATIONS_V18_SCHEMA_OBJECTS_SQL, "", 1).replace(
     RETURN_NOTIFICATIONS_V18_MARKER_SQL, "", 1
 ).replace("PRAGMA user_version=18;", "PRAGMA user_version=17;", 1)
 
@@ -455,6 +474,11 @@ def canonical_prod1_pre_v17_object_sql(kind: str, name: str) -> str:
 def canonical_prod1_pre_v18_object_sql(kind: str, name: str) -> str:
     """Frozen v17 object authority, before the return notification CHECK."""
     return _probe_object_sql(_PRE_V18_SCHEMA_SQL, kind, name)
+
+
+def canonical_prod1_pre_v19_object_sql(kind: str, name: str) -> str:
+    """Frozen v18 object authority, before the document-template tables."""
+    return _probe_object_sql(_PRE_V19_SCHEMA_SQL, kind, name)
 
 
 def canonical_prod1_pre_v16_object_sql(kind: str, name: str) -> str:
@@ -589,6 +613,7 @@ _PROD1_V15_SIGNATURE_SHA256 = "01053f9071f348c4b83f32742cb4eb020fc9d3eeaf0177ff6
 _PROD1_V16_SIGNATURE_SHA256 = "fec016723ce0dfb207ec97c6a06886076677347661544a38143b7b462151f108"
 _PROD1_V17_SIGNATURE_SHA256 = "31bc8c594739245216a2a686d1c23ecb1b0e964cc4f818c6584b4501931455c8"
 _PROD1_V18_SIGNATURE_SHA256 = "77cf9fe3c4562df206c9d8f9ed44c6e46cd70396da8fe55fcfcdbebcff8db161"
+_PROD1_V19_SIGNATURE_SHA256 = "52c4593ef133f0456b8b3543a637c0adda02ac705a3693abb57818024f55129e"
 
 
 def _expected_physical_schema_signature() -> dict[str, object]:
@@ -1306,9 +1331,33 @@ def migrate_prod1_v17_to_v18(conn):
     return migrate(conn)
 
 
+def _validate_prod1_v18_schema(conn):
+    if _user_version(conn) != 18 or _physical_schema_digest(conn) != _PROD1_V18_SIGNATURE_SHA256:
+        raise Prod1SchemaError("prod-1/v18 physical schema contract mismatch")
+    reference = sqlite3.connect(":memory:")
+    try:
+        reference.executescript(_PRE_V19_SCHEMA_SQL)
+        if _marker(conn) != _marker(reference):
+            raise Prod1SchemaError("prod-1/v18 migration marker mismatch")
+    finally:
+        reference.close()
+    if conn.execute("PRAGMA foreign_key_check").fetchall():
+        raise Prod1SchemaError("prod-1/v18 foreign key violations")
+
+
+def migrate_prod1_v18_to_v19(conn):
+    from app.prod1_document_templates_v19 import migrate_prod1_v18_to_v19 as migrate
+    return migrate(conn)
+
+
+def _migrate_prod1_v17_to_head(conn):
+    previous = migrate_prod1_v17_to_v18(conn)
+    return {**previous, **migrate_prod1_v18_to_v19(conn)}
+
+
 def _migrate_prod1_v16_to_head(conn):
     previous = migrate_prod1_v16_to_v17(conn)
-    return {**previous, **migrate_prod1_v17_to_v18(conn)}
+    return {**previous, **_migrate_prod1_v17_to_head(conn)}
 
 
 def validate_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
@@ -1335,6 +1384,7 @@ def validate_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
         (16, EPHEMERAL_STATE_MARKER, SCHEMA_EPOCH),
         (17, REQUEST_RECLASSIFICATION_MARKER, SCHEMA_EPOCH),
         (18, RETURN_NOTIFICATIONS_MARKER, SCHEMA_EPOCH),
+        (19, DOCUMENT_TEMPLATES_MARKER, SCHEMA_EPOCH),
     ]
     if _marker(conn) != expected_markers:
         raise Prod1SchemaError("prod-1 migration marker mismatch")
@@ -1346,8 +1396,8 @@ def validate_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
     expected_signature = _expected_physical_schema_signature()
     if actual_signature != expected_signature:
         raise Prod1SchemaError("prod-1 physical schema contract mismatch")
-    if _physical_schema_digest(conn) != _PROD1_V18_SIGNATURE_SHA256:
-        raise Prod1SchemaError("prod-1/v18 physical schema digest mismatch")
+    if _physical_schema_digest(conn) != _PROD1_V19_SIGNATURE_SHA256:
+        raise Prod1SchemaError("prod-1/v19 physical schema digest mismatch")
     violations = conn.execute("PRAGMA foreign_key_check").fetchall()
     if violations:
         raise Prod1SchemaError(f"prod-1 foreign key violations: {violations!r}")
@@ -1510,7 +1560,9 @@ def bootstrap_prod1_schema(conn: sqlite3.Connection) -> dict[str, object]:
         if _user_version(conn) == 16:
             return _migrate_prod1_v16_to_head(conn)
         if _user_version(conn) == 17:
-            return migrate_prod1_v17_to_v18(conn)
+            return _migrate_prod1_v17_to_head(conn)
+        if _user_version(conn) == 18:
+            return migrate_prod1_v18_to_v19(conn)
         try:
             return validate_prod1_schema(conn)
         except Prod1SchemaError as exc:

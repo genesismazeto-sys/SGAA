@@ -5,6 +5,7 @@ from app import pg_schema
 from app.request_email_notifications import pending_request_ids
 from app.request_email_recovery import recover_return_notification
 from app.requisitions import auto_indefer_devolvidas
+from tests.prod1_v19_support import drop_pg_v19_objects
 from tests.storage_mp1_pg_support import PG_URL, Registry, adapter, raw_connection
 from tests.storage_mp1_support import REQUEST_ID
 
@@ -25,6 +26,7 @@ def test_v17_upgrade_and_return_notification_lifecycle(registry):
     name, url = registry.create(template=registry.template)
     raw = raw_connection(url)
     try:
+        drop_pg_v19_objects(raw)
         check = next(c for c in pg_schema.PG_TABLE_SPECS['requisicao_email_eventos']['checks'] if c['name'].endswith('status_decisao'))
         old = check['expression'].replace(",'Devolvida'", "")
         raw.execute(f'ALTER TABLE requisicao_email_eventos DROP CONSTRAINT "{check["name"]}", '

@@ -13,8 +13,9 @@ deliberately independent of Flask and of request handling:
   SQLite migrations v1..v14 are never ported).  It is reachable only through
   the explicit CLI (``python -m app.pg_schema provision``) and never from
   ``init_db`` or from request-time ``ensure_*`` paths.
-* ``upgrade_pg_schema`` is the only in-place change: an exact prod-1/v16 or v17
-  schema becomes v18 (the v17 trigger and the return notification CHECK), also
+* ``upgrade_pg_schema`` is the only in-place change: an exact prod-1/v16, v17
+  or v18 schema becomes v19 (the v17 trigger, the return notification CHECK
+  and the v19 document-template tables), also
   reachable only through the explicit CLI (``python -m app.pg_schema
   upgrade``).
 * ``validate_pg_schema`` is strictly read-only: it checks material catalog
@@ -107,9 +108,17 @@ from app.prod1_storage_ddl import (
 )
 
 from app.prod1_return_notifications_ddl import RETURN_NOTIFICATIONS_V18_DETAILS_JSON
+from app.prod1_document_templates_ddl import (
+    DOCUMENT_TEMPLATE_FILENAME_MAX_LENGTH,
+    DOCUMENT_TEMPLATE_MAX_BYTES,
+    DOCUMENT_TEMPLATE_TITLE_MAX_LENGTH,
+    DOCUMENT_TEMPLATES_V19_DETAILS_JSON,
+    DOCUMENT_TEMPLATES_V19_TABLES,
+    DOCX_MIME_TYPE,
+)
 
 PG_SCHEMA_EPOCH = "prod-1"
-PG_SCHEMA_VERSION = 18
+PG_SCHEMA_VERSION = 19
 PG_SCHEMA_META_TABLE = "pg_schema_meta"
 PG_SCHEMA_META_ID = 1
 PG_BUSINESS_RULE_SQLSTATE = "SG001"
@@ -561,6 +570,77 @@ def _admin_import_previews_spec():
     )
 
 
+def _modelo_documento_arquivos_spec():
+    """v19 immutable DOCX template content; same constraints as ``app.prod1_document_templates_ddl``."""
+    t = "modelo_documento_arquivos"
+    return _spec(
+        [
+            _identity("id"),
+            _text("sha256", not_null=True),
+            _text("mime_type", not_null=True),
+            _integer("size_bytes", not_null=True),
+            _bytea("conteudo", not_null=True),
+            _text("criado_em", not_null=True, default=_NOW),
+        ],
+        _pk(t, "id"),
+        uniques=[_uq(t, "sha256")],
+        checks=[
+            _ck(t, "sha256", "sha256 ~ '^[0-9a-f]{64}$'"),
+            _ck(t, "mime_type", f"mime_type = '{DOCX_MIME_TYPE}'"),
+            _ck(t, "size_bytes", f"size_bytes > 0 AND size_bytes <= {DOCUMENT_TEMPLATE_MAX_BYTES}"),
+            _ck(
+                t,
+                "conteudo",
+                "octet_length(conteudo) = size_bytes"
+                " AND substring(conteudo FROM 1 FOR 4) = '\\x504b0304'::bytea",
+            ),
+        ],
+    )
+
+
+def _atividade_versao_modelos_spec():
+    """v19 template-to-version associations; same constraints as ``app.prod1_document_templates_ddl``."""
+    t = "atividade_versao_modelos"
+    return _spec(
+        [
+            _identity("id"),
+            _integer("atividade_versao_id", not_null=True),
+            _integer("arquivo_id", not_null=True),
+            _text("titulo", not_null=True),
+            _text("nome_arquivo", not_null=True),
+            _integer("ordem", not_null=True),
+            _text("status", not_null=True, default="'ativo'"),
+            _text("criado_em", not_null=True, default=_NOW),
+            _integer("criado_por_usuario_id"),
+            _text("encerrado_em"),
+            _integer("encerrado_por_usuario_id"),
+        ],
+        _pk(t, "id"),
+        checks=[
+            _ck(
+                t,
+                "titulo",
+                f"char_length(titulo) BETWEEN 1 AND {DOCUMENT_TEMPLATE_TITLE_MAX_LENGTH}"
+                " AND titulo = btrim(titulo)",
+            ),
+            _ck(
+                t,
+                "nome_arquivo",
+                f"char_length(nome_arquivo) BETWEEN 1 AND {DOCUMENT_TEMPLATE_FILENAME_MAX_LENGTH}",
+            ),
+            _ck(t, "ordem", "ordem >= 1"),
+            _ck(t, "status", "status IN ('ativo','substituido','retirado')"),
+            _ck(t, "encerrado", "(status = 'ativo') = (encerrado_em IS NULL)"),
+        ],
+        foreign_keys=[
+            _fk(t, ["atividade_versao_id"], "atividade_versao", ["id"], on_delete="CASCADE"),
+            _fk(t, ["arquivo_id"], "modelo_documento_arquivos", ["id"], on_delete="RESTRICT"),
+            _fk(t, ["criado_por_usuario_id"], "usuarios", ["id"], on_delete="RESTRICT"),
+            _fk(t, ["encerrado_por_usuario_id"], "usuarios", ["id"], on_delete="RESTRICT"),
+        ],
+    )
+
+
 def _storage_worker_status_spec():
     """v14 mirror-worker health: at most one row; no row means "never ran"."""
     t = "storage_worker_status"
@@ -636,6 +716,7 @@ PG_APPLICATION_TABLES = (
     "storage_worker_status",
     "auth_throttle_events",
     "admin_import_previews",
+    *DOCUMENT_TEMPLATES_V19_TABLES,
 )
 
 PG_SCHEMA_TABLES = PG_APPLICATION_TABLES + (PG_SCHEMA_META_TABLE,)
@@ -1585,6 +1666,8 @@ PG_TABLE_SPECS = {
     "storage_worker_status": _storage_worker_status_spec(),
     "auth_throttle_events": _auth_throttle_events_spec(),
     "admin_import_previews": _admin_import_previews_spec(),
+    "modelo_documento_arquivos": _modelo_documento_arquivos_spec(),
+    "atividade_versao_modelos": _atividade_versao_modelos_spec(),
     PG_SCHEMA_META_TABLE: _spec(
         [
             _integer("id", not_null=True),
@@ -1798,6 +1881,11 @@ PG_EXPLICIT_INDEXES = {
         ),
         _index("idx_auth_throttle_events_expiry", "auth_throttle_events", ["occurred_at"]),
         _index("idx_admin_import_previews_expiry", "admin_import_previews", ["expires_at"]),
+        _index(
+            "idx_atividade_versao_modelos_versao",
+            "atividade_versao_modelos",
+            ["atividade_versao_id", "status", "ordem"],
+        ),
         _index(
             "ux_req_arquivos_storage_object",
             "requisicao_arquivos",
@@ -2120,6 +2208,37 @@ $fn$
 }
 
 
+# v19: template content is immutable; an association changes only from ativo
+# to its end state (the SQLite triggers of the same names).
+PG_TRIGGER_FUNCTIONS["fn_modelo_documento_arquivos_immutable"] = r"""
+CREATE FUNCTION fn_modelo_documento_arquivos_immutable() RETURNS trigger
+LANGUAGE plpgsql AS $fn$
+BEGIN
+  RAISE EXCEPTION 'document template content is immutable'
+    USING ERRCODE = 'SG001';
+END;
+$fn$
+"""
+PG_TRIGGER_FUNCTIONS["fn_atividade_versao_modelos_history"] = r"""
+CREATE FUNCTION fn_atividade_versao_modelos_history() RETURNS trigger
+LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF OLD.status <> 'ativo'
+     OR NEW.atividade_versao_id IS DISTINCT FROM OLD.atividade_versao_id
+     OR NEW.arquivo_id IS DISTINCT FROM OLD.arquivo_id
+     OR NEW.titulo IS DISTINCT FROM OLD.titulo
+     OR NEW.nome_arquivo IS DISTINCT FROM OLD.nome_arquivo
+     OR NEW.ordem IS DISTINCT FROM OLD.ordem
+     OR NEW.criado_em IS DISTINCT FROM OLD.criado_em
+     OR NEW.criado_por_usuario_id IS DISTINCT FROM OLD.criado_por_usuario_id THEN
+    RAISE EXCEPTION 'document template history is immutable'
+      USING ERRCODE = 'SG001';
+  END IF;
+  RETURN NEW;
+END;
+$fn$
+"""
+
 PG_TRIGGERS = (
     _trigger(
         "trg_atividade_versao_prev_same_eixo_insert",
@@ -2235,6 +2354,18 @@ PG_TRIGGERS = (
         "fn_storage_objects_drive_account_bound",
         columns=["drive_account_key"],
     ),
+    _trigger(
+        "trg_modelo_documento_arquivos_immutable",
+        "modelo_documento_arquivos",
+        ["UPDATE"],
+        "fn_modelo_documento_arquivos_immutable",
+    ),
+    _trigger(
+        "trg_atividade_versao_modelos_history",
+        "atividade_versao_modelos",
+        ["UPDATE"],
+        "fn_atividade_versao_modelos_history",
+    ),
 )
 
 
@@ -2334,6 +2465,7 @@ PG_SCHEMA_MIGRATIONS_SEED = (
     (16, "ephemeral_state", EPHEMERAL_STATE_V16_DETAILS_JSON),
     (17, "request_reclassification", REQUEST_RECLASSIFICATION_V17_DETAILS_JSON),
     (18, "return_notifications", RETURN_NOTIFICATIONS_V18_DETAILS_JSON),
+    (19, "document_templates", DOCUMENT_TEMPLATES_V19_DETAILS_JSON),
 )
 
 
@@ -3475,6 +3607,7 @@ PG_UPGRADED_FUNCTIONS = ("fn_requisicoes_snapshot_immutable",)
 #: Frozen predecessors accepted by the explicit, transactional upgrade.
 _PG_V16_CONTRACT_SHA256 = "499c03e5a368bb061347e3a1acbe84558f85af098d6d28d50084a21e1095a465"
 _PG_V17_CONTRACT_SHA256 = "09f618d08de0c39c0d8e2c04fc181c1c9f15e8ea3d10180d31815752cee0ebfa"
+_PG_V18_CONTRACT_SHA256 = "2b492b2a80a86f8d548f77193ffdc3c1d4e653da3ccd4213ad3cb1136267bfff"
 _PG_V16_SNAPSHOT_FUNCTION_BODY = """
 BEGIN
   IF NEW.atividade_versao_id IS DISTINCT FROM OLD.atividade_versao_id
@@ -3487,12 +3620,34 @@ END;
 """
 
 
-def upgrade_pg_schema(connection):
-    """Upgrade the frozen v16/v17 contract to v18; caller owns the transaction.
+def _seed_row_statement(version):
+    (statement,) = [statement for statement in _seed_statements() if statement.startswith(
+        "INSERT INTO schema_migrations") and f"VALUES ({version}," in statement]
+    return statement
 
-    v18 expands one notification CHECK and adds migration row 18. Starting
-    from v16 also applies the v17 trigger replacement. Existing rows and all
-    delivery history stay intact. The metadata row serializes upgrades.
+
+def _create_v19_objects(connection):
+    """The v19 additions exactly as the generated contract declares them."""
+    for table in DOCUMENT_TEMPLATES_V19_TABLES:
+        connection.execute(_table_ddl(table, PG_TABLE_SPECS[table]))
+    for index in PG_EXPLICIT_INDEXES.values():
+        if index["table"] in DOCUMENT_TEMPLATES_V19_TABLES:
+            connection.execute(_index_ddl(index))
+    triggers = [trigger for trigger in PG_TRIGGERS if trigger["table"] in DOCUMENT_TEMPLATES_V19_TABLES]
+    for function_name in dict.fromkeys(trigger["function"] for trigger in triggers):
+        connection.execute(PG_TRIGGER_FUNCTIONS[function_name].strip())
+    for trigger in triggers:
+        connection.execute(_trigger_ddl(trigger))
+    connection.execute(_seed_row_statement(19))
+
+
+def upgrade_pg_schema(connection):
+    """Upgrade a frozen v16, v17 or v18 contract to v19; caller owns the transaction.
+
+    v19 only adds the two document-template tables (their index, triggers and
+    migration row 19). Starting from v16 or v17 also applies the earlier
+    steps: the v17 trigger replacement and the v18 notification CHECK. No
+    existing row changes. The metadata row serializes concurrent upgrades.
     """
     _require_server_encoding(connection)
     meta = _fetch(
@@ -3505,10 +3660,10 @@ def upgrade_pg_schema(connection):
     version, digest = int(meta[0][2]), str(meta[0][3])
     if version == PG_SCHEMA_VERSION:
         return {"status": "already_current", **validate_pg_schema(connection)}
-    predecessors = {16: _PG_V16_CONTRACT_SHA256, 17: _PG_V17_CONTRACT_SHA256}
+    predecessors = {16: _PG_V16_CONTRACT_SHA256, 17: _PG_V17_CONTRACT_SHA256, 18: _PG_V18_CONTRACT_SHA256}
     if version not in predecessors or digest != predecessors[version]:
         raise PostgresSchemaIncompatibleError(
-            f"in-place upgrade starts only from frozen prod-1/v16 or v17 (found version {version})"
+            f"in-place upgrade starts only from frozen prod-1/v16, v17 or v18 (found version {version})"
         )
     migrations = _fetch(
         connection,
@@ -3526,26 +3681,24 @@ def upgrade_pg_schema(connection):
     if _schema_function_sources(connection, (function,)).get(function) != expected_body:
         raise PostgresSchemaIncompatibleError(f"{function} is not the frozen predecessor body")
 
-    check = next(c for c in PG_TABLE_SPECS['requisicao_email_eventos']['checks'] if c['name'].endswith('status_decisao'))
-    old_check = next((c for c in _catalog_constraints(connection)
-                      if c['table'] == 'requisicao_email_eventos' and c['name'] == check['name']), None)
-    if old_check is None or re.findall(r"'([^']*)'", old_check['definition']) != [
-        'Deferida', 'Deferida Parcialmente', 'Indeferida'
-    ]:
-        raise PostgresSchemaIncompatibleError('notification status CHECK is not the frozen predecessor')
-
-    if version == 16:
-        connection.execute(
-            PG_TRIGGER_FUNCTIONS[function].strip().replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION", 1)
-        )
-        (row_17,) = [statement for statement in _seed_statements() if statement.startswith(
-            "INSERT INTO schema_migrations") and "VALUES (17," in statement]
-        connection.execute(row_17)
-    connection.execute(f'ALTER TABLE requisicao_email_eventos DROP CONSTRAINT "{check["name"]}", '
-                       f'ADD CONSTRAINT "{check["name"]}" CHECK ({check["expression"]})')
-    (row_18,) = [statement for statement in _seed_statements() if statement.startswith(
-        "INSERT INTO schema_migrations") and "VALUES (18," in statement]
-    connection.execute(row_18)
+    if version < 18:
+        check = next(c for c in PG_TABLE_SPECS['requisicao_email_eventos']['checks']
+                     if c['name'].endswith('status_decisao'))
+        old_check = next((c for c in _catalog_constraints(connection)
+                          if c['table'] == 'requisicao_email_eventos' and c['name'] == check['name']), None)
+        if old_check is None or re.findall(r"'([^']*)'", old_check['definition']) != [
+            'Deferida', 'Deferida Parcialmente', 'Indeferida'
+        ]:
+            raise PostgresSchemaIncompatibleError('notification status CHECK is not the frozen predecessor')
+        if version == 16:
+            connection.execute(
+                PG_TRIGGER_FUNCTIONS[function].strip().replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION", 1)
+            )
+            connection.execute(_seed_row_statement(17))
+        connection.execute(f'ALTER TABLE requisicao_email_eventos DROP CONSTRAINT "{check["name"]}", '
+                           f'ADD CONSTRAINT "{check["name"]}" CHECK ({check["expression"]})')
+        connection.execute(_seed_row_statement(18))
+    _create_v19_objects(connection)
     connection.execute(
         f"UPDATE {PG_SCHEMA_META_TABLE} SET schema_version = {PG_SCHEMA_VERSION}, "
         f"contract_sha256 = '{PG_CONTRACT_SHA256}', applied_at = {PG_UTC_NOW_FUNCTION}() "
@@ -3636,7 +3789,7 @@ def provision_database(database_url):
 
 
 def upgrade_database(database_url):
-    """Upgrade ``database_url`` from v16/v17 to v18 in one transaction."""
+    """Upgrade ``database_url`` from v16/v17/v18 to v19 in one transaction."""
     connection = _connect_database(database_url)
     try:
         result = upgrade_pg_schema(connection)
@@ -3656,8 +3809,8 @@ _USAGE = (
     "DATABASE_URL must be a PostgreSQL URL. 'provision' creates the baseline\n"
     "from an empty schema or is a no-op when it already matches; it never\n"
     "drops, alters or repairs an existing schema. 'upgrade' moves an exact\n"
-    "prod-1/v16 or v17 schema to v18 in one transaction; v18 is a validated\n"
-    "no-op. Existing data is preserved and notifications are never backfilled.\n"
+    "prod-1/v16, v17 or v18 schema to v19 in one transaction; v19 is a\n"
+    "validated no-op. Existing data is preserved and nothing is backfilled.\n"
 )
 
 

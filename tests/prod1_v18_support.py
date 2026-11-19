@@ -4,6 +4,9 @@ from app.prod1_schema import canonical_prod1_pre_v18_object_sql
 
 
 def revert_prod1_v18_to_v17(conn):
+    if conn.execute("PRAGMA user_version").fetchone()[0] == 19:
+        from tests.prod1_v19_support import revert_prod1_v19_to_v18
+        revert_prod1_v19_to_v18(conn)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == 18
     assert not conn.execute("SELECT 1 FROM requisicao_email_eventos WHERE status_decisao='Devolvida'").fetchone()
     conn.commit()

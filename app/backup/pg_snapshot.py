@@ -53,11 +53,12 @@ SNAPSHOT_NAME = re.compile(r"sgaa-pg-snapshot-\d{8}T\d{6}Z(?:-[0-9a-f]{12}-(?:[0
 REGISTERS_PREFIX = "sgaa-registros-"
 REGISTERS_NAME = re.compile(r"sgaa-registros-\d{8}T\d{6}Z(?:-[0-9a-f]{12}-(?:[0-9a-f]{8}|[0-9a-f]{16}))?\.zip")
 #: Never in the readable copy: credentials, single-use links, OAuth tokens, machine and transient state,
-#: and the image bytes (a register keeps its row; a picture is not a register).
+#: and the image and template bytes (a register keeps its row; a picture or a file is not a register).
 _NOT_REGISTERS = frozenset({
     "schema_migrations", "usuario_credenciais", "senha_tokens", "configuracoes_backup", "cloud_accounts",
     "backup_logs", "cloud_drive_settings", "storage_upload_intents", "storage_worker_status",
     "auth_throttle_events", "admin_import_previews", "usuarios_foto", "alunos_foto", "reportes_captura",
+    "modelo_documento_arquivos",
 })
 _NOT_REGISTER_COLUMNS = {"usuarios": frozenset({"senha"})}
 

@@ -465,15 +465,17 @@ def test_contract_toc_is_accepted_with_census():
     specs = pg_schema.PG_TABLE_SPECS
     assert census["classes"] == {
         "CONSTRAINT": sum(1 + len(specs[t]["uniques"]) for t in pg_schema.PG_SCHEMA_TABLES),
-        "FK CONSTRAINT": 41,
-        "FUNCTION": 15,
+        # v19: +4 template FKs, +2 trigger functions, +2 identity sequences, +2 tables
+        # (both archived with their data), +2 triggers.
+        "FK CONSTRAINT": 45,
+        "FUNCTION": 17,
         "INDEX": len(pg_schema.PG_EXPLICIT_INDEXES),
-        "SEQUENCE": 23,
-        "SEQUENCE SET": 23,
-        "TABLE": 39,
+        "SEQUENCE": 25,
+        "SEQUENCE SET": 25,
+        "TABLE": 41,
         # v14 / v16: the intents, worker health, throttle events and import previews are schema-only.
-        "TABLE DATA": 35,
-        "TRIGGER": 17,
+        "TABLE DATA": 37,
+        "TRIGGER": 19,
     }
     assert census["public_schema_entries"] == 2
     assert len(census["sha256"]) == 64

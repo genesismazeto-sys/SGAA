@@ -280,6 +280,17 @@ CATALOG_LEDGER: tuple[tuple[str, int], ...] = (
         "2 additions, 0 retirements",
         2,
     ),
+    (
+        "TPL1 DOCX templates of an activity version: the outcomes of adding, "
+        "replacing and withdrawing a template on a draft -- 'Modelo "
+        "adicionado.' (msg_3fa7333d80a4a4e8), 'Modelo substituído. A versão "
+        "anterior do modelo foi preservada no histórico.' "
+        "(msg_cc06bdafda49e2be), 'Modelo retirado desta versão. O arquivo foi "
+        "preservado no histórico.' (msg_02697b7bf77eaca2) -- and the safe "
+        "failure 'Não foi possível alterar o modelo; nenhuma alteração foi "
+        "aplicada.' (msg_8610ce6bbe0e7ae4). 4 additions, 0 retirements",
+        4,
+    ),
 )
 
 # Everything before the UT-MX3 term is MX3's exact parent state. Anchored on
@@ -329,9 +340,9 @@ PARENT_CATALOG_KEYS_SHA256 = (
 # with its one success message, and the R3 review's CSV warning and policy refusal, to 588; the rereview's
 # uncertain-restore warning, to 589; RECT1 (three additions, one retirement),
 # to 591; RECL1 (two additions, one retirement), to 592; UXA1 (two additions),
-# to 594.
+# to 594; TPL1 (four additions), to 598.
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "d8bf8cb58903b71e74e51eacc3f071439110d2315c3064d0ff33606b85cbc594"
+    "821dc8e9a7154226fb885d6420238739124df6ac1072fae8a967e89773c05ca3"
 )
 
 # Named post-MX3 key sets.  Suites that reconstruct UT-MX3's parent state have
@@ -614,8 +625,11 @@ TMA1_MATRIX_AUTHORITY_KEYS = frozenset({"msg_35110e5b7a30e863"})
 # (comprovantes.issue_upload_intent) and
 # /storage/upload-intents/<intent_id>/finalize (comprovantes.finalize_upload_intent).
 # Access-mail batch adds one CSRF-protected POST, requiring (acesso, full).
+# Document templates (prod-1/v19) add three CSRF-protected POSTs on a draft
+# version's templates, requiring (atividades, edit), and the administrator's
+# GET download, requiring (atividades, view).
 CANONICAL_ROUTE_IDENTITIES_SHA256 = (
-    "28c441bceca41ecf8489b9532eff07062d2210b60b52f08807944623e6c62b6d"
+    "ba6d7611f6a41950956f22d45688e44e0c9f2cef78f6bac040511f1c2f82bbac"
 )
 
 
@@ -955,10 +969,30 @@ UXA1_REVOKED_CREDENTIAL_KEYS = frozenset(
 def catalog_keys_before_revoked_credential_refusal(keys) -> set[str]:
     """Undo the UXA1 term: drop its two keys (it retired none).
 
-    UXA1 is the newest term, so a reconstruction walks back through this
-    first, then RECL1, RECT1, A19, S3-A, U5-E, U5-B and every older term.
+    A reconstruction walks back through TPL1 first, then this, then RECL1,
+    RECT1, A19, S3-A, U5-E, U5-B and every older term.
     """
     return set(keys) - set(UXA1_REVOKED_CREDENTIAL_KEYS)
+
+
+# TPL1 DOCX templates of an activity version (net +4).
+TPL1_DOCUMENT_TEMPLATE_KEYS = frozenset(
+    {
+        "msg_3fa7333d80a4a4e8",  # Modelo adicionado.
+        "msg_cc06bdafda49e2be",  # Modelo substituído. A versão anterior do modelo ...
+        "msg_02697b7bf77eaca2",  # Modelo retirado desta versão. O arquivo ...
+        "msg_8610ce6bbe0e7ae4",  # Não foi possível alterar o modelo; ...
+    }
+)
+
+
+def catalog_keys_before_document_templates(keys) -> set[str]:
+    """Undo the TPL1 term: drop its four keys (it retired none).
+
+    TPL1 is the newest term, so a reconstruction walks back through this
+    first, then UXA1, RECL1, RECT1 and every older term.
+    """
+    return set(keys) - set(TPL1_DOCUMENT_TEMPLATE_KEYS)
 
 
 def catalog_keys_before_s3a_direct_documents(keys) -> set[str]:

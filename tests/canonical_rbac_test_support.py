@@ -762,8 +762,11 @@ def profile_digest(level: str, profiles=None) -> str:
 # Aluno and exact activity-version consultation; no existing requirement is
 # weakened.
 # Access-mail batch adds (admin_acesso_email_lote, POST, acesso, full).
+# Document templates add admin_catalogo_{adicionar,atualizar,retirar}_modelo
+# (POST, atividades, edit) and admin_catalogo_baixar_modelo (GET, atividades,
+# view); no existing requirement changes.
 CANONICAL_REQUIREMENT_MATRIX_DIGEST = (
-    "2ccae003b53a61a3b67d9748414af8f7fba297c033dff126ad347059385a6b3c"
+    "a222478c485e9c60c2de30a66a7385dba22bd80f30e2c3c25ecb1efd8d3564e2"
 )
 
 # The profile anchor: which access level holds which scope per resource.
@@ -781,18 +784,20 @@ CANONICAL_PROFILE_DIGESTS = {
 # (category database_image_delivery); no requirement or denial changes.
 # STORAGE S3-A adds the two non-/admin direct request-document upload POSTs
 # (category request_document_direct_upload); no requirement or denial changes.
+# Document templates add four parameterised governed routes; the denials
+# follow from the requirement matrix (non-edit profiles on the three POSTs).
 CANONICAL_NON_GOVERNED_IDENTITIES_SHA256 = (
     "a7286c53ea2780d1f97f9f5ebdffc7827a3909e1f0a60b65d5e30550bfbccbc1"
 )
 CANONICAL_DYNAMIC_REQUIREMENT_IDENTITIES_SHA256 = (
-    "630959fb02f2828ff93f57a08b441d1aa2d0a2b429a52bc35d1e300b10a1017a"
+    "acf37b9f8e0a92efb8f4602dcfbd56fb84ced4a5931c4ad3160f983b3a78975a"
 )
 # Password foundation adds the expected denials for the non-full Acesso
 # profiles on the single-account password e-mail endpoint. The default-password
 # activation has no endpoint of its own; it is denied through the pre-existing
 # senhas-default requirement.
 CANONICAL_DENIAL_MATRIX_IDENTITIES_SHA256 = (
-    "5f560af161f16717451a1d7a697e41431f12f9a17ffedde4124522dc9e21fa92"
+    "d42f9ca71ddd40cff07b48973a4621fb81cd28b57c07db75b9953fef41ef1ecf"
 )
 
 

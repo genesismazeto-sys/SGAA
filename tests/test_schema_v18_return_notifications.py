@@ -30,10 +30,10 @@ def test_migration_preserves_all_event_states_and_high_water_counter():
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute("UPDATE requisicao_email_eventos SET status_decisao='Devolvida'")
     conn.rollback()
-    assert prod1_schema.bootstrap_prod1_schema(conn)["schema_version"] == 18
+    assert prod1_schema.bootstrap_prod1_schema(conn)["schema_version"] == 19
     assert [tuple(r) for r in conn.execute("SELECT * FROM requisicao_email_eventos ORDER BY id")] == rows
     assert _sequences(conn) == counters
-    assert prod1_schema.bootstrap_prod1_schema(conn)["schema_version"] == 18
+    assert prod1_schema.bootstrap_prod1_schema(conn)["schema_version"] == 19
     conn.execute("UPDATE requisicao_email_eventos SET status_decisao='Devolvida'")
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
     conn.rollback()
