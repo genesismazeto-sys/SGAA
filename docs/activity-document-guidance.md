@@ -58,8 +58,63 @@ v19 is purely additive. The SQLite migration (`app/prod1_document_templates_v19.
 proves every existing row and counter unchanged; `python -m app.pg_schema upgrade`
 moves an exact v16, v17 or v18 PostgreSQL schema to v19 in one transaction.
 Path-B migrates both tables exactly with value-free integrity checks, and the
-governed PostgreSQL backup carries them like every other table; the hosted
-snapshot's readable registers leave out the template bytes, as they do images.
+governed PostgreSQL backup carries them like every other table. The hosted
+snapshot file carries the bytes and the history too, and its restore puts them
+back exactly; only its readable registers leave out the template bytes, as they
+do images.
+
+## Capacity
+
+A template is at most 4 MiB and a version has at most 10 active ones. Identical
+bytes are stored once and a version made from another reuses its bytes, so the
+database grows only with new uploads, and it keeps every replaced or withdrawn
+file by design. A DOCX is already compressed: each stored byte costs about a byte
+in the database, in every governed generation and in every hosted snapshot. The
+Free plans bound this (500 MB database; 5 GB egress a month, which every daily
+generation spends on a full read of the database), so the templates should stay
+within tens of MB in total. Nothing enforces a total; the operator watches the
+database size with the other Free limits (`docs/PRODUCTION_CUTOVER_RUNBOOK.md`).
+
+Vercel Hobby limits a function's request and response body to 4.5 MB. An upload
+at the 4 MiB limit with its form fits, and so does its download. A larger upload
+is refused by the platform (HTTP 413) before the application can answer with its
+own message.
+
+If templates ever need larger files or a large total, the path is a private
+bucket or prefix of their own: a DOCX-only table, the signed TUS upload of the
+comprovantes and a short-lived signed download, added to the object backup set.
+`storage_objects` and its PDF / PNG / JPEG CHECK stay as they are.
+
+## Publication (GF1)
+
+PROD is v18. v19 is published by the gate G1 sequence of
+`docs/specs/MP-3-A22-request-reclassification.md` §10, as run for v18 on
+2026-10-20:
+
+1. the GF1 grant naming the commit and the upgrade;
+2. a pre-upgrade governed generation with objects, from the pinned v18 worktree
+   (the rollback point);
+3. from a worktree of the commit, against the verified PROD source:
+   `python -m app.pg_schema upgrade` (`upgrade: upgraded (... version=19 ...)`;
+   one transaction that refuses anything but an exact frozen v16 / v17 / v18
+   contract and then writes nothing), `python -m app.pg_schema validate`
+   (`version=19`) and `python -m app.hosting_cli check --database` (schema 19,
+   API exposure clean: under the cleared default privileges the two new tables
+   reach no API role);
+4. in the same session, a governed generation with objects from the new
+   worktree, with the daily governed-backup script and task repinned to it (the
+   v18 tools refuse a v19 database);
+5. the GF1 deploy, `authorize-code`, promote and smoke.
+
+The order matters. The v19 code reads the template tables on the version form
+and on Nova requisição, so it is never deployed before the upgrade. The v18 code
+in production does not read them, so the time between steps 3 and 5 is safe,
+and a code rollback needs no schema rollback. The operator's read-only identity
+proof used for v18 expects the notification CHECK only when the version is 18
+exactly. v19 leaves that CHECK unchanged, so for v19 the proof must expect it for
+every version from 18. After the upgrade, the v19 restore reader refuses the
+earlier hosted snapshots (`SOURCE_SCHEMA_UNSUPPORTED`); the post-upgrade
+generations are the new restore points.
 
 ## Student form (C)
 

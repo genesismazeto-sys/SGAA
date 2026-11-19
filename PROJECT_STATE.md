@@ -21,9 +21,13 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   v19 adds the DOCX fill-in templates of activity versions, purely additive).
   The processing repairs and controlled recovery are documented in `docs/request-processing-corrections.md`;
   the activity documentation guidance and templates in `docs/activity-document-guidance.md`.
-  PROD PostgreSQL is v16 until a separately authorized gate runs `python -m app.pg_schema
-  upgrade` (v16, v17 or v18 -> v19); governed tooling validates the exact version, so the daily
-  backup worktree is repinned in the same session.
+  PROD PostgreSQL is v18: the GF1 of `5b989cd` (2026-10-20, ledger seq 190-199) upgraded it
+  from v17, and the GF1 of `a5b912a` (seq 202-209, the code in production) kept it; the daily
+  governed generations, which validate the exact version, run from the v18 worktree of
+  `5b989cd`. v19 reaches PROD only through a separately authorized GF1 that runs
+  `python -m app.pg_schema upgrade` (exactly v16, v17 or v18 -> v19) before the v19 code is
+  deployed and repins the daily backup worktree in the same session
+  (`docs/activity-document-guidance.md`, Publication).
 - PostgreSQL schema authority, runtime dialect and transaction semantics are in
   place. The production database is hosted in Supabase PostgreSQL 17; Path-B
   migration, governed Layer-2 backup/restore and the production cutover are recorded.
@@ -94,8 +98,8 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   a no-op scheduled wake returned HTTP 200/NOT_DUE. The configured policy is the
   default 24 h database / 7 d objects / 2 retained / 30 d restoration drill.
 - MP-3 A22 (`docs/specs/MP-3-A22-request-reclassification.md`): a student or administrator
-  corrects the activity of an editable request in place (schema v17). Slice 1 is on the
-  development branch, not deployed; PROD gate G1 (upgrade, then GF1 deploy) awaits the owner.
+  corrects the activity of an editable request in place (schema v17). In PROD since gate G1
+  on 2026-10-19 (upgrade to v17, then the GF1 deploy of `f559e3d`, ledger seq 173-181).
 
 ## Production
 
