@@ -239,3 +239,77 @@ def test_an_activation_committed_while_a_template_write_waits_wins(database):
         activator.close()
         writer.close()
         observer.close()
+
+
+def _insert_template(conn, version_id, title, content, *, slot, status="ativo"):
+    """Setup only: a template row on any version (the owner itself refuses frozen ones)."""
+    import hashlib
+
+    from app.prod1_document_templates_ddl import DOCX_MIME_TYPE
+
+    digest = hashlib.sha256(content).hexdigest()
+    conn.execute(
+        "INSERT INTO modelo_documento_arquivos (sha256, mime_type, size_bytes, conteudo) VALUES (?, ?, ?, ?)"
+        " ON CONFLICT (sha256) DO NOTHING",
+        (digest, DOCX_MIME_TYPE, len(content), content),
+    )
+    content_id = conn.execute("SELECT id FROM modelo_documento_arquivos WHERE sha256 = ?", (digest,)).fetchone()[0]
+    ended = "2026-01-01 00:00:00" if status != "ativo" else None
+    return int(conn.execute(
+        "INSERT INTO atividade_versao_modelos (atividade_versao_id, arquivo_id, titulo, nome_arquivo, ordem, status,"
+        " encerrado_em) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id",
+        (version_id, content_id, title, f"{title}.docx", slot, status, ended),
+    ).fetchone()[0])
+
+
+def test_the_student_read_path_on_postgresql(database):
+    """E-PG1: the request form's guidance read model and the student download rule."""
+    from app.activity_document_templates import active_templates_by_version, read_template_file, student_may_download
+    from app.activity_documentation import student_guidance_by_version
+    from tests.storage_mp1_support import STUDENT_USER_ID
+
+    conn = adapter(database)
+    try:
+        requested = 1  # the seeded student's own request uses version 1
+        offered = conn.execute(
+            "INSERT INTO atividade_versao (atividade_base_id, eixo, grupo, documentos_json, numero_versao, status)"
+            " VALUES (1, 'AAC', '1 - Eventos', '[\"Certificado\"]', 2, 'ativa') RETURNING id"
+        ).fetchone()[0]
+        foreign_base = conn.execute(
+            "INSERT INTO atividade_base (nome_conceito) VALUES ('Fora da matriz') RETURNING id").fetchone()[0]
+        foreign = conn.execute(
+            "INSERT INTO atividade_versao (atividade_base_id, eixo, numero_versao, status)"
+            " VALUES (?, 'AAC', 1, 'ativa') RETURNING id", (foreign_base,)
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_base_id, atividade_versao_id) VALUES (1, 1, ?)",
+            (offered,),
+        )
+        ids = {
+            "offered_2": _insert_template(conn, offered, "Segundo", FREQUENCIA, slot=2),
+            "offered_1": _insert_template(conn, offered, "Primeiro", DECLARACAO, slot=1),
+            "withdrawn": _insert_template(conn, offered, "Retirado", FREQUENCIA, slot=3, status="retirado"),
+            "requested": _insert_template(conn, requested, "Da requisição", DECLARACAO, slot=1),
+            "foreign": _insert_template(conn, foreign, "Estrangeiro", DECLARACAO, slot=1),
+        }
+        conn.commit()
+
+        by_version = active_templates_by_version(conn, [offered, requested, foreign, 999999])
+        assert [m["titulo"] for m in by_version[offered]] == ["Primeiro", "Segundo"]  # slot order, active only
+        assert [m["id"] for m in by_version[requested]] == [ids["requested"]]
+        assert by_version[999999] == []
+        guidance = student_guidance_by_version(conn, [
+            {"id": offered, "documentos_json": '["Certificado"]'},
+            {"id": foreign, "documentos_json": None},
+            {"id": 999999, "documentos_json": "[]"},
+        ])
+        assert guidance[offered]["documentos"] == ["Certificado"]
+        assert [m["titulo"] for m in guidance[offered]["modelos"]] == ["Primeiro", "Segundo"]
+        assert 999999 not in guidance
+        allowed = {name: student_may_download(conn, usuario_id=STUDENT_USER_ID, template=read_template_file(conn, i))
+                   for name, i in ids.items()}
+        assert allowed == {"offered_2": True, "offered_1": True, "withdrawn": False, "requested": True,
+                           "foreign": False}
+        assert read_template_file(conn, ids["offered_1"])["conteudo"] == DECLARACAO
+    finally:
+        conn.close()

@@ -1,6 +1,7 @@
 {% extends "base_aluno.html" %}
 {% block title %}Nova Requisição{% endblock %}
 {% block extra_head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/activity-documentation.css', v=static_asset_version) }}">
   <style>
     /* Replicar estrutura do form de Atividades (admin) */
     /* Largura padrao do formulario: vem de .form-cards-narrow (F-5B). */
@@ -191,6 +192,28 @@
         <div class="form-note form-note--guide" id="data-evento-orientacao"><i class="lucide" data-lucide="info" aria-hidden="true"></i><span>Informe a data em que a atividade ocorreu, conforme o comprovante — não a data da solicitação. Em atividades continuadas, informe a data da última atividade realizada.</span></div>
         {% endif %}
 
+  {#- Documentação exigida of the selected activity version: what to attach
+      and the fill-in templates to download. Informative only -- nothing
+      checks the comprovantes against it (app.activity_documentation). Filled
+      by the script below from #atividade-orientacoes-json for exactly the
+      selected option, and hidden when that version has nothing to show.
+      Like the field guidance above (UI-B23) it belongs to the fillable form
+      only: the read-only view shows none. -#}
+  {% if page_mode != 'view_readonly' %}
+  <section class="doc-guidance" id="orientacao-comprovantes" aria-labelledby="orientacao-comprovantes-titulo" aria-live="polite" data-doc-guidance data-download-url="{{ url_for('aluno.aluno_baixar_modelo', modelo_id=0) }}" hidden>
+    <h2 class="doc-guidance-title" id="orientacao-comprovantes-titulo"><i class="lucide" data-lucide="file-check-2" aria-hidden="true"></i><span>Documentação exigida para esta atividade</span></h2>
+    <p class="doc-guidance-lead">Anexe em Comprovantes os documentos indicados. Esta orientação é informativa: a análise da requisição é feita pela coordenação.</p>
+    <div class="doc-guidance-part" data-guidance-documents hidden>
+      <h3 class="doc-guidance-subtitle" id="orientacao-documentos-titulo">Comprovantes exigidos</h3>
+      <ul class="doc-guidance-list" aria-labelledby="orientacao-documentos-titulo" data-guidance-document-list></ul>
+    </div>
+    <div class="doc-guidance-part" data-guidance-templates hidden>
+      <h3 class="doc-guidance-subtitle" id="orientacao-modelos-titulo">Modelos para preenchimento</h3>
+      <ul class="doc-guidance-templates" aria-labelledby="orientacao-modelos-titulo" data-guidance-template-list></ul>
+    </div>
+  </section>
+  {% endif %}
+
   {% if page_mode != 'view_readonly' %}
   <div class="form-row">
     <label class="row-label">Comprovantes</label>
@@ -266,6 +289,12 @@
 <script src="{{ url_for('static', filename='js/direct-upload.js', v=static_asset_version) }}" defer></script>
 <!-- Inicialização do modo edição somente leitura -->
 <script id="init-form-json" type="application/json">{{ (init or {}) | tojson | safe }}</script>
+{#- page_mode belongs to block content; this block reads the context's mode. -#}
+{% if (mode or 'create') != 'view_readonly' %}
+{%- set guidance = namespace(by_version={}) -%}
+{%- for a in atividades or [] if a.orientacao -%}{%- set _ = guidance.by_version.update({(a.id|string): a.orientacao}) -%}{%- endfor %}
+<script id="atividade-orientacoes-json" type="application/json">{{ guidance.by_version | tojson }}</script>
+{% endif %}
 <meta id="readonly-flag" data-readonly="{{ '1' if page_mode=='view_readonly' else '0' }}">
 <script>
   // Grupo (nº/descrição) e filtro de Atividade por Tipo+Grupo
@@ -437,6 +466,84 @@
       numSel.addEventListener('change', ()=>{ loadDescFromSelected(); syncHidden(); applyAtividadesFilter(); applySuggestedHours(); });
       atvSel.addEventListener('change', applySuggestedHours);
     }
+  })();
+
+  // Documentação exigida: always the guidance of the option actually
+  // selected, rebuilt from data on every change -- never left over from a
+  // previous activity. (Absent from the read-only view, see the block.)
+  (function(){
+    const block = document.querySelector('[data-doc-guidance]');
+    const atvSel = document.getElementById('atividade_versao_id_select');
+    if (!block || !atvSel) return;
+    let byVersion = {};
+    try{ byVersion = JSON.parse(document.getElementById('atividade-orientacoes-json')?.textContent || '{}'); }catch(_e){ byVersion = {}; }
+    const documentsPart = block.querySelector('[data-guidance-documents]');
+    const documentList = block.querySelector('[data-guidance-document-list]');
+    const templatesPart = block.querySelector('[data-guidance-templates]');
+    const templateList = block.querySelector('[data-guidance-template-list]');
+    const downloadUrl = block.getAttribute('data-download-url') || '';
+
+    function icon(name, className){
+      const element = document.createElement('i');
+      element.className = 'lucide' + (className ? ' ' + className : '');
+      element.setAttribute('data-lucide', name);
+      element.setAttribute('aria-hidden', 'true');
+      return element;
+    }
+    function selectedVersionId(){
+      return (!atvSel.disabled && atvSel.value) ? String(atvSel.value) : '';
+    }
+    function render(){
+      const id = selectedVersionId();
+      const guidance = id ? byVersion[id] : null;
+      documentList.replaceChildren();
+      templateList.replaceChildren();
+      const documentos = (guidance && guidance.documentos) || [];
+      const modelos = (guidance && guidance.modelos) || [];
+      documentos.forEach(text => {
+        const item = document.createElement('li');
+        item.textContent = text;
+        documentList.appendChild(item);
+      });
+      modelos.forEach(modelo => {
+        const item = document.createElement('li');
+        item.className = 'doc-guidance-template';
+        item.dataset.modeloId = String(modelo.id);
+        const text = document.createElement('div');
+        text.className = 'doc-guidance-template-text';
+        const title = document.createElement('span');
+        title.className = 'doc-guidance-template-title';
+        title.textContent = modelo.titulo;
+        const meta = document.createElement('span');
+        meta.className = 'doc-guidance-template-meta';
+        meta.textContent = modelo.nome_arquivo + ' · ' + modelo.tamanho;
+        text.append(title, meta);
+        const link = document.createElement('a');
+        link.className = 'btn doc-guidance-download';
+        link.href = downloadUrl.replace('/0/', '/' + encodeURIComponent(modelo.id) + '/');
+        link.setAttribute('aria-label', 'Baixar modelo ' + modelo.titulo);
+        const label = document.createElement('span');
+        label.className = 'btn-label';
+        label.textContent = 'Baixar modelo';
+        link.append(icon('download'), label);
+        item.append(icon('file-text', 'doc-guidance-template-icon'), text, link);
+        templateList.appendChild(item);
+      });
+      documentsPart.hidden = documentos.length === 0;
+      templatesPart.hidden = modelos.length === 0;
+      block.hidden = documentos.length === 0 && modelos.length === 0;
+      block.dataset.versaoId = block.hidden ? '' : id;
+      if (!block.hidden && window.lucide) lucide.createIcons();
+    }
+    if (atvSel){
+      // The Tipo and Grupo selects re-filter the activity and may move or
+      // clear its value without a change event of its own.
+      ['tipo_atividade_select', 'grupo_num'].forEach(selectId => {
+        document.getElementById(selectId)?.addEventListener('change', render);
+      });
+      atvSel.addEventListener('change', render);
+    }
+    render();
   })();
 
   // Auto-grow para textarea de observação

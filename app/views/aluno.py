@@ -9,6 +9,7 @@ from typing import Any
 
 from flask import (
     Blueprint,
+    abort,
     current_app,
     jsonify,
     redirect,
@@ -20,6 +21,12 @@ from flask import (
 )
 
 from app.academics import DEFAULT_CURSO_TOTAL_HORAS_AAC, DEFAULT_CURSO_TOTAL_HORAS_AEU
+from app.activity_document_templates import (
+    read_template_file,
+    student_may_download,
+    template_download_response,
+)
+from app.activity_documentation import student_guidance_by_version
 from app.admin_alerts import list_active_admin_alertas
 from app.admin_files import get_admin_arquivo
 from app.arquivos import ArquivoError, read_arquivo_content
@@ -324,6 +331,10 @@ def _list_atividades_for_usuario(
             ptbr_text_sort_key(atividade.get("nome")),
         )
     )
+    # Documentação exigida of each exact version the form offers (informative).
+    guidance = student_guidance_by_version(conn, atividades)
+    for atividade in atividades:
+        atividade["orientacao"] = guidance.get(int(atividade["id"]))
     return aluno_scope, matriz, atividades
 
 
@@ -1249,6 +1260,17 @@ def aluno_baixar_arquivo(arquivo_id: int):
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["Cache-Control"] = "private, no-store"
     return resp
+
+
+@bp_aluno.route("/aluno/modelos/<int:modelo_id>/baixar")
+@aluno_required
+def aluno_baixar_modelo(modelo_id: int):
+    """A fill-in template of an activity the student may request or already requested."""
+    conn = get_db_connection()
+    template = read_template_file(conn, modelo_id)
+    if not student_may_download(conn, usuario_id=int(session["user_id"]), template=template):
+        abort(404)
+    return template_download_response(template)
 
 
 def _aluno_reportes(conn, aluno_id):

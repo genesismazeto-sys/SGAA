@@ -60,3 +60,12 @@ moves an exact v16, v17 or v18 PostgreSQL schema to v19 in one transaction.
 Path-B migrates both tables exactly with value-free integrity checks, and the
 governed PostgreSQL backup carries them like every other table; the hosted
 snapshot's readable registers leave out the template bytes, as they do images.
+
+## Student form (C)
+
+`aluno_nova_requisicao.html` shows, between the event fields and Comprovantes,
+the guidance of the selected activity version, rebuilt from
+`#atividade-orientacoes-json` on every change of Tipo, Grupo or Atividade and
+hidden when that version has nothing to show. Editing or rectifying a request
+shows the recorded version's guidance, even when the Matrix no longer offers
+it; like the field guidance of the same form, the read-only view shows none.

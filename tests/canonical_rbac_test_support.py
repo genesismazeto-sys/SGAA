@@ -518,6 +518,7 @@ NON_GOVERNED_BOUNDARY_CATEGORIES: tuple[NonGovernedCategory, ...] = (
             Combination("/aluno/dashboard", "aluno.aluno_dashboard", "GET"),
             Combination("/aluno/meus_dados", "aluno.aluno_meus_dados", "GET"),
             Combination("/aluno/meus_dados", "aluno.aluno_meus_dados", "POST"),
+            Combination("/aluno/modelos/<int:modelo_id>/baixar", "aluno.aluno_baixar_modelo", "GET"),
             Combination("/aluno/nova-requisicao", "aluno.aluno_nova_requisicao", "GET"),
             Combination("/aluno/nova-requisicao", "aluno.aluno_nova_requisicao", "POST"),
             Combination("/aluno/nova_requisicao", "aluno.aluno_nova_requisicao", "GET"),
@@ -784,10 +785,11 @@ CANONICAL_PROFILE_DIGESTS = {
 # (category database_image_delivery); no requirement or denial changes.
 # STORAGE S3-A adds the two non-/admin direct request-document upload POSTs
 # (category request_document_direct_upload); no requirement or denial changes.
-# Document templates add four parameterised governed routes; the denials
+# Document templates add the student's template download GET (category
+# aluno_self_service) and four parameterised governed routes; the denials
 # follow from the requirement matrix (non-edit profiles on the three POSTs).
 CANONICAL_NON_GOVERNED_IDENTITIES_SHA256 = (
-    "a7286c53ea2780d1f97f9f5ebdffc7827a3909e1f0a60b65d5e30550bfbccbc1"
+    "3297578c7404fce721f0794a3e792cda11181ea16f645c3bdd6e1c6899eddb7e"
 )
 CANONICAL_DYNAMIC_REQUIREMENT_IDENTITIES_SHA256 = (
     "acf37b9f8e0a92efb8f4602dcfbd56fb84ced4a5931c4ad3160f983b3a78975a"

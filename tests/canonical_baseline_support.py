@@ -627,9 +627,11 @@ TMA1_MATRIX_AUTHORITY_KEYS = frozenset({"msg_35110e5b7a30e863"})
 # Access-mail batch adds one CSRF-protected POST, requiring (acesso, full).
 # Document templates (prod-1/v19) add three CSRF-protected POSTs on a draft
 # version's templates, requiring (atividades, edit), and the administrator's
-# GET download, requiring (atividades, view).
+# GET download, requiring (atividades, view); the student's GET download
+# /aluno/modelos/<int:modelo_id>/baixar (aluno.aluno_baixar_modelo) is
+# authorized in its view.
 CANONICAL_ROUTE_IDENTITIES_SHA256 = (
-    "ba6d7611f6a41950956f22d45688e44e0c9f2cef78f6bac040511f1c2f82bbac"
+    "36c50d19442c8d42d6862508523a3e52f4a21da197082cbb4d30c7bdb52eba01"
 )
 
 

@@ -192,10 +192,11 @@ def test_derived_projections_agree_with_the_versioned_artifacts():
     # STORAGE S1 adds two GET rules with their own endpoints (images.*).
     # STORAGE S3-A: +2 POST routes (the direct request-document upload intents).
     # Access-mail batch: +1 POST rule and endpoint, with (acesso, full).
-    # Document templates: +4 admin rules and endpoints (three POSTs, one GET download).
-    assert governance.CANONICAL_ROUTE_ENTRY_COUNT == 142
-    assert governance.CANONICAL_ROUTE_ENDPOINT_COUNT == 141
-    assert governance.CANONICAL_ROUTE_RULE_COUNT == 141
+    # Document templates: +4 admin rules and endpoints (three POSTs, one GET download)
+    # and the student's GET template download.
+    assert governance.CANONICAL_ROUTE_ENTRY_COUNT == 143
+    assert governance.CANONICAL_ROUTE_ENDPOINT_COUNT == 142
+    assert governance.CANONICAL_ROUTE_RULE_COUNT == 142
     assert governance.CANONICAL_CSRF_ROW_COUNT == 78
     assert governance.CANONICAL_CSRF_PAGE_STATUS_COUNT == 68
     assert sum(governance.CANONICAL_CSRF_OWNER_PARTITIONS.values()) == 78

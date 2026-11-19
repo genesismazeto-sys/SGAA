@@ -850,6 +850,13 @@
       "rule": "/aluno/meus_dados"
     },
     {
+      "endpoint": "aluno.aluno_baixar_modelo",
+      "methods": [
+        "GET"
+      ],
+      "rule": "/aluno/modelos/<int:modelo_id>/baixar"
+    },
+    {
       "endpoint": "aluno.aluno_nova_requisicao",
       "methods": [
         "GET",

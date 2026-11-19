@@ -35,7 +35,9 @@ AUTHORIZATION
     Writes: the caller's route is ``atividades:edit``; this owner re-checks
     the version state under the base lock, then the version row lock
     (``app.db``), inside one write transaction.  Reads: an administrator with
-    ``atividades:view`` reads any association.
+    ``atividades:view`` reads any association; a student reads an ACTIVE
+    template of a version that the student's effective Matrix offers or that
+    one of the student's own requests uses (``student_may_download``).
 """
 
 from __future__ import annotations
@@ -59,6 +61,7 @@ from app.prod1_document_templates_ddl import (
 )
 from app.presentation import _format_bytes_label, format_date_ptbr
 from app.sql_dialect import current_utc_text
+from app.student_matrix import get_effective_matrix_for_student
 
 MAX_ACTIVE_TEMPLATES_PER_VERSION = 10
 TEMPLATE_FILE_FIELD = "modelo_arquivo"
@@ -298,6 +301,25 @@ def list_version_templates(conn, versao_id: int, *, include_ended: bool = False)
     return [_listed(row) for row in rows]
 
 
+def active_templates_by_version(conn, versao_ids) -> dict[int, list[dict]]:
+    """Active templates of each listed version, in slot order, without bytes."""
+    ids = sorted({int(value) for value in versao_ids if value is not None})
+    result: dict[int, list[dict]] = {version_id: [] for version_id in ids}
+    for start in range(0, len(ids), 500):
+        chunk = ids[start:start + 500]
+        placeholders = ", ".join("?" for _ in chunk)
+        rows = conn.execute(
+            f"SELECT {_LIST_COLUMNS} FROM atividade_versao_modelos m"
+            " JOIN modelo_documento_arquivos a ON a.id = m.arquivo_id"
+            f" WHERE m.status = 'ativo' AND m.atividade_versao_id IN ({placeholders})"
+            " ORDER BY m.atividade_versao_id, m.ordem, m.id",
+            chunk,
+        ).fetchall()
+        for row in rows:
+            result[int(row["atividade_versao_id"])].append(_listed(row))
+    return result
+
+
 def read_template_file(conn, modelo_id: int):
     """The association with its bytes (any status), or None."""
     row = conn.execute(
@@ -332,6 +354,29 @@ def template_download_response(template):
     return response
 
 
+def student_may_download(conn, *, usuario_id: int, template) -> bool:
+    """An ACTIVE template of a version the student may request now or already requested."""
+    if template is None or template["status"] != "ativo":
+        return False
+    aluno = conn.execute("SELECT id FROM alunos WHERE usuario_id = ?", (int(usuario_id),)).fetchone()
+    if aluno is None:
+        return False
+    versao_id = int(template["atividade_versao_id"])
+    own_request = conn.execute(
+        "SELECT 1 FROM requisicoes WHERE aluno_id = ? AND atividade_versao_id = ? LIMIT 1",
+        (int(aluno["id"]), versao_id),
+    ).fetchone()
+    if own_request is not None:
+        return True
+    matriz = get_effective_matrix_for_student(conn, int(aluno["id"]))
+    if not matriz:
+        return False
+    return conn.execute(
+        "SELECT 1 FROM matriz_atividade_versao_item WHERE matriz_id = ? AND atividade_versao_id = ?",
+        (int(matriz["id"]), versao_id),
+    ).fetchone() is not None
+
+
 __all__ = [
     "DocumentTemplateRefused",
     "FROZEN_MESSAGE",
@@ -339,6 +384,7 @@ __all__ = [
     "TEMPLATE_FILE_FIELD",
     "TEMPLATE_TITLE_FIELD",
     "TemplateUpload",
+    "active_templates_by_version",
     "add_template",
     "copy_active_templates",
     "list_version_templates",
@@ -346,6 +392,7 @@ __all__ = [
     "read_template_file",
     "read_template_upload",
     "retire_template",
+    "student_may_download",
     "template_download_response",
     "update_template",
 ]

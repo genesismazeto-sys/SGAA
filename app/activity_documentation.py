@@ -22,6 +22,12 @@ STORAGE FORMAT
     leaves the list unchanged keeps the stored text exactly as it is
     (``documentos_json_for_write``), so opening and saving a version never
     rewrites data nobody edited.
+
+WHAT THE STUDENT SEES
+    ``student_guidance_by_version`` is the read model of the request form: for
+    each version it offers, the required documents and the active DOCX
+    templates (``app.activity_document_templates``) of that exact version --
+    a request being edited or rectified shows its own recorded version's.
 """
 
 from __future__ import annotations
@@ -29,6 +35,7 @@ from __future__ import annotations
 import json
 
 from app.activity_catalog import parse_documentos_json
+from app.activity_document_templates import active_templates_by_version
 
 REQUIRED_DOCUMENTS_FIELD = "documentos_exigidos"
 #: Carried by every form that shows the list, so that a list emptied on purpose
@@ -88,6 +95,34 @@ def parse_required_documents_form(values) -> list[str]:
     return items
 
 
+def student_guidance_by_version(conn, atividades) -> dict[int, dict]:
+    """What the student is told for each listed activity version, keyed by its id.
+
+    ``atividades`` are the version rows a request form offers (each with
+    ``id`` and ``documentos_json``).  A version with neither required
+    documents nor active templates is absent, so the form shows no empty
+    block for it.  Each template carries what the download button shows; the
+    bytes stay behind the authorized download route.
+    """
+    templates = active_templates_by_version(conn, [atividade["id"] for atividade in atividades])
+    guidance: dict[int, dict] = {}
+    for atividade in atividades:
+        version_id = int(atividade["id"])
+        documentos = read_required_documents(atividade.get("documentos_json"))
+        modelos = [
+            {
+                "id": int(item["id"]),
+                "titulo": item["titulo"],
+                "nome_arquivo": item["nome_arquivo"],
+                "tamanho": item["tamanho_label"],
+            }
+            for item in templates.get(version_id, [])
+        ]
+        if documentos or modelos:
+            guidance[version_id] = {"documentos": documentos, "modelos": modelos}
+    return guidance
+
+
 def serialize_required_documents(items) -> str:
     """The canonical stored form: a JSON array of the items, in order."""
     return json.dumps(list(items), ensure_ascii=False)
@@ -117,5 +152,6 @@ __all__ = [
     "parse_required_documents_form",
     "read_required_documents",
     "serialize_required_documents",
+    "student_guidance_by_version",
     "submitted_required_documents",
 ]
