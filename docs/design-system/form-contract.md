@@ -130,10 +130,12 @@ Pinned by `form_responsive_960`, `form_responsive_720`,
 `form_responsive_wide_720`, `form_responsive_640` and
 `form_field_label_reflow`.
 
-**Supported floor: 768px.** Below the 720px stacking breakpoint the contract
-holds; in the narrow band just above it the `--gutter-wide` surfaces are
-squeezed hard enough that field cards can exceed the form box. That is recorded
-as debt in the [README](README.md) §8 and is not claimed as supported.
+**Supported widths.** From 768px up the desktop shell applies; below it the
+phone shell of the [README](README.md) §2.7 removes the sidebar from the
+content row, so the form is bound by a track as wide as the viewport less
+32px. Below the 720px stacking breakpoint the contract holds down to 320px,
+and the 720–767px band no longer squeezes the `--gutter-wide` surfaces
+(measured by MOBILE-01; README §8).
 
 ---
 

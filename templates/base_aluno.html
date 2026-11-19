@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="csrf-token" content="{{ csrf_token() }}" />
   <title>{% block title %}Sistema de Gerenciamento de Atividades Acadêmicas (SGAA){% endblock %}</title>
-    {% set static_asset_version = '20261019-ui-rework-v1' %}
+    {% set static_asset_version = '20261119-mobile-shell-v1' %}
 
     <!-- Fontes + CSS global -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -31,6 +31,7 @@
     <script src="{{ url_for('static', filename='js/ui-tooltips.js', v=static_asset_version) }}" defer></script>
     <script src="{{ url_for('static', filename='js/table-ellipsis.js', v=static_asset_version) }}" defer></script>
     <script src="{{ url_for('static', filename='js/password-toggle.js', v=static_asset_version) }}" defer></script>
+    <script src="{{ url_for('static', filename='js/app-shell.js', v=static_asset_version) }}" defer></script>
   </head>
 
   <body>
@@ -38,16 +39,19 @@
 
     <div class="app-layout">
       <header class="app-header" role="banner">
+        <button class="app-menu-toggle" type="button" id="app-menu-toggle" aria-controls="app-sidebar" aria-expanded="false" aria-label="Menu de navegação">
+          <i class="lucide" data-lucide="menu" aria-hidden="true"></i>
+        </button>
         <a class="logo" href="/aluno/dashboard">
           <img src="{{ url_for('static', filename='images/ej_logo.svg') }}" alt="Logo" />
-          <span>SGAA - Sistema de Gerenciamento de Atividades Acadêmicas</span>
+          <span class="logo-text">SGAA<span class="logo-text-long"> - Sistema de Gerenciamento de Atividades Acadêmicas</span></span>
         </a>
 
         <a class="user-profile user-profile-link" href="/aluno/meus_dados" title="{{ user_message('Meus dados') }}">
           {% set _nome_aluno = session.get('user_name') or 'Aluno' %}
           {% set _foto_aluno = session.get('foto_perfil') %}
 
-          <span>{{ _nome_aluno }}</span>
+          <span class="user-profile-name">{{ _nome_aluno }}</span>
           {% if _foto_aluno %}
             <img src="{{ url_for('images.profile_photo', v=_foto_aluno) }}" alt="Foto de {{ _nome_aluno }}" class="user-avatar" />
           {% else %}
@@ -56,7 +60,7 @@
         </a>
       </header>
 
-      <aside class="app-sidebar" role="complementary">
+      <aside class="app-sidebar" id="app-sidebar" role="complementary">
         <nav class="sidebar-group" aria-label="Menu do aluno">
           <a
             class="sidebar-link {{ 'active' if request.endpoint and request.endpoint.endswith('aluno_dashboard') else '' }}"
@@ -120,6 +124,7 @@
           </a>
         </nav>
       </aside>
+      <div class="app-nav-backdrop" id="app-nav-backdrop" aria-hidden="true"></div>
 
       <main id="conteudo" class="app-main" role="main">
         <div class="app-track aluno-page-track">

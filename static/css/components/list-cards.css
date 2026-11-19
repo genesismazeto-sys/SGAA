@@ -171,7 +171,7 @@
 /* ====== POPOVER (menus ordenar/filtrar) ====== */
 .popover{
   position:absolute; background:var(--surface); border:1px solid var(--border-strong);
-  border-radius:var(--radius); box-shadow:0 12px 28px rgba(0,0,0,.10); padding:12px; min-width:520px; z-index:1000;
+  border-radius:var(--radius); box-shadow:0 12px 28px rgba(0,0,0,.10); padding:12px; min-width:min(520px, calc(100vw - 24px)); z-index:1000;
 }
 .menu-title{ font-size:12px; font-weight:400; color:var(--text-secondary); margin:2px 2px 8px; }
 .pill-row{ display:flex; flex-wrap:wrap; gap:6px; }

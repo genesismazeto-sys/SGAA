@@ -15,6 +15,15 @@
     .imp-reportes{ --imp-status-col-chars:10; }
     .imp-reportes{ --imp-list-min-width:calc(684px + var(--imp-status-col)); }
     .imp-reportes{ --imp-cols: 44px minmax(130px, 2fr) minmax(100px, 1fr) minmax(80px, 1fr) minmax(150px, 3fr) minmax(90px, 1fr) var(--imp-status-col); }
+    /* On a phone the list scrolls sideways at its minimum width, where 80px
+       cut the centred category ("Bug na plataforma") on both sides; there the
+       column fits the longest category instead (MOBILE-01). */
+    @media (max-width:767.98px){
+      .imp-reportes{
+        --imp-list-min-width:calc(728px + var(--imp-status-col));
+        --imp-cols: 44px minmax(130px, 2fr) minmax(100px, 1fr) minmax(124px, 1fr) minmax(150px, 3fr) minmax(90px, 1fr) var(--imp-status-col);
+      }
+    }
     .imp-reportes .impressoes-cards,
     .imp-reportes .impresso-card{ width:100% !important; max-width:100% !important; }
     .imp-reportes .impresso-card .cell:nth-child(2),

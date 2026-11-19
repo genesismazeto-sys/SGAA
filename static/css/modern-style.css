@@ -169,6 +169,71 @@ body{
   container-name:track;
 }
 
+/* ===== Phone shell (MOBILE-01) =====
+   From 768px up the shell above is unchanged. Below it the 240px sidebar
+   would leave the content column 86px wide on a 390px phone, so the
+   navigation becomes a drawer: the header's menu button
+   (static/js/app-shell.js) opens it over the content, under a scrim, and
+   the content column takes the whole width. Closed, the drawer is
+   `visibility:hidden`, so it is neither focusable nor announced; open, the
+   content behind it is `inert`. The header keeps the short name "SGAA".
+   The layout uses the dynamic viewport height, so the browser's own bars
+   never cover the bottom of the page. */
+.app-menu-toggle,
+.app-nav-backdrop{ display:none; }
+
+@media (max-width:767.98px){
+  .app-layout{
+    grid-template-columns:minmax(0, 1fr);
+    grid-template-areas:"header" "main";
+    height:100vh;
+    height:100dvh;
+  }
+  .app-header{ justify-content:flex-start; gap:8px; padding:0 16px 0 6px; min-width:0; }
+  .app-menu-toggle{
+    display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto;
+    width:44px; height:44px; padding:0; margin:0;
+    border:1px solid transparent; border-radius:var(--radius);
+    background:transparent; color:var(--text-primary); cursor:pointer;
+  }
+  .app-menu-toggle:hover,
+  .app-menu-toggle[aria-expanded="true"]{ background:var(--surface); border-color:var(--border-strong); }
+  .app-menu-toggle:focus-visible{ outline:2px solid var(--focus-ring-color); outline-offset:2px; }
+  .logo{ flex:0 1 auto; min-width:0; gap:8px; }
+  .logo-text{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .logo-text-long{ display:none; }
+  .user-profile{ flex:0 1 auto; min-width:0; margin-left:auto; }
+  .user-profile-name{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  .app-sidebar{
+    position:fixed; top:56px; left:0; bottom:0; z-index:30;
+    width:min(280px, calc(100vw - 48px));
+    overflow-y:auto; overscroll-behavior:contain;
+    transform:translateX(-100%); visibility:hidden;
+    transition:transform .2s ease, visibility 0s linear .2s;
+  }
+  .app-layout.is-nav-open .app-sidebar{
+    transform:none; visibility:visible; box-shadow:var(--shadow-modal);
+    transition:transform .2s ease;
+  }
+  .app-layout.is-nav-open .app-nav-backdrop{
+    display:block; position:fixed; inset:56px 0 0 0; z-index:29;
+    background:var(--backdrop);
+  }
+  .sidebar-link{ min-height:44px; }
+
+  .app-main{ padding:16px; }
+  /* The toolbar search keeps its 320px floor from 768px up; on a phone that
+     floor is wider than the content column, so the search takes the whole
+     first row of the toolbar instead and the other controls wrap below it. */
+  .app-main .toolbar .filters .input-group[id^="grp-busca"]{ flex:1 1 100%; min-width:0; }
+  .app-main .toolbar .filters .input-group[id^="grp-busca"] input{ flex:1 1 0; min-width:0; }
+}
+@media (max-width:767.98px) and (prefers-reduced-motion:reduce){
+  .app-sidebar,
+  .app-layout.is-nav-open .app-sidebar{ transition:none; }
+}
+
 /* ===== TÃ­tulos / grids bÃ¡sicos ===== */
 .main-title{ font-size:24px; font-weight:600; margin-bottom:48px; }
 

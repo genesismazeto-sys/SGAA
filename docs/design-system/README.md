@@ -438,10 +438,38 @@ should measure **the box it actually lives in**, not the window: the shell eats
 240px of sidebar plus 64px of padding plus the scrollbar gutter, so a viewport
 number is wrong by an amount that changes with the platform.
 
-**Supported width.** `768px` is the current supported floor for the list and
-dashboard contracts below. Behaviour under 768 is not part of this contract.
-A 360–480px phone shell is a **separate product decision** and is not claimed,
-implied or supported here.
+**Supported width.** `768px` is the floor of the desktop shell and of the list
+and dashboard contracts below; from 768 up nothing in this section changed
+with the phone shell (MOBILE-01 compared 768 and 1366 renders pixel for pixel).
+
+**Phone shell (MOBILE-01), below 768px, supported down to 320px.** The binding
+box here IS the viewport: what changes is the shell itself, so the query is
+`@media (max-width:767.98px)` and it lives with the shell in
+`modern-style.css`.
+
+* The sidebar becomes a drawer. The header's menu button
+  (`#app-menu-toggle`, `static/js/app-shell.js`) opens it over the content
+  under the `--backdrop` scrim; Escape, the scrim or the button close it and
+  return the focus to the button, and following a link closes it. Closed, the
+  drawer is `visibility:hidden` (not focusable, not announced); open, the
+  content (`#conteudo`) is `inert`. The button never opens it from 768 up.
+* The content column takes the whole width (`.app-main` padding 16px) and the
+  layout uses `100dvh`, so the browser's own bars never cover the page.
+* The header shows the short name "SGAA" (`.logo-text-long` is hidden) and
+  truncates the user's name before anything runs past the screen.
+* The toolbar search drops its 320px floor and takes the toolbar's first row;
+  the other controls wrap below it as on desktop.
+* `.popover` keeps its 520px minimum only where the viewport has room for it
+  (`min(520px, 100vw - 24px)`), so the sort and filter popovers stay inside
+  the screen; the 12px clamp of §2.7 Popovers places them.
+* Form labels still never wrap and still stack above their control (DS-7, at
+  ≤720px); the `.form-note--guide` text stays justified, as approved.
+* List grids (`.impressoes-cards-scroll`) keep their minimum width and scroll
+  sideways inside their own box: that is the intended horizontal scroll, not
+  page overflow. Nothing else may run past the viewport.
+
+Pinned by `tests/test_mobile_shell_browser.py` (Chromium, phone emulation at
+320/360/390/430, desktop shell at 768/1366).
 
 **Forms**
 
@@ -1044,14 +1072,17 @@ review. These were recorded and deliberately left in the tree.
   was measured and found false; see §2.7.
 * ~~**`openMenu()` hidden-width measurement.**~~ Fixed by F-7, which had to
   measure the same opener for the vertical axis anyway.
-* **Mobile shell / C5.** The 240px sidebar never collapses, so below roughly
-  480px the content track falls under a field card's intrinsic minimum. 768px
-  is the supported floor (§2.7); a 360–480px phone shell is a separate product
-  decision and is **not** supported.
-* **Residual narrow-form geometry below the supported floor.** Between the 720
-  stacking breakpoint and 768, the `--gutter-wide` surfaces are squeezed far
-  enough that field cards can exceed the form box. Measured strictly better
-  than before F-5D at every width in that band, and no baseline covers it.
+* ~~**Mobile shell / C5.**~~ Fixed by MOBILE-01: below 768px the sidebar is a
+  drawer and the content takes the whole width (§2.7, Phone shell). The
+  Playwright baselines rendered below 768 (`form_responsive_640`,
+  `form_responsive_720`, `form_responsive_wide_720`) predate it and must be
+  re-approved with the harness (§5.1); MOBILE-01 did not run it.
+* ~~**Residual narrow-form geometry below the supported floor.**~~ Between the
+  720 stacking breakpoint and 768 the `--gutter-wide` surfaces were squeezed
+  far enough that field cards could exceed the form box. Under the phone shell
+  that band has no sidebar: MOBILE-01 measured `/admin/adicionar_atividade` and
+  `/admin/adicionar_aluno` at 721, 744 and 767 with no field card outside its
+  form and nothing past the viewport.
 
 **Harness**
 
