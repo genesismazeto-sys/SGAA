@@ -26,6 +26,7 @@ EXPECTED_ADMIN_PACKAGE_FILES = frozenset(
     {
         "__init__.py",
         "acesso.py",
+        "activity_templates.py",  # COMPROVANTES-01 DOCX template routes of a version
         "activity_version_delete.py",  # exact-version deletion workflow owner
         "alertas.py",
         "alunos_turmas_cursos.py",
@@ -58,6 +59,7 @@ EXPECTED_BACKEND_MESSAGE_FILES = frozenset(
         "app/versioning/integrity.py",
         "app/views/admin/__init__.py",
         "app/views/admin/acesso.py",
+        "app/views/admin/activity_templates.py",
         "app/views/admin/activity_version_delete.py",
         "app/views/admin/alertas.py",
         "app/views/admin/alunos_turmas_cursos.py",

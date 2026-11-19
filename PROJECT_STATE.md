@@ -169,6 +169,11 @@ corrections of 2026-11-18 (identical on the untouched prior head; not fixed):
   -- it expects the caution tone to hold only Pendente and Encerrada; Devolvida
   now shares it.
 
+A ninth fails identically on `a8922ad`:
+`tests/test_ui_corrections_batch3.py::test_form_note_hidden_rule_changes_no_existing_consumer`
+-- `admin_acesso.html`'s e-mail batch notes (`#access-email-replace` and one
+more) start `hidden`, which the guard expects no consumer to do.
+
 Three real-PostgreSQL tests fail too, identically on the untouched prior head:
 `tests/test_storage_s2_real_pg.py::test_fresh_v14_authority_validates_and_is_empty`
 and `tests/test_storage_s3a_real_pg.py::test_pg_authority_is_v15` still pin head
