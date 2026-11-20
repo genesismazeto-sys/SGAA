@@ -261,7 +261,7 @@
                   <i class="lucide doc-template-icon" data-lucide="file-text" aria-hidden="true"></i>
                   <div class="doc-template-text">
                     <span class="doc-template-title">{{ m.titulo }}</span>
-                    <span class="doc-template-meta">{{ m.nome_arquivo }} · {{ m.tamanho_label }}</span>
+                    <span class="doc-template-meta">{{ m.nome_arquivo }} <span class="doc-template-meta-tail">· {{ m.tamanho_label }}</span></span>
                   </div>
                   <div class="doc-template-actions">
                     <a class="btn" href="{{ url_for('admin_catalogo_baixar_modelo', base_id=base.id, versao_id=modelos_versao_id, modelo_id=m.id) }}" aria-label="Baixar modelo {{ m.titulo }}"><i class="lucide" data-lucide="download" aria-hidden="true"></i><span class="btn-label">Baixar</span></a>
@@ -319,7 +319,7 @@
                     <i class="lucide doc-template-icon" data-lucide="file-clock" aria-hidden="true"></i>
                     <div class="doc-template-text">
                       <span class="doc-template-title">{{ m.titulo }}</span>
-                      <span class="doc-template-meta">{{ m.nome_arquivo }} · {{ 'Substituído' if m.status == 'substituido' else 'Retirado' }} em {{ m.encerrado_em_label }}</span>
+                      <span class="doc-template-meta">{{ m.nome_arquivo }} <span class="doc-template-meta-tail">· {{ 'Substituído' if m.status == 'substituido' else 'Retirado' }} em {{ m.encerrado_em_label }}</span></span>
                     </div>
                     <div class="doc-template-actions">
                       <a class="btn" href="{{ url_for('admin_catalogo_baixar_modelo', base_id=base.id, versao_id=modelos_versao_id, modelo_id=m.id) }}" aria-label="Baixar modelo encerrado {{ m.titulo }}"><i class="lucide" data-lucide="download" aria-hidden="true"></i><span class="btn-label">Baixar</span></a>

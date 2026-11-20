@@ -101,6 +101,8 @@
 .doc-template-meta{ overflow-wrap:anywhere; }
 .doc-template-title{ font-weight:600; color:var(--text-primary); }
 .doc-template-meta{ font-size:var(--font-size-small); color:var(--text-secondary); }
+/* The file name wraps; its size (or end date) stays whole: never "990" / "B". */
+.doc-template-meta-tail{ white-space:nowrap; }
 .doc-template-actions{ display:inline-flex; flex-wrap:wrap; justify-content:flex-end; gap:6px; }
 .doc-template-editor,
 .doc-template-new{ display:grid; row-gap:6px; min-width:0; }

@@ -333,10 +333,14 @@ def test_a_template_title_stays_readable_on_the_version_form_at_any_width(worksp
                 " const tr = t.getBoundingClientRect(), ar = a.getBoundingClientRect();"
                 " return {title: t.textContent.trim(), titleCut: t.scrollWidth - t.clientWidth,"
                 " metaCut: m.scrollWidth - m.clientWidth, overflow: li.scrollWidth - li.clientWidth,"
+                " sizeLines: m.querySelector('.doc-template-meta-tail').getClientRects().length,"
+                " sizeWrap: getComputedStyle(m.querySelector('.doc-template-meta-tail')).whiteSpace,"
                 " actionsBelow: ar.top >= tr.bottom - 1, actionsBeside: ar.left >= tr.right - 1}; })()"
             )
             assert row["title"] == LONG_ANNEX_TITLE
             assert row["titleCut"] <= 0 and row["metaCut"] <= 0 and row["overflow"] <= 0, (width, row)
+            # The file name wraps; its size stays whole (never "990" / "B").
+            assert row["sizeLines"] == 1 and row["sizeWrap"] == "nowrap", (width, row)
             assert row["actionsBelow"] is stacked, (width, row)
             assert row["actionsBelow"] or row["actionsBeside"], (width, row)
         assert session.evaluate("window.__errors") == []
