@@ -600,6 +600,13 @@ See [form-contract.md](form-contract.md) for the measured detail.
 * At an actual track of **≤791px** the grid drops to 2 columns — `.kpi-grid` on
   both dashboards and `.dashboard-turma-row-kpis` on the admin dashboard.
   The threshold is the track, never the viewport.
+* Two columns have their own minimum, `2 × 180px + 24px = 384px`, and every
+  phone track is narrower (288px at 320). At a track of **≤383px** `.kpi-grid`
+  stacks in one column (O3, 2026-11-20): before, its second column ran past the
+  content column on both dashboards (+26px at 390, +96 at 320) and the page
+  scrolled sideways. Its fallback is a 415px viewport, exactly (the phone
+  shell's track is the viewport less 32px). Pinned by
+  `tests/test_dashboard_kpi_phone_browser.py`.
 * An `@supports not (container-type: inline-size)` fallback with an identical
   rule body exists for engines without inline-size container queries. Its
   viewport threshold is deliberately conservative, so it switches early rather

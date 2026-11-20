@@ -1078,6 +1078,14 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
 @container track (max-width:791px){
   .kpi-grid{ grid-template-columns:repeat(2, minmax(180px,1fr)); }
 }
+/* The two-column state has its own hard minimum, 2 x 180 + 24 = 384px, and
+   every phone track is narrower (288px at a 320 viewport, 358 at 390). The
+   second column ran past the content column -- +26px at 390, +96 at 320, on
+   both dashboards -- and the page scrolled sideways. At 383px, one below that
+   minimum, the cards stack in one column. */
+@container track (max-width:383px){
+  .kpi-grid{ grid-template-columns:minmax(0, 1fr); }
+}
 
 /* Fallback for engines without inline-size container queries (pre-2022-23
    Chrome/Safari/Firefox). Without it those browsers would keep four columns
@@ -1090,6 +1098,11 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
 @supports not (container-type: inline-size){
   @media (max-width:1125px){
     .kpi-grid{ grid-template-columns:repeat(2, minmax(180px,1fr)); }
+  }
+  /* Below 768 the phone shell's track is the viewport less 32px, so a 383px
+     track is a 415px viewport, exactly. */
+  @media (max-width:415px){
+    .kpi-grid{ grid-template-columns:minmax(0, 1fr); }
   }
 }
 
