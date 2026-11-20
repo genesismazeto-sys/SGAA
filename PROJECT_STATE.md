@@ -176,29 +176,27 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   directory; a report `descricao` is bounded only by the request size.
 - Agreed outside MP-1…MP-4, no recorded execution: reconcile/import the official
   deferred-hours spreadsheet.
-- Next GF1 release candidate (owner hold, 2026-11-19: not deployed, no migration): the
-  development-branch head, carrying the COMPROVANTES-01 correction (required proofs are short
-  names; the older regulation sentence is never listed; model titles and file names wrap instead
-  of being cut at any width), UI-B40 (a closed request reads Indeferida;
-  `docs/backlog/UI_ACCEPTANCE_BACKLOG.md`) and OPS-LOG-01 (not installed). The owner accepted
-  COMPROVANTES-01 and UI-B40 in the VA-01 visual acceptance (2026-11-20; isolated local runtime,
-  synthetic data; tested at `f29a422` and `249ccfd`; evidence package outside the repository,
-  `D:\SGAA_tmp\va01\package`). Schema stays v19, so its GF1 has no upgrade step. PROD keeps the
-  v19 artifact of `4087eaf` until then. Release qualification (2026-11-20): the full suite at
-  `8c8d8e0` found no product regression (results and the GF1 plan outside the repository,
-  `D:\SGAA_tmp\rc_8c8d8e0`); the served code identity changes from `902a0be4…` to `b37c2daf…`
-  (14 files). Publication waits for the owner's push and GF1 authorizations.
-- BL-02 (2026-11-20, owner charter; publication HOLD): the VA-01 observations O1-O4, found by the
-  executor and then scheduled by the owner, are fixed on the local branch `backlog/va01-findings`
-  (an isolated worktree on top of the RC; the RC branch is unchanged), with the owner-requested
-  student guidance sentence: UI-B41 the processing page reads the request's frozen record; UI-B42
-  the request lists keep Status in view (shared DS status column, DS README section 2.6b); UI-B43
-  the KPI cards stack on a phone; UI-B44 a long proof name opens whole while edited; UI-B45 the
-  guidance text. The owner approved all five visually (2026-11-20). Separate and unchanged: the 28
-  historical rows awaiting confirmation (none has an acceptance on record) and UI-B15 (clean in
-  Chromium; the owner's own Chrome decides). Package outside the repository: `D:\SGAA_tmp\bl02\package`. Taking the
-  branch into a release needs a delta qualification of its CSS, templates and tests against the RC
-  (TEP section 6), then the owner's push and GF1 authorizations.
+- Next GF1 release candidate (owner hold: not deployed, no migration): the development-branch
+  head, carrying the COMPROVANTES-01 correction (required proofs are short names; the older
+  regulation sentence is never listed; model titles and file names wrap instead of being cut at
+  any width), UI-B40 (a closed request reads Indeferida), OPS-LOG-01 (not installed) and BL-02
+  (UI-B41 the processing page reads the request's frozen record; UI-B42 the request lists keep
+  Status in view through the shared DS status column, DS README section 2.6b; UI-B43 the KPI
+  cards stack on a phone; UI-B44 a long proof name opens whole while edited; UI-B45 the student
+  guidance says what every proof must hold; `docs/backlog/UI_ACCEPTANCE_BACKLOG.md`). The owner
+  accepted COMPROVANTES-01 and UI-B40 in VA-01 and the five BL-02 items on 2026-11-20 (isolated
+  local runtimes, synthetic data; packages outside the repository, `D:\SGAA_tmp\va01\package` and
+  `D:\SGAA_tmp\bl02\package`). Schema stays v19, so its GF1 has no upgrade step; PROD keeps the
+  v19 artifact of `4087eaf` until then. Qualification: the full suite at `8c8d8e0` found no
+  product regression; BL-02 is delta-qualified against it (TEP section 6: an independent review,
+  whose one material finding, a lost touch tap, is fixed; the mechanically selected impact set
+  and permanent guards rerun on the final code, failing only the known guards below). Results and
+  the GF1 plan are outside the repository (`D:\SGAA_tmp\rc_8c8d8e0`, `D:\SGAA_tmp\bl02\dq` and
+  the consolidated report beside them); the served code identity changes from `902a0be4…` to
+  `a7cdcfef…` (16 files). Publication waits for the owner's push and GF1 authorizations.
+- Still awaiting the owner, separate from the release: the 28 historical UI rows awaiting visual
+  confirmation (none has an acceptance on record) and UI-B15 (clean in Chromium; the owner's own
+  Chrome decides).
 
 ## Environment facts
 
