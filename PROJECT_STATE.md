@@ -178,9 +178,13 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   deferred-hours spreadsheet.
 - Next GF1 release candidate (owner hold, 2026-11-19: not deployed, no migration): the
   development-branch head, carrying the COMPROVANTES-01 correction (required proofs are short
-  names; the older regulation sentence is never listed) and UI-B40 (a closed request reads
-  Indeferida; `docs/backlog/UI_ACCEPTANCE_BACKLOG.md`). Schema stays v19, so its GF1 has no
-  upgrade step. PROD keeps the v19 artifact of `4087eaf` until then.
+  names; the older regulation sentence is never listed; model titles and file names wrap instead
+  of being cut at any width), UI-B40 (a closed request reads Indeferida;
+  `docs/backlog/UI_ACCEPTANCE_BACKLOG.md`) and OPS-LOG-01 (not installed). The owner accepted
+  COMPROVANTES-01 and UI-B40 in the VA-01 visual acceptance (2026-11-20; isolated local runtime,
+  synthetic data; tested at `f29a422` and `249ccfd`; evidence package outside the repository,
+  `D:\SGAA_tmp\va01\package`); its unrelated findings are backlog items UI-B41 to UI-B44. Schema
+  stays v19, so its GF1 has no upgrade step. PROD keeps the v19 artifact of `4087eaf` until then.
 
 ## Environment facts
 
