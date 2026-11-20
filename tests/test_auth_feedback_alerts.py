@@ -185,24 +185,68 @@ def test_every_auth_page_uses_the_shared_alert_and_no_line_feedback_remains():
         assert "login-feedback" not in path.read_text(encoding="utf-8"), path.name
 
 
-def test_the_alert_stylesheet_takes_every_colour_from_tokens():
+def test_the_alert_stylesheet_takes_every_colour_from_the_alert_palette():
     css = _source("static/css/components/auth-alert.css")
-    assert not re.search(r"#[0-9a-fA-F]{3,8}\b|rgba?\(", re.sub(r"/\*.*?\*/", "", css, flags=re.DOTALL))
+    assert not re.search(r"#[0-9a-fA-F]{3,8}|rgba?\(", re.sub(r"/\*.*?\*/", "", css, flags=re.DOTALL))
     rules = dict(re.findall(r"(?m)^([^\s/@{}][^{]*)\{([^}]*)\}", css))
     tones = {
-        ".auth-alert": "danger",
-        ".auth-alert.auth-alert--positive": "status-positive",
-        ".auth-alert.auth-alert--info": "info",
+        ".auth-alert": "red",
+        ".auth-alert.auth-alert--positive": "green",
+        ".auth-alert.auth-alert--info": "blue",
     }
-    for selector, family in tones.items():
+    for selector, colour in tones.items():
         body = rules[selector].replace(" ", "")
-        for part in ("bg", "border", "text"):
-            assert f"--auth-alert-{part}:var(--{family}-{part})" in body, (selector, part)
+        for part in ("bg", "border"):
+            assert f"--auth-alert-{part}:var(--alert-{colour}-{part})" in body, (selector, part)
     base = rules[".auth-alert"].replace(" ", "")
     for declaration in ("border:1pxsolidvar(--auth-alert-border)", "background:var(--auth-alert-bg)",
-                        "color:var(--auth-alert-text)", "border-radius:var(--radius)"):
+                        "color:var(--alert-text)", "border-radius:var(--radius)"):
         assert declaration in base
+    # One text colour for every tone, as on the Alertas card; no other family.
+    assert not re.search(r"--(danger|info|status-[a-z]+)-", css)
     text = rules[".auth-alert p"].replace(" ", "")
     assert "text-align:justify" in text and "text-align-last:start" in text
     assert "margin:0" in rules[".login-form > .auth-alert"].replace(" ", "")
     assert not any("login-card" in s or "login-page" in s for s in rules), "the auth shell is not re-opened"
+
+
+def _alert_tokens():
+    tokens = _source("static/css/foundation/tokens.css")
+    return {name: value.lower() for name, value in re.findall(r"--(alert-[\w-]+)\s*:\s*([^;]+);", tokens)}
+
+
+def test_the_alert_palette_has_one_owner_and_every_copy_matches_it():
+    """tokens.css --alert-* is the system's one alert palette (the owner's Alertas colours)."""
+    from app.requisitions import AUTO_ALERT_YELLOW_BG, AUTO_ALERT_YELLOW_BORDER
+    from app.views.admin.alertas import ALERTA_COLOR_OPTIONS
+
+    tokens = _alert_tokens()
+    names = {"Azul": "blue", "Amarelo": "yellow", "Verde": "green", "Laranja": "orange",
+             "Vermelho": "red", "Roxo": "purple", "Ciano": "cyan"}
+    # Every preset an administrator can pick is a token, value for value, and nothing more.
+    assert {option["label"] for option in ALERTA_COLOR_OPTIONS} == set(names)
+    for option in ALERTA_COLOR_OPTIONS:
+        colour = names[option["label"]]
+        assert option["bg"].lower() == tokens[f"alert-{colour}-bg"], option["label"]
+        assert option["border"].lower() == tokens[f"alert-{colour}-border"], option["label"]
+    assert len(tokens) == 2 * len(names) + 1  # seven pairs and --alert-text
+    assert (AUTO_ALERT_YELLOW_BG.lower(), AUTO_ALERT_YELLOW_BORDER.lower()) == (
+        tokens["alert-yellow-bg"], tokens["alert-yellow-border"])
+    # The Alertas cards, the auth alert and the flash toasts share --alert-text.
+    assert tokens["alert-text"] == "#0f172a"
+    for page, selector in (("templates/aluno_dashboard.html", ".aluno-alerta-card"),
+                           ("templates/admin_dashboard.html", ".admin-alerta-card")):
+        body = re.search(r"(?m)^\s*" + re.escape(selector) + r"\{([^}]*)\}", _source(page)).group(1)
+        assert "color:var(--alert-text)" in body.replace(" ", ""), page
+
+
+def test_the_flash_toasts_use_the_alert_palette():
+    modern = _source("static/css/modern-style.css")
+    flash = re.search(r"(?m)^\.flash\{([^}]*)\}", modern).group(1).replace(" ", "")
+    assert "color:var(--alert-text)" in flash
+    # .flash-error shares the .flash-danger rule (grouped selector).
+    assert re.search(r"(?m)^\.flash\.flash-error,\s*\n\.flash\.flash-danger\s*\{", modern)
+    for category, colour in (("danger", "red"), ("success", "green"), ("warning", "yellow"), ("info", "blue")):
+        body = re.search(r"(?m)^\.flash\.flash-" + category + r"\s*\{([^}]*)\}", modern).group(1).replace(" ", "")
+        assert f"background:var(--alert-{colour}-bg)" in body and f"border-color:var(--alert-{colour}-border)" in body
+        assert "color:" not in body.replace("border-color:", ""), "toast text is --alert-text, not a tone colour"

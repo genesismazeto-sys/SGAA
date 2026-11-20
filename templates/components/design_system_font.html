@@ -1,0 +1,17 @@
+{#
+  Design System — the typeface (single owner).
+
+  Every full document loads Inter, the first family of --font-sans
+  (tokens.css), through this macro and nowhere else: without it a page falls
+  back to the system font (Segoe UI / Arial on Windows). The CSP allows
+  exactly these origins (style-src fonts.googleapis.com, font-src
+  fonts.gstatic.com).
+
+  Kept apart from design_system_css.html on purpose: tools/ds_css.py expands
+  every macro of a file that declares css/ paths into those stylesheets.
+#}
+{%- macro design_system_font() -%}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+{%- endmacro -%}

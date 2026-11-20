@@ -40,6 +40,8 @@ static/css/
 
 templates/components/
   design_system_css.html  ← THE load-order contract. One owner, one list.
+  design_system_font.html ← THE typeface: Inter (--font-sans), loaded by every
+                            full document through design_system_font().
   detail_header.html      ← shared semantic markup for detail-page headers.
   auth_recovery.html      ← the recovery card of a dead password link, §2.6f.
   auth_alert.html         ← the auth feedback banner, §2.6g.
@@ -77,6 +79,20 @@ enough content to justify a split.
 
   This is scoped overriding, not duplication. It is correct — keep doing it.
 
+**The alert palette is one palette.** `--alert-*` in `tokens.css` holds the
+owner's Alertas colours — seven background/border pairs (blue, yellow, green,
+orange, red, purple, cyan) and one text colour, `--alert-text` — and is the only
+palette of messages: the Alertas presets (`app/views/admin/alertas.py`
+`ALERTA_COLOR_OPTIONS`, and the automatic yellow alert in `app/requisitions.py`)
+equal these values, the `.flash` toasts and the auth alert (§2.6g) use them,
+and the Alertas cards' text is `--alert-text`. Text on an alert is always
+`--alert-text`, whatever the tone. Guard:
+`tests/test_auth_feedback_alerts.py` (one owner, every copy equal, toasts and
+banner on the tokens). The other colour families keep their own roles and are
+not alerts: `--status-*` the status pills, decision buttons and deadline meter;
+`--field-invalid-*` field validation; `--danger-*` destructive actions and
+error text; `--info-*` the selected/active highlight.
+
 Enforced by `test_global_tokens_have_exactly_one_owner`,
 `test_no_token_resolves_to_two_values_on_one_page`,
 `test_tokens_file_declares_tokens_only`.
@@ -98,6 +114,18 @@ foundation/tokens.css   →   modern-style.css   →   component CSS   →   pag
   files style the same selector, their relative order becomes load-bearing and
   the architecture has failed. `list-cards.css` and `actions-float.css` are
   currently disjoint — keep it that way.
+
+**The typeface** has one owner too: `templates/components/design_system_font.html`
+`design_system_font()` emits the Inter stylesheet and its preconnects, and every
+full document (`base.html`, `base_aluno.html`, `error_page.html`, `login.html`,
+`forgot_password.html`, `set_password.html`) calls it before
+`design_system_css()`. A document without it renders in the system font (the
+auth pages did until UI-B46). It lives apart from `design_system_css.html`
+because `tools/ds_css.py` expands every macro of a file that declares `css/`
+paths. Form controls on the auth pages inherit the family (`font-family:inherit`,
+as `.btn` does, UI-B06), and take the DS field colours (`--text-primary`, the
+placeholder `--text-tertiary`) and the brand link colour. Enforced by
+`test_every_document_loads_the_typeface_from_its_one_owner`.
 
 Enforced by `test_every_page_loads_the_token_foundation_first`,
 `test_every_referenced_stylesheet_exists`.
@@ -512,14 +540,16 @@ and `flash_feedback(category, message)`; styles in
 
 | Tone | Used for | Icon (`components/icons.html`) | Role | Tokens |
 |---|---|---|---|---|
-| `danger` (default) | "E-mail ou senha inválidos.", the login throttle, set-password form errors, a dead link | `alert-circle` | `alert` | `--danger-*` |
-| `positive` | "Senha definida com sucesso. Entre com sua nova senha." | `circle-check` | `status` | `--status-positive-*` |
-| `info` | the recovery request's acknowledgement (it confirms neither an account nor a delivery), "Você foi desconectado.", the session-ended notice | `info-circle` | `status` | `--info-*` |
+| `danger` (default) | "E-mail ou senha inválidos.", the login throttle, set-password form errors, a dead link | `alert-circle` | `alert` | `--alert-red-*` |
+| `positive` | "Senha definida com sucesso. Entre com sua nova senha." | `circle-check` | `status` | `--alert-green-*` |
+| `info` | the recovery request's acknowledgement (it confirms neither an account nor a delivery), "Você foi desconectado.", the session-ended notice | `info-circle` | `status` | `--alert-blue-*` |
 
 * `flash_feedback` maps a flash category: `error`/`danger` → danger, `success` →
   positive, anything else → info (neutral; it asserts nothing).
-* Tones are variant tokens (`--auth-alert-bg/-border/-text`, §2.1); no literal
-  colour. Inside the auth form (`.login-form`, a flex column with its own gap)
+* Colours are the DS alert palette (§2.1): tones set `--auth-alert-bg/-border`;
+  text and icon are `--alert-text` in every tone, as on the Alertas card. The
+  icons are the banner's own (they say what the message is); the Alertas bell
+  is not reused, because its function is different. No literal colour. Inside the auth form (`.login-form`, a flex column with its own gap)
   the banner takes no margin; elsewhere it has `16px` above and below.
 * The login keeps its approved layout and logo: the banner sits in the same
   slot the message line had (after the password, before "Lembrar-me").

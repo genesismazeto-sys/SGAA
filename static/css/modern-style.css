@@ -941,15 +941,16 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
   font-size:13px;
   font-weight:500;
   line-height:1.2;
-  color:#0f172a;
+  color:var(--alert-text);
   box-shadow:var(--shadow-sm);
   overflow:hidden;
 }
+/* The DS alert palette (tokens.css --alert-*); text stays --alert-text. */
 .flash.flash-error,
-.flash.flash-danger  { background:#fee2e2; border-color:#bb6464; color:#7f1d1d; }
-.flash.flash-success { background:#dcfaeb; border-color:#4ea86a; color:#166534; }
-.flash.flash-warning { background:#fef4c0; border-color:#c9a227; color:#713f12; }
-.flash.flash-info    { background:#e3eefd; border-color:#7e95b2; color:#1e3a8a; }
+.flash.flash-danger  { background:var(--alert-red-bg); border-color:var(--alert-red-border); }
+.flash.flash-success { background:var(--alert-green-bg); border-color:var(--alert-green-border); }
+.flash.flash-warning { background:var(--alert-yellow-bg); border-color:var(--alert-yellow-border); }
+.flash.flash-info    { background:var(--alert-blue-bg); border-color:var(--alert-blue-border); }
 
 /* ===== Login ===== */
 /* Shared authentication shell. Owns the centring contract for every public
@@ -982,8 +983,8 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
 .login-subtitle{ font-size:14px; color:var(--text-secondary); margin-bottom:24px; }
 .login-form{ display:flex; flex-direction:column; gap:12px; text-align:left; }
 .login-form label{ font-size:14px; font-weight:500; }
-.login-form input{ padding:8px 10px; font-size:var(--font-size-base); border-radius:var(--radius); border:1px solid var(--border-strong); }
-.login-form button[type="submit"]{ margin-top:10px; padding:8px 10px; font-size:var(--font-size-base); font-weight:400; color:var(--text-on-brand); background:var(--brand); border:none; border-radius:var(--radius); cursor:pointer; }
+.login-form input{ padding:8px 10px; font-family:inherit; font-size:var(--font-size-base); color:var(--text-primary); border-radius:var(--radius); border:1px solid var(--border-strong); }
+.login-form button[type="submit"]{ margin-top:10px; padding:8px 10px; font-family:inherit; font-size:var(--font-size-base); font-weight:400; color:var(--text-on-brand); background:var(--brand); border:none; border-radius:var(--radius); cursor:pointer; }
 .login-form-meta{
   display:flex; align-items:center; justify-content:space-between; gap:12px;
   width:100%; margin-top:2px; font-size:13px;
@@ -997,6 +998,12 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
 .login-forgot-link:hover{ text-decoration:underline; }
 .login-forgot-link[aria-disabled="true"]{ cursor:pointer; }
 .login-footer{ font-size:12px; color:var(--text-tertiary); margin-top:16px; }
+/* The same field and link colours as the rest of the DS (.field-card .control,
+   .login-forgot-link): without them the browser's black text and #0000ee link
+   showed through. */
+.login-form input::placeholder{ color:var(--text-tertiary); }
+.login-footer a{ color:var(--brand); text-decoration:none; }
+.login-footer a:hover{ text-decoration:underline; }
 
 @media (max-width:480px){
   .login-form-meta{ flex-wrap:wrap; justify-content:space-between; }

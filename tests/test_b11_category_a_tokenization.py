@@ -52,7 +52,9 @@ TOKENS = (ROOT / "static/css/foundation/tokens.css").read_text(encoding="utf-8")
 # Measured after the third cohort (audit baseline was 498; cohorts: 459, 430).
 # RECT1: the student dashboard's days-bar ramp and inline colours became the
 # shared .progress.is-deadline meter and token classes, 291 -> 273.
-MAX_RAW_COLOURS = 273
+# UI-B46: the .flash toasts, the Alertas cards' text and the retired login
+# feedback lines take the DS alert palette tokens (tokens.css --alert-*), 273 -> 256.
+MAX_RAW_COLOURS = 256
 
 _HEX = r"#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b"
 _COLOUR = re.compile(rf"({_HEX}|(?:rgba?|hsla?)\([^)]*\))")
@@ -212,10 +214,10 @@ def test_no_phantom_token_references_remain():
 
 def test_info_and_danger_families_are_used_at_their_current_values():
     modern = _read("static/css/modern-style.css")
-    # The auth pages' feedback lines became the shared auth alert (DS README §2.6g).
-    auth_alert = _read("static/css/components/auth-alert.css")
-    assert "--auth-alert-text:var(--info-text)" in _rule(auth_alert, ".auth-alert.auth-alert--info")
-    assert "--auth-alert-text:var(--danger-text)" in _rule(auth_alert, ".auth-alert")
+    # The auth pages' feedback lines left these families for the DS alert palette
+    # (tokens.css --alert-*, README §2.6g); the families keep their other roles.
+    assert "color:var(--info-text)" in _rule(_read("templates/admin_importar_atividades.html"), ".status-chip.update")
+    assert "color:var(--danger-text)" in _rule(modern, "\n.btn.danger")
     assert "background:var(--danger-bg)" in _rule(modern, ".table-progresso td.progresso-limitado")
     assert "background:var(--danger-bg)" in _rule(_read("templates/admin_diagnostico_atividades_versionadas_view.html"), ".diag-alert")
     assert "border:1px solid var(--danger-border)" in _rule(_read("templates/admin_requisicoes.html"), ".req-email-warnings")

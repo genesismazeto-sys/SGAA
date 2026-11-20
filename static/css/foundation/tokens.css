@@ -104,6 +104,27 @@
   --text-on-brand:#ffffff;
   --control-selected:#0f5b99;
 
+  /* Paleta de alertas — a única paleta de mensagens do sistema, escolhida
+     pelo proprietário: as cores pré-definidas de Alertas
+     (app/views/admin/alertas.py ALERTA_COLOR_OPTIONS, mantidas iguais a estes
+     valores por teste), os toasts .flash e o alerta das telas de acesso.
+     Texto e ícone em --alert-text, como no cartão de Alertas. */
+  --alert-text:#0f172a;
+  --alert-blue-bg:#e3eefd;
+  --alert-blue-border:#7e95b2;
+  --alert-yellow-bg:#fef4c0;
+  --alert-yellow-border:#c9a227;
+  --alert-green-bg:#dcfaeb;
+  --alert-green-border:#4ea86a;
+  --alert-orange-bg:#ffecd4;
+  --alert-orange-border:#c07a3a;
+  --alert-red-bg:#fee2e2;
+  --alert-red-border:#bb6464;
+  --alert-purple-bg:#ede9fe;
+  --alert-purple-border:#8872c4;
+  --alert-cyan-bg:#cffafe;
+  --alert-cyan-border:#3aaab8;
+
   /* Info */
   --info-bg:#eff6ff;
   --info-text:#1d4ed8;

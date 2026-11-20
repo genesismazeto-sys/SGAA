@@ -178,6 +178,32 @@ def test_no_token_resolves_to_two_values_on_one_page(pages):
     assert not conflicts, f"conflicting :root token values: {conflicts}"
 
 
+# ----------------------------------------------------------------- FONT
+
+FONT_OWNER = "components/design_system_font.html"
+
+
+def test_every_document_loads_the_typeface_from_its_one_owner():
+    """Inter (--font-sans) reaches every full document through one macro.
+
+    A document that forgets it renders in the system font (Segoe UI / Arial on
+    Windows) -- what the authentication pages did until UI-B46.
+    """
+    documents = [
+        path for path in ds.TEMPLATES_DIR.rglob("*.html")
+        if re.search(r"<head(?:\s|>)", path.read_text(encoding="utf-8", errors="replace"), re.I)
+    ]
+    assert len(documents) >= 6, "lost sight of the full-document templates"
+    missing = [ds.rel_path(p) for p in documents if "{{ design_system_font() }}" not in p.read_text(encoding="utf-8")]
+    assert not missing, f"documents that do not load the DS typeface: {missing}"
+    copies = [
+        ds.rel_path(p) for p in ds.TEMPLATES_DIR.rglob("*.html")
+        if "fonts.googleapis.com" in p.read_text(encoding="utf-8", errors="replace")
+        and p.relative_to(ds.TEMPLATES_DIR).as_posix() != FONT_OWNER
+    ]
+    assert not copies, f"the font link has one owner ({FONT_OWNER}); copies in: {copies}"
+
+
 # --------------------------------------------------------------- PURITY
 
 def test_tokens_file_declares_tokens_only():

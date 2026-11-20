@@ -1,5 +1,6 @@
 {% from 'components/icons.html' import school_icon %}
 {% from 'components/design_system_css.html' import design_system_css %}
+{% from 'components/design_system_font.html' import design_system_font %}
 <!DOCTYPE html>
 <html lang="pt-BR">
   <head>
@@ -10,9 +11,7 @@
     {% set static_asset_version = '20261120-bl02-rc' %}
 
     <!-- Fontes + CSS global -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    {{ design_system_font() }}
     {{ design_system_css(static_asset_version) }}
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/ej_favicon.svg') }}">
 

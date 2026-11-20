@@ -5,17 +5,17 @@
    forgot_password.html, set_password.html and the recovery card).
    Markup owner: templates/components/auth_alert.html.
 
-   Tones are variant tokens: danger (default), --positive and --info, from
-   the danger, status-positive and info families of tokens.css; no literal
-   colour here. Inside the auth form (.login-form, a flex column with its own
-   gap) the alert takes no margin of its own. Text that wraps is justified,
-   its last line start-aligned.
+   Colours are the DS alert palette (tokens.css --alert-*, the Alertas
+   palette): danger (default) = red, --positive = green, --info = blue; text
+   and icon in --alert-text, as on the Alertas card. No literal colour here.
+   Inside the auth form (.login-form, a flex column with its own gap) the
+   alert takes no margin of its own. Text that wraps is justified, its last
+   line start-aligned.
    ============================================================= */
 
 .auth-alert{
-  --auth-alert-bg:var(--danger-bg);
-  --auth-alert-border:var(--danger-border);
-  --auth-alert-text:var(--danger-text);
+  --auth-alert-bg:var(--alert-red-bg);
+  --auth-alert-border:var(--alert-red-border);
   display:flex;
   align-items:flex-start;
   gap:8px;
@@ -24,18 +24,16 @@
   border:1px solid var(--auth-alert-border);
   border-radius:var(--radius);
   background:var(--auth-alert-bg);
-  color:var(--auth-alert-text);
+  color:var(--alert-text);
   text-align:left;
 }
 .auth-alert.auth-alert--positive{
-  --auth-alert-bg:var(--status-positive-bg);
-  --auth-alert-border:var(--status-positive-border);
-  --auth-alert-text:var(--status-positive-text);
+  --auth-alert-bg:var(--alert-green-bg);
+  --auth-alert-border:var(--alert-green-border);
 }
 .auth-alert.auth-alert--info{
-  --auth-alert-bg:var(--info-bg);
-  --auth-alert-border:var(--info-border);
-  --auth-alert-text:var(--info-text);
+  --auth-alert-bg:var(--alert-blue-bg);
+  --auth-alert-border:var(--alert-blue-border);
 }
 .login-form > .auth-alert{
   margin:0;
