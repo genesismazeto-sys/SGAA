@@ -571,9 +571,12 @@ document.addEventListener('DOMContentLoaded', function(){
   // focus away (Adicionar, an arrow, another field) the field closes only
   // after that press is released: otherwise the button would move away from
   // the pointer between press and release and the click would be lost.
-  let docPointerDown = false;
-  document.addEventListener('pointerdown', () => { docPointerDown = true; }, true);
-  ['pointerup', 'pointercancel'].forEach(type => document.addEventListener(type, () => { docPointerDown = false; }, true));
+  // A press lasts until its click (or a cancel, or 1 s): on touch the
+  // browser sends pointerup before the mousedown that moves the focus.
+  let docPressAt = 0;
+  const pressing = () => docPressAt && Date.now() - docPressAt < 1000;
+  document.addEventListener('pointerdown', () => { docPressAt = Date.now(); }, true);
+  ['click', 'pointercancel'].forEach(type => document.addEventListener(type, () => { docPressAt = 0; }, true));
   function closeDocName(name){
     if (document.activeElement === name) return;
     name.classList.remove('is-open');
@@ -587,14 +590,17 @@ document.addEventListener('DOMContentLoaded', function(){
   docList?.addEventListener('focusout', event => {
     const name = event.target.closest(DOC_NAME);
     if (!name) return;
-    if (!docPointerDown){ closeDocName(name); return; }
+    if (!pressing()){ closeDocName(name); return; }
+    let timer = 0;
     const release = () => {
-      document.removeEventListener('pointerup', release, true);
+      clearTimeout(timer);
+      document.removeEventListener('click', release, true);
       document.removeEventListener('pointercancel', release, true);
       setTimeout(() => closeDocName(name));
     };
-    document.addEventListener('pointerup', release, true);
+    document.addEventListener('click', release, true);
     document.addEventListener('pointercancel', release, true);
+    timer = setTimeout(release, 1000);
   });
   window.addEventListener('resize', growDocNames);
   renumberDocs();
