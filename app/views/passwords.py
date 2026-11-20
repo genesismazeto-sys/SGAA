@@ -17,6 +17,12 @@ from app import auth_throttle
 from app.auth import _client_ip
 from app.db import get_db_connection
 from app.password_email import issue_and_send_password_email
+from app.password_recovery import (
+    RECOVERY_LINK_PURPOSE,
+    expired_link_email,
+    recovery_account,
+    recovery_link_ttl,
+)
 from app.password_tokens import (
     PURPOSE_FIRST_ACCESS,
     PURPOSE_PASSWORD_RESET,
@@ -24,7 +30,7 @@ from app.password_tokens import (
     resolve_password_token,
 )
 from app.security.passwords import hash_password
-from app.user_accounts import first_access_redeemable, usuario_access_is_active
+from app.user_accounts import first_access_redeemable
 
 
 logger = logging.getLogger(__name__)
@@ -37,29 +43,6 @@ RECOVERY_NEUTRAL_MESSAGE = (
 
 def _identifier_hash(value: str) -> str:
     return hashlib.sha256(str(value or "").encode("utf-8")).hexdigest()[:12]
-
-
-def _eligible_recovery_user(conn, email: str):
-    row = conn.execute(
-        """
-        SELECT u.id,u.nome,u.email,u.tipo,a.status AS aluno_status
-          FROM usuarios u
-          LEFT JOIN alunos a ON a.usuario_id=u.id
-         WHERE u.email=?
-         LIMIT 1
-        """,
-        (email,),
-    ).fetchone()
-    if row is None:
-        return None
-    # A revoked access receives no recovery link. The caller answers with the
-    # same neutral message either way, so this reveals nothing.
-    if not usuario_access_is_active(conn, int(row["id"])):
-        return None
-    if str(row["tipo"] or "").strip().lower() == "aluno":
-        if str(row["aluno_status"] or "Ativo").strip().lower() != "ativo":
-            return None
-    return row
 
 
 def forgot_password():
@@ -77,14 +60,15 @@ def forgot_password():
         if not blocked:
             auth_throttle.recovery_attempted(ip, email)
             conn = get_db_connection()
-            user = _eligible_recovery_user(conn, email)
+            # An ineligible account gets the same neutral answer as an unknown one.
+            user = recovery_account(conn, email)
             if user is not None:
                 outcome = issue_and_send_password_email(
                     conn,
                     usuario_id=int(user["id"]),
                     recipient=str(user["email"] or ""),
                     user_name=str(user["nome"] or ""),
-                    purpose=PURPOSE_PASSWORD_RESET,
+                    purpose=RECOVERY_LINK_PURPOSE,
                 )
                 logger.info(
                     "event=public_password_recovery outcome=%s account_hash=%s",
@@ -120,6 +104,9 @@ def _render_set_password(*, purpose: str, raw_token: str, error: str = ""):
     valid = record is not None
     if valid and purpose == PURPOSE_FIRST_ACCESS:
         valid = first_access_redeemable(record.credential_state)
+    # A dead link's page offers a new one at once, through the public recovery,
+    # and states the validity of the link that recovery sends.
+    recovery_email = "" if valid else expired_link_email(conn, raw_token, purpose=purpose)
     response = make_response(
         render_template(
             "set_password.html",
@@ -127,6 +114,8 @@ def _render_set_password(*, purpose: str, raw_token: str, error: str = ""):
             token=raw_token if valid else "",
             valid=valid,
             error=error,
+            recovery_email=recovery_email,
+            recovery_ttl_minutes=int(recovery_link_ttl().total_seconds() // 60),
         )
     )
     response.headers["Cache-Control"] = "no-store"
@@ -169,7 +158,9 @@ def _set_password(purpose: str):
         new_hash,
     )
     if auth_version is None:
-        return _render_set_password(purpose=purpose, raw_token="")
+        # Re-resolved, the dead token renders the recovery card; a link that
+        # expired while the form was being filled keeps its pre-fill.
+        return _render_set_password(purpose=purpose, raw_token=raw_token)
     flash("Senha definida com sucesso. Entre com sua nova senha.", "success")
     return redirect(url_for("login"))
 

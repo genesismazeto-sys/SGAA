@@ -178,6 +178,54 @@ def resolve_password_token(
     )
 
 
+def expired_password_token_owner(
+    conn,
+    raw_token: str,
+    *,
+    purpose: str,
+    expired_within: dt.timedelta,
+    now: dt.datetime | None = None,
+) -> tuple[int, str] | None:
+    """``(usuario_id, email)`` behind a link that died only of old age, or ``None``.
+
+    Only a token that expired untouched, at most ``expired_within`` ago,
+    qualifies: never consumed and never invalidated. Every event that changes
+    who the link speaks for invalidates it -- a password change, an address
+    change, a revocation -- so for such a token the address returned is still
+    the one the link was mailed to. An unknown, used or invalidated token, one
+    still live and one that expired longer ago return ``None``. It grants
+    nothing: callers may only use it to offer a new link.
+    """
+    if purpose not in PASSWORD_TOKEN_PURPOSES:
+        raise ValueError(f"invalid password token purpose: {purpose!r}")
+    if not _valid_raw_token(raw_token):
+        return None
+    current = _utc_now(now)
+    row = conn.execute(
+        """
+        SELECT t.usuario_id,u.email
+          FROM senha_tokens t
+          JOIN usuarios u ON u.id=t.usuario_id
+         WHERE t.token_hash=?
+           AND t.purpose=?
+           AND t.expires_at<=?
+           AND t.expires_at>?
+           AND t.consumed_at IS NULL
+           AND t.invalidated_at IS NULL
+         LIMIT 1
+        """,
+        (
+            password_token_digest(raw_token),
+            purpose,
+            _db_timestamp(current),
+            _db_timestamp(current - expired_within),
+        ),
+    ).fetchone()
+    if row is None:
+        return None
+    return int(row[0]), str(row[1] or "")
+
+
 def mark_password_token_sent(
     conn,
     token_id: int,
@@ -291,6 +339,7 @@ __all__ = [
     "PasswordTokenError",
     "PasswordTokenRecord",
     "consume_password_token_and_set_password",
+    "expired_password_token_owner",
     "invalidate_password_token",
     "issue_password_token",
     "mark_password_token_sent",

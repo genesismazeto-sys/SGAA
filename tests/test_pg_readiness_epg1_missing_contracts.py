@@ -1,5 +1,5 @@
 # coding: utf-8
-"""E-PG1 phase 2: the missing single-connection real-PostgreSQL contracts M1-M9.
+"""E-PG1 phase 2: the missing single-connection real-PostgreSQL contracts M1-M10.
 
 Runs only when ``SGAA_PG_TEST_URL`` supplies a local PostgreSQL role with
 CREATE DATABASE; otherwise the whole module skips (REAL-PG EVIDENCE: ABSENT).
@@ -1092,3 +1092,67 @@ def test_m7_request_without_commit_does_not_persist_lazy_access_defaults(pg_app)
     response = pg_app["client"].get("/admin/acesso")
     assert response.status_code == 200
     assert observer.execute("SELECT count(*) FROM configuracoes_acesso").fetchone()[0] == 0
+
+
+# ---------------------------------------------------------------------------
+# M10 -- the dead-link pre-fill query on real PostgreSQL TEXT timestamps
+# ---------------------------------------------------------------------------
+
+
+def test_m10_expired_token_owner_matches_only_an_untouched_token_inside_the_window(fresh_url):
+    """``expired_password_token_owner``: expired, untouched, right purpose, within the window."""
+    from datetime import timedelta
+
+    from app.password_tokens import (
+        PURPOSE_FIRST_ACCESS,
+        PURPOSE_PASSWORD_RESET,
+        expired_password_token_owner,
+        issue_password_token,
+    )
+    from app.user_accounts import create_usuario_with_access_level
+
+    def stamp(delta):
+        return (datetime.now(timezone.utc) + delta).strftime("%Y-%m-%d %H:%M:%S")
+
+    email = "epg1.m10@example.test"
+    cases = {
+        # case: (purpose, expires_at, consumed_at, invalidated_at)
+        "inside": (PURPOSE_PASSWORD_RESET, stamp(timedelta(hours=-2)), None, None),
+        "outside": (PURPOSE_PASSWORD_RESET, stamp(timedelta(hours=-25)), None, None),
+        "live": (PURPOSE_PASSWORD_RESET, stamp(timedelta(hours=1)), None, None),
+        "consumed": (PURPOSE_PASSWORD_RESET, stamp(timedelta(hours=-2)), stamp(timedelta(hours=-3)), None),
+        "invalidated": (PURPOSE_PASSWORD_RESET, stamp(timedelta(hours=-2)), None, stamp(timedelta(hours=-3))),
+        "first_access": (PURPOSE_FIRST_ACCESS, stamp(timedelta(hours=-2)), None, None),
+    }
+    conn = _production_connection(fresh_url)
+    try:
+        raw, ids = {}, {}
+        with app_db.write_transaction(conn):
+            usuario_id = int(create_usuario_with_access_level(
+                conn, "EPG1 M10", email, "fixture-hash", "admin", "consultivo",
+                credential_state="personal",
+            ).usuario_id)
+            for case, (purpose, *_state) in cases.items():
+                raw[case], ids[case] = issue_password_token(conn, usuario_id, purpose)
+            # Issuance supersedes earlier live links, so every row's state is
+            # written once all are issued.
+            for case, (_purpose, expires_at, consumed_at, invalidated_at) in cases.items():
+                conn.execute(
+                    "UPDATE senha_tokens SET expires_at=?, consumed_at=?, invalidated_at=? WHERE id=?",
+                    (expires_at, consumed_at, invalidated_at, ids[case]),
+                )
+
+        def owner(case, purpose=PURPOSE_PASSWORD_RESET):
+            return expired_password_token_owner(
+                conn, raw[case], purpose=purpose, expired_within=timedelta(hours=24)
+            )
+
+        assert owner("inside") == (usuario_id, email)
+        assert owner("first_access", PURPOSE_FIRST_ACCESS) == (usuario_id, email)
+        for case in ("outside", "live", "consumed", "invalidated", "first_access"):
+            assert owner(case) is None, case
+    finally:
+        try:
+            conn.rollback()
+        finally:
+            conn.close()

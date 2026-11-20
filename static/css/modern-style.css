@@ -983,7 +983,7 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
 .login-form{ display:flex; flex-direction:column; gap:12px; text-align:left; }
 .login-form label{ font-size:14px; font-weight:500; }
 .login-form input{ padding:8px 10px; font-size:var(--font-size-base); border-radius:var(--radius); border:1px solid var(--border-strong); }
-.login-feedback{ margin:-4px 0 0; font-size:12px; line-height:1.35; text-align:left; }
+.login-feedback{ margin:-4px 0 0; font-size:12px; line-height:1.35; text-align:justify; text-align-last:start; }
 .login-feedback-error{ color:var(--danger-text); }
 .login-feedback-success{ color:#047857; }
 .login-feedback-info{ color:var(--info-text); }

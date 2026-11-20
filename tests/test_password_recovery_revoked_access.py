@@ -1,6 +1,6 @@
 """A revoked access can neither receive a recovery link nor use an old one.
 
-Covers the three layers: the public request (``_eligible_recovery_user``), the
+Covers the three layers: the public request (``app.password_recovery.recovery_account``), the
 issuance (``issue_and_send_password_email`` rechecks under the account lock)
 and the token itself (``resolve_password_token`` -- the link page and the
 locked consumption). The public answer stays the same neutral message for an
@@ -222,10 +222,10 @@ def test_issuance_rechecks_the_access_inside_its_own_transaction(env):
 def test_the_recovery_request_itself_selects_no_revoked_account(env):
     # Layer one on its own (the issuance recheck would also refuse): the public
     # request never even reaches the issuer for a revoked access.
-    from app.views.passwords import _eligible_recovery_user
+    from app.password_recovery import recovery_account
 
     with main.app.app_context():
         conn = main.get_db_connection()
-        assert _eligible_recovery_user(conn, "rec.revogado@example.test") is None
-        assert int(_eligible_recovery_user(conn, "rec.ativo@example.test")["id"]) == env["ids"]["ativo"]
-        assert _eligible_recovery_user(conn, "ninguem@example.test") is None
+        assert recovery_account(conn, "rec.revogado@example.test") is None
+        assert int(recovery_account(conn, "rec.ativo@example.test")["id"]) == env["ids"]["ativo"]
+        assert recovery_account(conn, "ninguem@example.test") is None

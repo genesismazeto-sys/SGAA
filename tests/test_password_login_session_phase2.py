@@ -198,14 +198,15 @@ def test_public_password_surfaces_use_the_shared_auth_design_system(tmp_path):
         assert 'class="login-form"' in forgot_html
         assert 'name="csrf_token"' in forgot_html
 
-        # An invalid token still renders the DS shell with a DS feedback line,
-        # never a bare browser error page.
+        # An invalid token still renders the DS shell with the DS recovery
+        # state (README §2.6f), never a bare browser error page.
         invalid = env["client"].get("/redefinir-senha?token=not-a-real-token")
         invalid_html = invalid.get_data(as_text=True)
         assert invalid.status_code == 200
         assert invalid.headers["Referrer-Policy"] == "strict-origin"
         assert 'class="login-card"' in invalid_html
-        assert "login-feedback-error" in invalid_html
+        assert '<div class="auth-recovery-alert" role="alert">' in invalid_html
+        assert "Este link é inválido, expirou ou já foi utilizado." in invalid_html
         assert 'type="password"' not in invalid_html
 
         # A live token renders the DS password fields with the shared pw-toggle.

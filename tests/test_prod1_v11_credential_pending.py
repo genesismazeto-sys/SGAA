@@ -26,6 +26,7 @@ writing.
 from __future__ import annotations
 
 import ast
+import re
 import sqlite3
 from pathlib import Path
 
@@ -551,7 +552,11 @@ def _first_access_page(client, raw_token: str, method: str = "GET", senha: str =
             "/primeiro-acesso",
             data={"token": raw_token, "senha": senha, "confirmacao_senha": senha},
         )
-    return response.status_code, response.get_data(as_text=True)
+    # A dead link renders the recovery card, whose resend form carries a CSRF
+    # value signed per render; everything else, the address field included,
+    # must still be byte-identical between any two dead links.
+    html = re.sub(r'name="csrf_token" value="[^"]*"', 'name="csrf_token" value=""', response.get_data(as_text=True))
+    return response.status_code, html
 
 
 def _unknown_token_pages(client):

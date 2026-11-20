@@ -33,10 +33,13 @@ static/css/
     turma-alunos.css    ← the Turma student list ("Alunos da turma") shared by
                           Adicionar turma and Editar turma. Component tokens
                           on .alunos-wide resolve to --surface / --bg.
+    auth-recovery.css   ← the authentication recovery state inside the auth
+                          shell (a dead password link), §2.6f.
 
 templates/components/
   design_system_css.html  ← THE load-order contract. One owner, one list.
   detail_header.html      ← shared semantic markup for detail-page headers.
+  auth_recovery.html      ← the recovery card of a dead password link, §2.6f.
 
 tools/ds_css.py           ← static cascade analyser + equivalence gate.
 tests/test_ds_design_system_contract.py  ← the structural gates.
@@ -459,6 +462,41 @@ label position and clip are identical.
 boxes everywhere, ≤ 4 differing pixels per select (the chevron), no page-level
 difference. The neutralised run is also the fallback proof; the committed test
 repeats it on representative pages at 1440 and 640.
+
+### 2.6f Authentication recovery state (AUTH-RECOVERY-01)
+
+What a public password link (`/redefinir-senha`, `/primeiro-acesso`) renders
+when it can no longer be used — invalid, expired or already used. It never
+ends in a dead end: the card offers a new link at once, through the
+self-service recovery (`/esqueci-minha-senha`), so no administrator is needed.
+
+**Owner:** `templates/components/auth_recovery.html` `expired_link_card(ttl_minutes,
+email)`; styles in `static/css/components/auth-recovery.css`,
+linked by the page after the macro. The card is the shared auth shell
+(`.login-page` / `.login-card`, with its title, form, primary button and footer
+link); the component styles only what is new inside it and never re-opens the
+shell (`tests/test_auth_shell_viewport_centering.py`).
+
+Structure, top to bottom: a 64 px logo; the title "Link expirado" (no
+subtitle); the danger alert — the Tabler `alert-circle` icon
+(`components/icons.html` `alert_circle_icon`) and "Este link é inválido,
+expirou ou já foi utilizado.", in the `--danger-bg` / `--danger-border` /
+`--danger-text` tokens; the validity paragraph; the E-mail field; the
+full-width "Enviar novo link"; "Voltar para o login".
+
+* **Validity** is the configured TTL of the link "Enviar novo link" sends —
+  the public recovery always mails a reset link, whatever link was lost
+  (`app.password_recovery.recovery_link_ttl`) — worded by the macro in days,
+  hours or minutes, never a literal.
+* **The address** is pre-filled only when the backend identifies the account
+  safely (`app.password_recovery.expired_link_email`: the link expired
+  untouched, at most 24 h ago, and its account may still recover); otherwise
+  the field is blank and focused.
+* The alert text and the paragraph are justified, last line start-aligned,
+  when they wrap (a phone width). Colours come from tokens only.
+
+**Guard:** `tests/test_auth_recovery_expired_link.py` (behaviour, pre-fill
+cases, configured validity, and the single-owner / token-only contract).
 
 ### 2.7 Responsive contract
 
