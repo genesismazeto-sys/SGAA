@@ -90,9 +90,9 @@ comprovantes and a short-lived signed download, added to the object backup set.
 
 ## Publication (GF1)
 
-PROD is v18. v19 is published by the gate G1 sequence of
-`docs/specs/MP-3-A22-request-reclassification.md` §10, as run for v18 on
-2026-10-20:
+PROD is v19 since GF1-V19 (2026-11-19, `PROJECT_STATE.md`), which published it by the gate G1
+sequence of `docs/specs/MP-3-A22-request-reclassification.md` §10, as run for v18 on
+2026-10-20. A later release that leaves the schema at v19 has no upgrade step. The sequence was:
 
 1. the GF1 grant naming the commit and the upgrade;
 2. a pre-upgrade governed generation with objects, from the pinned v18 worktree

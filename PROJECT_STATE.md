@@ -183,8 +183,19 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   `docs/backlog/UI_ACCEPTANCE_BACKLOG.md`) and OPS-LOG-01 (not installed). The owner accepted
   COMPROVANTES-01 and UI-B40 in the VA-01 visual acceptance (2026-11-20; isolated local runtime,
   synthetic data; tested at `f29a422` and `249ccfd`; evidence package outside the repository,
-  `D:\SGAA_tmp\va01\package`); its unrelated findings are backlog items UI-B41 to UI-B44. Schema
-  stays v19, so its GF1 has no upgrade step. PROD keeps the v19 artifact of `4087eaf` until then.
+  `D:\SGAA_tmp\va01\package`). Schema stays v19, so its GF1 has no upgrade step. PROD keeps the
+  v19 artifact of `4087eaf` until then. Release qualification (2026-11-20): the full suite at
+  `8c8d8e0` found no product regression (results and the GF1 plan outside the repository,
+  `D:\SGAA_tmp\rc_8c8d8e0`); the served code identity changes from `902a0be4…` to `b37c2daf…`
+  (14 files). Publication waits for the owner's push and GF1 authorizations.
+- Observations from VA-01 (found by the executor, not reported by the owner, so not backlog
+  items and not scheduled; behaviour unchanged; screenshots in the VA-01 package; the owner
+  decides whether any becomes work): O1, the legacy "Processar Requisição" page reads "Registro da
+  solicitação presente, mas leitura indisponível." for every request, because the template asks
+  for `diagnostico_disponivel`, which `_build_admin_requisicao_snapshot_diagnostic` never returns
+  (the same code is in PROD); O2, the request lists reach the Status column only by scrolling
+  sideways at 1440 px and on phones; O3, the student Painel cards run past the right edge at
+  390 px; O4, a long proof name is clipped inside its input on the version form at 768 px.
 
 ## Environment facts
 
@@ -196,18 +207,25 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   revokes it when rehearsals end.
 - Real-PG lanes need `SGAA_PG_TEST_URL` (local PostgreSQL 15 or 17; the PROD major is 17);
   without it they skip and real-PG evidence is ABSENT. Native client tools: `SGAA_PG_BIN_DIR`.
-  The live DEV rehearsal is opt-in: `SGAA_MP3_REHEARSAL=1` plus the DEV credential file. Full suite: ~5,000 tests, ~36 min; run
+  The backup/restore lanes (`test_pg_backup_restore_real_pg`, `test_mp3_ops_backup_real_pg`,
+  `test_mp3_backup_source`, `test_mp3_opening_real_app`, `test_mp3_restore_profile`) need the PG17
+  client tools in `SGAA_PG_BIN_DIR` and a PostgreSQL 17 target (local WSL cluster 127.0.0.1:54317):
+  without the tools they fail with `NATIVE_TOOL_MISSING`, and against PostgreSQL 15 the restores fail.
+  The live DEV rehearsal is opt-in: `SGAA_MP3_REHEARSAL=1` plus the DEV credential file. Full suite:
+  ~6,900 tests, 1 h 18 min with the real-PG lanes on (2026-11-20); run
   detached with ≥5 GB free RAM, from a clean checkout (the project-root
   isolation guard fails the session when another process writes there).
 
 ## Known test debt (not blockers)
 
-Baseline full suite is not green: six `xlwt` collection errors plus
-`tests/test_pytest_runtime_isolation.py::TestSentinelSurvival` (same cause);
-`tests/test_request_version_display_authority.py`
-`[canonical-v1-snapshot-v3]`, non-hermetic (random CSRF token containing `v3`);
+Baseline full suite is not green (release qualification of 2026-11-20, 6,908 collected):
 `tests/test_ut5_backup_package.py::test_cli_backup_sync_runs_isolated_with_app_context_only`
-needs the gitignored `database.db`, so it fails in a clean worktree.
+needs the gitignored `database.db`, so it fails in a clean worktree;
+`tests/test_phase4_atividades_blueprint.py::test_activity_blueprint_owns_exact_canonical_surface`
+pins 20 activity routes, 24 since the template routes of `118796c` (identical in PROD; not fixed).
+With `xlwt` in the test environment the former `xlwt` collection errors and
+`TestSentinelSurvival` no longer occur; the version-display test no longer reads the CSRF token or
+asset URLs.
 
 Eight guards fail on the development branch since before the Acesso
 corrections of 2026-11-18 (identical on `a5b912a`, the code in production before GF1-V19; not fixed):
