@@ -59,6 +59,29 @@ def _canonical_number(version_id):
         ).fetchone()[0]
 
 
+#: Page text that carries no version label but may happen to contain "v3" / "v4":
+#: the static-asset cache-busting query (``?v=20261120-doc-guidance-v4``) and the
+#: random CSRF token (meta tag and hidden inputs).
+_VOLATILE_TEXT = (
+    re.compile(r'\?v=[^"\'\s>]*'),
+    re.compile(r'(<[^>]*csrf[^>]*?(?:content|value)=")[^"]*'),
+)
+
+
+def _without_volatile_text(html):
+    """``html`` with only those carriers emptied, so a version label still shows everywhere else."""
+    html = _VOLATILE_TEXT[0].sub("", html)
+    return _VOLATILE_TEXT[1].sub(r"\1", html)
+
+
+def test_the_volatile_text_scrub_keeps_every_version_label():
+    page = ('<meta name="csrf-token" content="Iv4x"><link href="/static/a.css?v=20261120-doc-guidance-v4">'
+            '<input type="hidden" name="csrf_token" value="v3v4"><span title="v4">v4</span>')
+    scrubbed = _without_volatile_text(page)
+    assert "Iv4x" not in scrubbed and "doc-guidance-v4" not in scrubbed and "v3v4" not in scrubbed
+    assert '<span title="v4">v4</span>' in scrubbed
+
+
 def _list_chips(html):
     chips = {}
     for block in re.findall(r'data-req-id="(\d+)"(.*?)(?=data-req-id="|\Z)', html, re.S):
@@ -104,7 +127,7 @@ def test_operational_badge_uses_linked_version_and_snapshot_stays_history(
     )
     assert card is not None
     assert f"v{frozen_number}" in card.group(1)
-    outside = detail.replace(card.group(0), "")
+    outside = _without_volatile_text(detail.replace(card.group(0), ""))
     assert f"v{frozen_number}" not in outside
 
     # Nothing was written: snapshot byte-identical, same linked version.
