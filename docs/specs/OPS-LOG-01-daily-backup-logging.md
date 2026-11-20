@@ -1,6 +1,6 @@
 # SPEC OPS-LOG-01 — Governed daily backup logging reliability
 
-Status: FROZEN 2026-11-19
+Status: CLOSED 2026-11-19 (frozen 2026-11-19)
 Charter: "Eliminate the logging concurrency defect in the governed daily backup process, ensuring that
 simultaneous log observation cannot interrupt a valid backup operation." Local isolated testing only; PROD,
 live scheduled tasks, production credentials and deployed scripts unchanged. Publication: HOLD (local commits).
@@ -56,12 +56,15 @@ task runs (it wraps `tools/ops_backup.py --ledger-dir`); its deployed copy lives
   the run goes to `<log stem>.fallback-<yyyyMMddHHmmss>-<pid>.log` beside it: its first line names the log
   it continues, and the console names it. When no file takes a line, it throws `LOG_UNWRITABLE` unless
   `-NoThrow`.
-- `-NoThrow` exactly where the outcome is already decided: the `ops_backup` output lines, the RESULT line
-  and the stop line in `catch`. So `LOG_UNWRITABLE` can stop a run only before `ops_backup` starts, and a
-  log failure never turns a recorded generation into exit 1 or anything into exit 0.
+- `-NoThrow` exactly where the outcome is already decided: the `ops_backup` output lines, the
+  `NO GENERATION RECORDED` line (A1), the RESULT line and the stop line in `catch`. So `LOG_UNWRITABLE` can
+  stop a run only before `ops_backup` starts, and a log failure never turns a recorded generation into
+  exit 1 or anything into exit 0.
 - The start line moves inside `try`, so a refusal there is caught, cleans up and exits 1.
 - `finally`, after the environment cleanup: when a fallback file exists, one best-effort line is appended
   to the log, `#### this run's log continued in <fallback>`.
+
+- The header names the fallback file (A1; documentation only).
 
 Every other line is byte-identical: constants, preconditions, secrets, probes, the generation call,
 the cadence deadline, the exit codes.
@@ -93,8 +96,11 @@ Open decisions (product or architecture): none.
 - I1 — Exit 0 if and only if `ops_backup` returned 0 in this run; otherwise 1.
 - I2 — One `ops_backup` call per run, with the same arguments; the wrapper never writes the ledger, the
   generations or a stored secret beyond what the deployed copy does.
-- I3 — While some file takes writes, no line of the run is lost: each lands in the log or, from the first
-  refusal on, in the run's fallback.
+- I3 (restated by A1) — Each line of the run lands in the log until the log first refuses it, and from then
+  on in the run's fallback; the run returns to the log only for the closing pointer line. A fallback that
+  itself later refuses writes is the accepted edge: before `ops_backup` starts the run stops with exit 1 and
+  no generation (`LOG_UNWRITABLE`, or `GENERATION` when the refused line was the refusal reason), after it
+  the lines are lost and the exit code stands.
 - I4 — A reader that shares writes never moves the run to a fallback.
 - I5 — The script stays ASCII: Windows PowerShell 5.1 reads a BOM-less script in the ANSI code page.
 
@@ -157,14 +163,16 @@ credential, scheduled task or deployed file is read for writing.
 
 | # | Goal | Paths | Exit evidence | Status |
 |---|---|---|---|---|
-| 1 | Import the deployed wrapper unchanged | `tools/daily_governed_backup.ps1` | blob identity (T0) | PLANNED |
-| 2 | Shared-mode logging with fallback; tests; owner row; state | §6 allowed paths | RED→GREEN, T4, R2 review PASS | PLANNED |
+| 1 | Import the deployed wrapper unchanged | `tools/daily_governed_backup.ps1` | blob identity (T0) | DONE |
+| 2 | Shared-mode logging with fallback; tests; owner row; state | §6 allowed paths | RED→GREEN, T4, R2 review PASS | DONE |
 
 ## 13. Acceptance criteria
 
 - AC1 — A reader that shares writes (Python/CRT `open`, .NET `FileShare.ReadWrite`, Git for Windows
-  `tail -F`), held for the whole run: one generation, exit 0, the run's whole log in the log →
-  `test_a_reader_holding_the_log_open_changes_nothing`.
+  `tail -F`, a handle with delete access (A1)), held for the whole run: one generation, exit 0, the run's
+  whole log in the log → `test_a_reader_holding_the_log_open_changes_nothing`; a write-denying lock briefer
+  than the retry window costs no fallback (A1) →
+  `test_a_lock_briefer_than_the_retry_window_is_waited_out_without_a_fallback`.
 - AC2 — A handle that refuses writers, held for the whole run: one generation, exit 0, the whole log in one
   fallback named on the console, earlier lines intact →
   `test_a_lock_that_refuses_writers_moves_the_run_into_a_fallback_log`.
@@ -177,7 +185,9 @@ credential, scheduled task or deployed file is read for writing.
 - AC5 — A run whose lines no file takes stops before the generation, exit 1, ledger unchanged →
   `test_a_run_whose_lines_no_file_takes_stops_before_the_generation`.
 - AC6 — Contracts unchanged: the unobserved run (same `ops_backup` arguments, one ledger row, the same log
-  lines) → `test_the_unobserved_run_records_one_generation_and_logs_it_whole`; the slice-2 diff touches only
+  lines) → `test_the_unobserved_run_records_one_generation_and_logs_it_whole`; a log lost after `ops_backup`
+  started leaves the recorded generation at exit 0 (A1, D4) →
+  `test_a_log_lost_after_the_generation_started_never_changes_its_exit_code`; the slice-2 diff touches only
   §3's items.
 - AC7 — The observers are real (`test_control_each_observer_defeats_a_plain_add_content`) and AC1–AC5 fail
   on the slice-1 script.
@@ -196,8 +206,30 @@ open the live log while the task can run; a correction that needs PowerShell 7.
 
 ## 16. Amendments
 
-None.
+- A1 2026-11-19 — After the R2 review (all findings NON_MATERIAL): `-NoThrow` also on the
+  `NO GENERATION RECORDED` line, so the stop line names the real cause (exit 1 either way); the header names
+  the fallback file; I3 restated to what §3 does (no return to the log after the switch; a fallback that
+  later refuses writes is the accepted edge); three tests added that no earlier test discriminated — a log
+  lost after `ops_backup` started (D4), a lock briefer than the retry window, a handle with delete access —
+  each proven by a mutant it kills; the harness releases an observer whose start fails. Impact: none on any
+  outcome. Material: no.
 
 ## 17. Closure
 
-Filled in the last slice.
+CLOSED 2026-11-19, local commits only (publication HOLD: not pushed, not installed).
+
+- Acceptance: AC1–AC8 met. Evidence (outside the repository, `D:\SGAA_tmp\ops_log_01\`): GREEN, the test
+  file 21/21 on Windows PowerShell 5.1.26100 with the task's flags; RED, its pre-A1 version against the
+  slice-1 script: all ten AC1–AC5 tests fail (every line of an observed run lost; a refused or failed run's
+  reason lost; an unlogged generation when no log is writable) while the controls, the ASCII check and the
+  unobserved run pass; the A1 tests kill their mutants (no `-NoThrow` on `ops_backup`'s output, no retry,
+  no delete sharing). T4: `tests/test_mp3_deploy_audit.py` 81 passed, 1 skipped (the export is still the
+  runtime allowlist with the new file under `tools/`). Collection: prior + the file's 21 tests. T5 not
+  triggered (TEP §5.1: no condition applies).
+- Review: R2, a fresh-context Claude Opus 5.5 session (same family; not an R3 cross-family review):
+  PASS, 0 MATERIAL, 7 NON_MATERIAL — four fixed, two recorded by A1, one (documentation timing) reconciled
+  in slice 2; targeted recheck of the fixes PASS.
+- Slices: 1 imported the deployed blob of §2; 2 is the correction.
+- Carried to `PROJECT_STATE.md`: the installation of §9 (owner gate) and, until then, the rule that nothing
+  holds the live log open while the task runs; the push of these commits (HOLD).
+- Follow-ups: §15.

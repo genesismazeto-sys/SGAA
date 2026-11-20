@@ -96,6 +96,8 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   The first subsequently scheduled DUE pass is still awaiting observation;
   a no-op scheduled wake returned HTTP 200/NOT_DUE. The configured policy is the
   default 24 h database / 7 d objects / 2 retained / 30 d restoration drill.
+- OPS-LOG-01, governed daily backup logging reliability (R2): CLOSED locally under a publication
+  HOLD (local commits, not pushed, not installed).
 - MP-3 A22 (`docs/specs/MP-3-A22-request-reclassification.md`): a student or administrator
   corrects the activity of an editable request in place (schema v17). In PROD since gate G1
   on 2026-10-19 (upgrade to v17, then the GF1 deploy of `f559e3d`, ledger seq 173-181).
@@ -155,14 +157,18 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   receipt is in the cutover ledger; its publication to the PROD Banco de dados
   posture remains pending via the governed `ops_backup publish` procedure.
 - The daily governed backup task (Windows Task Scheduler, 20:00) runs
-  `daily_governed_backup.ps1` from the v19 worktree of `4087eaf` since GF1-V19; its last run
-  (2026-11-19, generation seq 243, schema 19) succeeded. It does not start on battery
+  `D:\SGAA_CUTOVER\daily_governed_backup.ps1` from the v19 worktree of `4087eaf` since GF1-V19; its
+  last run (2026-11-19, generation seq 243, schema 19) succeeded. It does not start on battery
   (`DisallowStartIfOnBatteries`): it waits, queued, for AC power.
-- Operational follow-up, OPEN (not resolved): `daily_governed_backup.ps1` still logs with
-  Windows PowerShell 5.1 `Add-Content`, so any process holding its log open (a tail, an editor,
-  a scanner) makes a write throw -- the defect that stopped GF1-V19 run 1, fixed only in that
-  GF1's scripts. Until the script appends with shared access and a fallback like them, nothing
-  may hold its log open while it runs.
+- The installed copy still logs with Windows PowerShell 5.1 `Add-Content`, which refuses to append
+  while any process holds the log open and, under the script's `Continue`, drops the line silently:
+  the run completes, but its log lines -- the failure reason included -- are lost. Until the
+  corrected wrapper is installed, nothing may hold `daily_governed_backup.log` open while it runs.
+  The correction is OPS-LOG-01 (`docs/specs/OPS-LOG-01-daily-backup-logging.md`): the repository
+  now holds the wrapper, `tools/daily_governed_backup.ps1` (shared-mode append, bounded retry, a
+  per-run fallback file; backup, ledger and exit-code contracts unchanged). Installing it replaces
+  the deployed copy, needs a separate owner authorization and follows the SPEC's §9; it is not part
+  of a GF1 (`tools/` is outside the deployment export).
 - The workstation SQLite runtime is stopped and frozen: the rollback asset until the window
   closes (C14); its contraction is MP-4.
 - Residuals recorded by MP-2 (no hosting impact today): `main.py` still attaches a file handler

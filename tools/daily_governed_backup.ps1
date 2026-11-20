@@ -12,7 +12,7 @@
   Every governed generation takes the documents too: once an object set is registered, a database-only governed
   run is refused (GENERATION_NOT_THIS_RUNS) after it has already registered its database set, so there is no
   database-only fallback here.  Exit code: 0 generation recorded | 1 nothing recorded (the log names why and the
-  cadence deadline).
+  cadence deadline).  A run the log refuses continues in daily_governed_backup.fallback-*.log beside it.
 
   Usage:  powershell -NoProfile -ExecutionPolicy Bypass -File D:\SGAA_CUTOVER\daily_governed_backup.ps1
 #>
@@ -39,8 +39,38 @@ $Names      = @('PGPASSWORD','PGPASSFILE','DATABASE_URL','APP_ENV','SGAA_RUNTIME
                 'SGAA_STORAGE_BUCKET','SGAA_PG_BIN_DIR','APP_SECRET_KEY','TOKEN_ENCRYPTION_KEY','SGAA_ADMISSION',
                 'SGAA_OPENING_REFERENCE','APP_PUBLIC_BASE_URL','SUPABASE_SECRET_KEY','GOOGLE_CLIENT_ID','GOOGLE_CLIENT_SECRET')
 $ExitCode   = 1
+$LogFallback = $null
 
-function Write-Log([string]$Text) { Add-Content -Path $Log -Value $Text -Encoding UTF8; Write-Host $Text }
+# Windows PowerShell 5.1 Add-Content refuses to append while any process holds the file open (a tail, Get-Content
+# -Wait, an editor, a scanner) and, under 'Continue', loses the line without a trace.  So a line is appended with
+# read/write/delete sharing, which no reader that shares writes refuses, and retried for 5 s; if the log still
+# refuses (a handle that denies writes), the rest of the run goes to a fallback file beside it, named on the console
+# and, once the log takes writes again, at its end.  When no file takes a line Write-Log throws LOG_UNWRITABLE,
+# which stops a run before its generation (a governed generation does not start without a record of its run); the
+# lines written once the outcome is decided pass -NoThrow, so a log failure never changes what the exit code reports.
+function Add-LogLine([string]$Path, [string]$Text) {
+    $bytes = (New-Object System.Text.UTF8Encoding($false)).GetBytes($Text + "`r`n")
+    for ($attempt = 1; $attempt -le 20; $attempt++) {
+        try {
+            $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write,
+                ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete))
+            try { $stream.Write($bytes, 0, $bytes.Length); $stream.Flush() } finally { $stream.Dispose() }
+            return $true
+        } catch { Start-Sleep -Milliseconds 250 }  # a refused line is reported to the caller, which decides
+    }
+    return $false
+}
+function Write-Log([string]$Text, [switch]$NoThrow) {
+    Write-Host $Text
+    if (-not $script:LogFallback) {
+        if (Add-LogLine $Log $Text) { return }
+        $script:LogFallback = '{0}.fallback-{1}-{2}.log' -f ($Log -replace '\.log$', ''), (Get-Date -Format 'yyyyMMddHHmmss'), $PID
+        Write-Host ("== WARNING: {0} refused writes; this run continues its log in {1}" -f $Log, $script:LogFallback)
+        [void](Add-LogLine $script:LogFallback ("== {0} refused writes from here on; this file continues it" -f $Log))
+    }
+    if (Add-LogLine $script:LogFallback $Text) { return }
+    if (-not $NoThrow) { throw 'LOG_UNWRITABLE' }
+}
 function Read-Secret([string]$File, [string]$Prompt) {
     if (Test-Path $File) { return @{ Secure = (Get-Content $File | ConvertTo-SecureString); Stored = $true } }
     return @{ Secure = (Read-Host -AsSecureString $Prompt); Stored = $false }
@@ -59,7 +89,7 @@ function Invoke-Generation([bool]$Objects, [string]$Label) {
     if ($Objects) { $cli += '--objects' }
     $out = & $Py @cli 2>&1
     $code = $LASTEXITCODE
-    foreach ($line in $out) { Write-Log "$line" }
+    foreach ($line in $out) { Write-Log "$line" -NoThrow }
     return $code
 }
 function Cadence-Deadline {
@@ -71,9 +101,9 @@ function Cadence-Deadline {
     return $newest.AddHours(36).ToString("yyyy-MM-ddTHH:mm:ssZ")
 }
 
-Write-Log ("#### daily governed generation start {0}" -f (Get-Date -Format s))
 Push-Location $Wt
 try {
+    Write-Log ("#### daily governed generation start {0}" -f (Get-Date -Format s))
     if (Test-Path Env:DATABASE_URL) { Write-Log 'REFUSED: DATABASE_URL is already set in this window'; throw 'PRECONDITION' }
     if (& git -C $Wt status --porcelain) { Write-Log 'REFUSED: the worktree is not clean'; throw 'PRECONDITION' }
     $env:PYTHONDONTWRITEBYTECODE = '1'; $env:TEMP = 'D:\SGAA_tmp'; $env:TMP = 'D:\SGAA_tmp'
@@ -122,16 +152,19 @@ try {
         }
     }
     if (-not $result) {
-        Write-Log ("NO GENERATION RECORDED: {0}. Cadence deadline {1}." -f $reason, (Cadence-Deadline))
+        Write-Log ("NO GENERATION RECORDED: {0}. Cadence deadline {1}." -f $reason, (Cadence-Deadline)) -NoThrow
         throw 'GENERATION'
     }
     Save-Secret $db $DbFile
     $ExitCode = 0
-    Write-Log ("#### RESULT: generation recorded (database + documents). Next cadence deadline {0}." -f (Cadence-Deadline))
+    Write-Log ("#### RESULT: generation recorded (database + documents). Next cadence deadline {0}." -f (Cadence-Deadline)) -NoThrow
 }
-catch { Write-Log ("#### stopped: {0}" -f $_.Exception.Message) }
+catch { Write-Log ("#### stopped: {0}" -f $_.Exception.Message) -NoThrow }
 finally {
     foreach ($name in $Names) { Remove-Item "Env:$name" -ErrorAction SilentlyContinue }
     Pop-Location
+    if ($LogFallback -and (Test-Path -LiteralPath $LogFallback)) {
+        [void](Add-LogLine $Log ("#### this run's log continued in {0}" -f $LogFallback))
+    }
 }
 exit $ExitCode
