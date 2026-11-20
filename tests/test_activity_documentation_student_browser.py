@@ -14,12 +14,12 @@ import json
 import main
 from app.student_matrix import get_effective_matrix_for_student
 from tests.canonical_request_test_support import login_student, student_identity
-from tests.docx_test_support import make_docx
+from tests.docx_test_support import ANEXO_3_TITULO, ANEXO_5_TITULO, make_docx
 from tests.test_activity_documentation_admin_browser import (
     BINARY,
     EVIDENCE,
-    DECLARACAO,
-    FREQUENCIA,
+    ANEXO_3,
+    ANEXO_5,
     Session,
     _js,
     _open,
@@ -53,7 +53,7 @@ def _seed_student_catalogue():
         with_docs, plain, templates_only = by_group[group][:3]
         conn.execute(
             "UPDATE atividade_versao SET documentos_json = ? WHERE id = ?",
-            (json.dumps({"comprovantes_exigidos": ["Certificado de participação", "Declaração assinada pelo responsável"]},
+            (json.dumps({"comprovantes_exigidos": ["Relatório da atividade (Anexo 3)", "Cópia do ingresso"]},
                         ensure_ascii=False), with_docs["id"]),
         )
         # What versions held before the list existed: a sentence, never shown as a proof.
@@ -63,8 +63,8 @@ def _seed_student_catalogue():
                         ensure_ascii=False), plain["id"]),
         )
         conn.execute("UPDATE atividade_versao SET documentos_json = '[]' WHERE id = ?", (templates_only["id"],))
-        insert_template(conn, with_docs["id"], "Declaração do responsável", DECLARACAO, slot=1)
-        insert_template(conn, templates_only["id"], "Folha de frequência", FREQUENCIA, slot=1)
+        insert_template(conn, with_docs["id"], ANEXO_3_TITULO, ANEXO_3, slot=1, filename="Anexo 3.docx")
+        insert_template(conn, templates_only["id"], ANEXO_5_TITULO, ANEXO_5, slot=1, filename="Anexo 5.docx")
         conn.commit()
     return {"group": group, "with_docs": with_docs, "plain": plain, "templates_only": templates_only}
 
@@ -111,8 +111,8 @@ def test_student_sees_the_selected_activity_guidance_and_downloads_its_template(
         block = _block(session)
         assert block == {
             "hidden": False, "versao": str(catalogue["with_docs"]["id"]),
-            "documentos": ["Certificado de participação", "Declaração assinada pelo responsável"],
-            "modelos": ["Declaração do responsável"], "documentsHidden": False, "templatesHidden": False,
+            "documentos": ["Relatório da atividade (Anexo 3)", "Cópia do ingresso"],
+            "modelos": [ANEXO_3_TITULO], "documentsHidden": False, "templatesHidden": False,
         }
         # The lead is justified like the field notes above it; a template row is
         # its title and "Baixar modelo", nothing else.
@@ -122,7 +122,7 @@ def test_student_sees_the_selected_activity_guidance_and_downloads_its_template(
         ) == ["justify", "justify"]
         assert session.evaluate(
             "document.querySelector('.doc-guidance-template-text').innerText.trim()"
-        ) == "Declaração do responsável"
+        ) == ANEXO_3_TITULO
         session.screenshot("aluno-nova-requisicao-orientacao-desktop")
         # Phone width. The student shell keeps its 240 px sidebar at every width
         # (the content track scrolls sideways -- pre-existing, every field alike),
@@ -172,9 +172,9 @@ def test_student_sees_the_selected_activity_guidance_and_downloads_its_template(
         # Templates only: the documents part stays hidden.
         _choose(session, catalogue["group"], catalogue["templates_only"]["id"])
         block = _block(session)
-        assert (block["hidden"], block["documentsHidden"], block["modelos"]) == (False, True, ["Folha de frequência"])
+        assert (block["hidden"], block["documentsHidden"], block["modelos"]) == (False, True, [ANEXO_5_TITULO])
         session.click_in_view(".doc-guidance-download")
-        assert session.downloaded("Folha de frequência.docx") == FREQUENCIA
+        assert session.downloaded("Anexo 5.docx") == ANEXO_5
 
         # Informative only: the request goes through without any comprovante.
         _choose(session, catalogue["group"], catalogue["with_docs"]["id"])
@@ -210,7 +210,7 @@ def test_student_sees_the_selected_activity_guidance_and_downloads_its_template(
         _open(session, f"/aluno/requisicoes/{request['id']}?edit=1")
         assert _block(session)["versao"] == str(catalogue["with_docs"]["id"])
         _choose(session, catalogue["group"], catalogue["templates_only"]["id"])
-        assert _block(session)["modelos"] == ["Folha de frequência"]
+        assert _block(session)["modelos"] == [ANEXO_5_TITULO]
         # Rectification of the returned request: the recorded version's guidance again.
         stamp = (datetime.datetime.now() - datetime.timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
         with main.app.app_context():
@@ -220,7 +220,7 @@ def test_student_sees_the_selected_activity_guidance_and_downloads_its_template(
             conn.commit()
         _open(session, f"/aluno/requisicoes/{request['id']}?edit=1")
         assert "Retificar Requisição" in session.evaluate("document.body.innerText")
-        assert _block(session)["documentos"] == ["Certificado de participação", "Declaração assinada pelo responsável"]
+        assert _block(session)["documentos"] == ["Relatório da atividade (Anexo 3)", "Cópia do ingresso"]
         session.screenshot("aluno-retificacao-orientacao")
         assert session.evaluate("window.__errors") == []
     finally:
@@ -229,7 +229,7 @@ def test_student_sees_the_selected_activity_guidance_and_downloads_its_template(
 
 #: The longest fill-in annex title of the ACC rev6 regulation, as an
 #: administrator would give it. The file itself is a synthetic test document.
-LONG_ANNEX_TITLE = "Anexo 5 — Atividades de monitoria, apoio institucional e visitas técnicas"
+LONG_ANNEX_TITLE = ANEXO_5_TITULO
 
 _TEMPLATE_ROW_GEOMETRY = (
     "(() => { const row = document.querySelector('#orientacao-comprovantes .doc-guidance-template');"

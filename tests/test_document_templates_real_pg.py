@@ -31,14 +31,16 @@ from app.activity_document_templates import (
     update_template,
 )
 from app.db import write_transaction
-from tests.docx_test_support import make_docx
+from tests.docx_test_support import ANEXO_3_TITULO, make_docx
 from tests.prod1_v19_support import drop_pg_v19_objects
 from tests.storage_mp1_pg_support import PG_URL, Registry, adapter, raw_connection
 
 pytestmark = pytest.mark.skipif(not PG_URL, reason="SGAA_PG_TEST_URL is required")
 
-DECLARACAO = make_docx("Declaração do responsável")
-FREQUENCIA = make_docx("Folha de frequência")
+ANEXO_3 = make_docx("Anexo 3 — Leitura de livro/filme (arquivo sintético de teste)")
+ANEXO_5 = make_docx(
+    "Anexo 5 — Atividades de monitoria, apoio institucional e visitas técnicas (arquivo sintético de teste)"
+)
 
 
 @pytest.fixture(scope="module")
@@ -148,21 +150,21 @@ def test_the_template_lifecycle_and_its_triggers_on_postgresql(database):
     conn = adapter(database)
     try:
         base_id, version_id, admin_id = _draft(conn)
-        first = add_template(conn, base_id=base_id, versao_id=version_id, titulo="Declaração",
-                             upload=TemplateUpload("Declaração.docx", DECLARACAO), actor_user_id=admin_id)
+        first = add_template(conn, base_id=base_id, versao_id=version_id, titulo="Anexo 3",
+                             upload=TemplateUpload("Anexo 3.docx", ANEXO_3), actor_user_id=admin_id)
         again = add_template(conn, base_id=base_id, versao_id=version_id, titulo="Cópia",
-                             upload=TemplateUpload("copia.docx", DECLARACAO), actor_user_id=admin_id)
+                             upload=TemplateUpload("copia.docx", ANEXO_3), actor_user_id=admin_id)
         assert conn.execute("SELECT count(*) FROM modelo_documento_arquivos").fetchone()[0] == 1  # ON CONFLICT
-        assert read_template_file(conn, first)["conteudo"] == DECLARACAO  # bytea round trip
+        assert read_template_file(conn, first)["conteudo"] == ANEXO_3  # bytea round trip
         replacement = update_template(conn, base_id=base_id, versao_id=version_id, modelo_id=first,
-                                      titulo="Declaração 2026", upload=TemplateUpload("d.docx", FREQUENCIA),
+                                      titulo=ANEXO_3_TITULO, upload=TemplateUpload("d.docx", ANEXO_5),
                                       actor_user_id=admin_id)
         retire_template(conn, base_id=base_id, versao_id=version_id, modelo_id=again, actor_user_id=admin_id)
         rows = list_version_templates(conn, version_id, include_ended=True)
         assert [(r["id"], r["status"], r["ordem"]) for r in rows] == [
             (first, "substituido", 1), (replacement, "ativo", 1), (again, "retirado", 2),
         ]
-        assert read_template_file(conn, first)["conteudo"] == DECLARACAO
+        assert read_template_file(conn, first)["conteudo"] == ANEXO_3
         # A successor in the same transaction as its creation gets the active templates only.
         with write_transaction(conn):
             successor = conn.execute(
@@ -187,7 +189,7 @@ def test_the_template_lifecycle_and_its_triggers_on_postgresql(database):
         conn.commit()
         with pytest.raises(DocumentTemplateRefused) as frozen:
             add_template(conn, base_id=base_id, versao_id=version_id, titulo="Tarde demais",
-                         upload=TemplateUpload("t.docx", FREQUENCIA), actor_user_id=admin_id)
+                         upload=TemplateUpload("t.docx", ANEXO_5), actor_user_id=admin_id)
         assert frozen.value.code == "VERSION_FROZEN"
     finally:
         conn.close()
@@ -221,7 +223,7 @@ def test_an_activation_committed_while_a_template_write_waits_wins(database):
         def write():
             try:
                 add_template(writer, base_id=base_id, versao_id=version_id, titulo="Concorrente",
-                             upload=TemplateUpload("c.docx", DECLARACAO), actor_user_id=admin_id)
+                             upload=TemplateUpload("c.docx", ANEXO_3), actor_user_id=admin_id)
                 outcome["result"] = "added"
             except DocumentTemplateRefused as exc:
                 outcome["result"] = exc.code
@@ -286,11 +288,11 @@ def test_the_student_read_path_on_postgresql(database):
             (offered,),
         )
         ids = {
-            "offered_2": _insert_template(conn, offered, "Segundo", FREQUENCIA, slot=2),
-            "offered_1": _insert_template(conn, offered, "Primeiro", DECLARACAO, slot=1),
-            "withdrawn": _insert_template(conn, offered, "Retirado", FREQUENCIA, slot=3, status="retirado"),
-            "requested": _insert_template(conn, requested, "Da requisição", DECLARACAO, slot=1),
-            "foreign": _insert_template(conn, foreign, "Estrangeiro", DECLARACAO, slot=1),
+            "offered_2": _insert_template(conn, offered, "Segundo", ANEXO_5, slot=2),
+            "offered_1": _insert_template(conn, offered, "Primeiro", ANEXO_3, slot=1),
+            "withdrawn": _insert_template(conn, offered, "Retirado", ANEXO_5, slot=3, status="retirado"),
+            "requested": _insert_template(conn, requested, "Da requisição", ANEXO_3, slot=1),
+            "foreign": _insert_template(conn, foreign, "Estrangeiro", ANEXO_3, slot=1),
         }
         conn.commit()
 
@@ -310,6 +312,6 @@ def test_the_student_read_path_on_postgresql(database):
                    for name, i in ids.items()}
         assert allowed == {"offered_2": True, "offered_1": True, "withdrawn": False, "requested": True,
                            "foreign": False}
-        assert read_template_file(conn, ids["offered_1"])["conteudo"] == DECLARACAO
+        assert read_template_file(conn, ids["offered_1"])["conteudo"] == ANEXO_3
     finally:
         conn.close()

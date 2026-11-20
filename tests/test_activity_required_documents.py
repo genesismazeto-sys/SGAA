@@ -37,7 +37,7 @@ LEGACY_SENTENCE = (
     " promotora, contendo a data de realização e a carga horária total do evento."
 )
 LEGACY_TEXT = json.dumps([LEGACY_SENTENCE], ensure_ascii=False)
-ITEMS = ["Certificado de participação", "Declaração do responsável"]
+ITEMS = ["Certificado de participação", "Relatório da atividade (Anexo 3)"]
 LIST_TEXT = json.dumps({LIST_KEY: ITEMS}, ensure_ascii=False)
 
 
@@ -183,7 +183,9 @@ def test_a_guidance_change_alone_creates_a_draft_and_leaves_the_frozen_version_u
         f"/admin/catalogo-versoes/{base_id}/nova-versao?from={version_id}",
         data={
             **_form(versao_anterior_id=str(version_id)),
-            "documentos_exigidos": ["Declaração do responsável", "Certificado de participação", "Lista de presença"],
+            "documentos_exigidos": [
+                "Relatório da atividade (Anexo 3)", "Certificado de participação", "Lista de presença",
+            ],
         },
     )
     assert response.status_code == 302
@@ -191,7 +193,7 @@ def test_a_guidance_change_alone_creates_a_draft_and_leaves_the_frozen_version_u
     assert original["documentos_json"] == LIST_TEXT and original["status"] == "ativa"
     assert successor["status"] == "rascunho" and successor["versao_anterior_id"] == version_id
     assert json.loads(successor["documentos_json"]) == {
-        LIST_KEY: ["Declaração do responsável", "Certificado de participação", "Lista de presença"],
+        LIST_KEY: ["Relatório da atividade (Anexo 3)", "Certificado de participação", "Lista de presença"],
     }
 
 
@@ -227,7 +229,7 @@ def test_an_unchanged_form_is_still_no_effective_change(env):
         f"/admin/catalogo-versoes/{base_id}/nova-versao?from={version_id}",
         data={
             **_form(versao_anterior_id=str(version_id)),
-            "documentos_exigidos": ["Certificado de participação", " Declaração  do responsável "],
+            "documentos_exigidos": ["Certificado de participação", " Relatório  da atividade (Anexo 3) "],
         },
     )
     assert response.status_code == 200
@@ -240,13 +242,15 @@ def test_a_draft_edit_reorders_removes_and_adds_items_and_a_reload_shows_them(en
     url = f"/admin/catalogo-versoes/{base_id}/versoes/{version_id}/editar"
     response = env["client"].post(
         url,
-        data={**_form(), "documentos_exigidos": ["Declaração do responsável", "", "Folha de frequência"]},
+        data={**_form(), "documentos_exigidos": ["Relatório da atividade (Anexo 3)", "", "Cópia do ingresso"]},
     )
     assert response.status_code == 302
     stored = _version(version_id)
-    assert json.loads(stored["documentos_json"]) == {LIST_KEY: ["Declaração do responsável", "Folha de frequência"]}
+    assert json.loads(stored["documentos_json"]) == {
+        LIST_KEY: ["Relatório da atividade (Anexo 3)", "Cópia do ingresso"],
+    }
     assert _rendered_items(env["client"].get(url).get_data(as_text=True)) == [
-        "Declaração do responsável", "Folha de frequência",
+        "Relatório da atividade (Anexo 3)", "Cópia do ingresso",
     ]
     response = env["client"].post(url, data={**_form(), "documentos_exigidos": []})
     assert response.status_code == 302

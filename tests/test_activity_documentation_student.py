@@ -20,18 +20,23 @@ import main
 from app.prod1_document_templates_ddl import DOCX_MIME_TYPE
 from app.student_matrix import get_effective_matrix_for_student
 from tests.canonical_request_test_support import login_student, student_identity
-from tests.docx_test_support import make_docx
+from tests.docx_test_support import ANEXO_3_TITULO, ANEXO_5_TITULO, make_docx
 from tests.versioned_test_support import isolated_versioned_app_env
 
-DECLARACAO = make_docx("Declaração do responsável")
-FREQUENCIA = make_docx("Folha de frequência")
+ANEXO_3 = make_docx("Anexo 3 — Leitura de livro/filme (arquivo sintético de teste)")
+ANEXO_5 = make_docx(
+    "Anexo 5 — Atividades de monitoria, apoio institucional e visitas técnicas (arquivo sintético de teste)"
+)
 RETIRADO = make_docx("Modelo antigo")
 # What versions held before the list existed: a regulation sentence, not a proof.
 OLDER_TEXT = "A validação será feita mediante certificado emitido pela instituição promotora do evento."
 
 
-def insert_template(conn, version_id, title, content, *, slot, status="ativo"):
-    """Seed a template row directly (setup only: the owner refuses frozen versions)."""
+def insert_template(conn, version_id, title, content, *, slot, status="ativo", filename=None):
+    """Seed a template row directly (setup only: the owner refuses frozen versions).
+
+    ``filename`` is the download name; a title may hold a "/" (Anexo 3), a file name not.
+    """
     digest = hashlib.sha256(content).hexdigest()
     conn.execute(
         "INSERT INTO modelo_documento_arquivos (sha256, mime_type, size_bytes, conteudo) VALUES (?, ?, ?, ?)"
@@ -43,7 +48,7 @@ def insert_template(conn, version_id, title, content, *, slot, status="ativo"):
     return conn.execute(
         "INSERT INTO atividade_versao_modelos (atividade_versao_id, arquivo_id, titulo, nome_arquivo, ordem, status,"
         f" encerrado_em) VALUES (?, ?, ?, ?, ?, ?, {ended}) RETURNING id",
-        (version_id, content_id, title, f"{title}.docx", slot, status),
+        (version_id, content_id, title, filename or f"{title}.docx", slot, status),
     ).fetchone()[0]
 
 
@@ -71,7 +76,8 @@ def env(tmp_path):
             with_docs, plain, templates_only = own[0], own[1], own[2]
             conn.execute(
                 "UPDATE atividade_versao SET documentos_json = ? WHERE id = ?",
-                (json.dumps({"comprovantes_exigidos": ["Certificado de participação", "Declaração do responsável"]},
+                (json.dumps({"comprovantes_exigidos": ["Certificado de participação",
+                                                       "Relatório da atividade (Anexo 3)"]},
                             ensure_ascii=False), with_docs),
             )
             conn.execute(
@@ -80,11 +86,11 @@ def env(tmp_path):
             )
             conn.execute("UPDATE atividade_versao SET documentos_json = '[]' WHERE id = ?", (templates_only,))
             ids = {
-                "declaracao": insert_template(conn, with_docs, "Declaração do responsável", DECLARACAO, slot=1),
-                "frequencia": insert_template(conn, with_docs, "Folha de frequência", FREQUENCIA, slot=2),
+                "anexo_3": insert_template(conn, with_docs, ANEXO_3_TITULO, ANEXO_3, slot=1, filename="Anexo 3.docx"),
+                "anexo_5": insert_template(conn, with_docs, ANEXO_5_TITULO, ANEXO_5, slot=2),
                 "retirado": insert_template(conn, templates_only, "Modelo antigo", RETIRADO, slot=1, status="retirado"),
-                "vigente": insert_template(conn, templates_only, "Modelo vigente", FREQUENCIA, slot=2),
-                "estrangeiro": insert_template(conn, foreign[0], "Outra matriz", DECLARACAO, slot=1),
+                "vigente": insert_template(conn, templates_only, "Modelo vigente", ANEXO_5, slot=2),
+                "estrangeiro": insert_template(conn, foreign[0], "Outra matriz", ANEXO_3, slot=1),
             }
             conn.commit()
         environment.update(
@@ -114,9 +120,11 @@ def test_the_form_gets_the_guidance_of_each_version_and_nothing_for_versions_wit
     )
     guidance = _guidance(html)
     assert set(guidance) == {str(env["with_docs"]), str(env["templates_only"])}
-    assert guidance[str(env["with_docs"])]["documentos"] == ["Certificado de participação", "Declaração do responsável"]
+    assert guidance[str(env["with_docs"])]["documentos"] == [
+        "Certificado de participação", "Relatório da atividade (Anexo 3)",
+    ]
     assert [m["titulo"] for m in guidance[str(env["with_docs"])]["modelos"]] == [
-        "Declaração do responsável", "Folha de frequência",
+        ANEXO_3_TITULO, ANEXO_5_TITULO,
     ]
     only = guidance[str(env["templates_only"])]
     assert only["documentos"] == [] and [m["id"] for m in only["modelos"]] == [env["templates"]["vigente"]]
@@ -127,11 +135,11 @@ def test_the_form_gets_the_guidance_of_each_version_and_nothing_for_versions_wit
     assert OLDER_TEXT not in html
 
 
-@pytest.mark.parametrize("name", ["declaracao", "frequencia", "vigente"])
+@pytest.mark.parametrize("name", ["anexo_3", "anexo_5", "vigente"])
 def test_the_student_downloads_the_exact_bytes_of_an_offered_template(env, name):
     response = env["client"].get(f"/aluno/modelos/{env['templates'][name]}/baixar")
     assert response.status_code == 200
-    assert response.data == {"declaracao": DECLARACAO, "frequencia": FREQUENCIA, "vigente": FREQUENCIA}[name]
+    assert response.data == {"anexo_3": ANEXO_3, "anexo_5": ANEXO_5, "vigente": ANEXO_5}[name]
     assert response.mimetype == DOCX_MIME_TYPE
     assert "attachment" in response.headers["Content-Disposition"]
     assert response.headers["Cache-Control"] == "private, no-store"
@@ -145,8 +153,8 @@ def test_a_withdrawn_or_foreign_template_is_not_found_for_the_student(env, name)
 def test_an_unknown_template_or_an_anonymous_visitor_gets_nothing(env):
     assert env["client"].get("/aluno/modelos/999999/baixar").status_code == 404
     anonymous = main.app.test_client()
-    response = anonymous.get(f"/aluno/modelos/{env['templates']['declaracao']}/baixar")
-    assert response.status_code == 302 and response.data != DECLARACAO
+    response = anonymous.get(f"/aluno/modelos/{env['templates']['anexo_3']}/baixar")
+    assert response.status_code == 302 and response.data != ANEXO_3
 
 
 def test_a_request_without_the_listed_proofs_is_still_accepted(env):
@@ -191,7 +199,7 @@ def test_edit_and_rectification_show_the_recorded_version_even_after_the_matrix_
     assert _init(edit)["atividade_versao_id"] == env["with_docs"]
     assert str(env["with_docs"]) in _guidance(edit)
     # The recorded version's templates stay downloadable for this student.
-    assert client.get(f"/aluno/modelos/{env['templates']['declaracao']}/baixar").data == DECLARACAO
+    assert client.get(f"/aluno/modelos/{env['templates']['anexo_3']}/baixar").data == ANEXO_3
     with main.app.app_context():
         conn = main.get_db_connection()
         stamp = (datetime.datetime.now() - datetime.timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")

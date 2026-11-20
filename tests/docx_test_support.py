@@ -15,6 +15,12 @@ MACRO_MAIN = "application/vnd.ms-word.document.macroEnabled.main+xml"
 TEMPLATE_MAIN = "application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml"
 VBA_TYPE = "application/vnd.ms-office.vbaProject"
 
+#: The fill-in annexes of the ACC rev6 regulation -- the only downloadable
+#: models the Regulamento has. Fixture titles only: the bytes the tests upload
+#: are synthetic documents built by ``make_docx``, never the official forms.
+ANEXO_3_TITULO = "Anexo 3 — Leitura de livro/filme"
+ANEXO_5_TITULO = "Anexo 5 — Atividades de monitoria, apoio institucional e visitas técnicas"
+
 
 def _content_types(main_type: str, extra: str = "") -> str:
     return (

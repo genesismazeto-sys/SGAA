@@ -27,7 +27,7 @@ from tests.canonical_matrix_test_support import login_admin
 from tests.canonical_request_test_support import login_student, student_identity
 from tests.test_activity_documentation_admin_browser import (
     BINARY,
-    DECLARACAO,
+    ANEXO_3,
     EVIDENCE,
     Session,
     _draft_version,
@@ -212,7 +212,7 @@ def test_on_a_phone_the_menu_is_a_drawer_and_the_student_can_request_and_navigat
         _open(session, "/aluno/nova-requisicao")
         _choose(session, catalogue["group"], catalogue["with_docs"]["id"])
         session.click_in_view(".doc-guidance-download")
-        assert session.downloaded("Declaração do responsável.docx") == DECLARACAO
+        assert session.downloaded("Anexo 3.docx") == ANEXO_3
         # The Comprovantes card and its Anexar control stay on screen.
         attach = session.evaluate(
             "(() => { const r = document.querySelector('[data-upload-card] .chip-right').getBoundingClientRect();"

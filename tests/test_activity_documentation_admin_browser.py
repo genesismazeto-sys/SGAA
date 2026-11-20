@@ -24,7 +24,7 @@ from werkzeug.serving import make_server
 import main
 from app.activity_documentation import read_required_documents
 from tests.canonical_matrix_test_support import login_admin
-from tests.docx_test_support import make_docx
+from tests.docx_test_support import ANEXO_3_TITULO, ANEXO_5_TITULO, make_docx
 from tests.test_activity_documentation_student import insert_template
 from tests.versioned_test_support import isolated_versioned_app_env
 
@@ -35,9 +35,11 @@ browser_only = pytest.mark.skipif(BINARY is None, reason="no Chromium binary for
 #: Opt-in screenshots for review (outside the repository): SGAA_EVIDENCE_DIR.
 EVIDENCE = os.environ.get("SGAA_EVIDENCE_DIR")
 
-DECLARACAO = make_docx("Declaração do responsável")
-FREQUENCIA = make_docx("Folha de frequência")
-FREQUENCIA_2026 = make_docx("Folha de frequência 2026")
+ANEXO_3 = make_docx("Anexo 3 — Leitura de livro/filme (arquivo sintético de teste)")
+ANEXO_5 = make_docx(
+    "Anexo 5 — Atividades de monitoria, apoio institucional e visitas técnicas (arquivo sintético de teste)"
+)
+ANEXO_5_REV6 = make_docx("Anexo 5 — ACC rev6 (arquivo sintético de teste)")
 
 
 class LiveServer:
@@ -166,8 +168,8 @@ def workspace(tmp_path):
         downloads.mkdir()
         files = tmp_path / "uploads-from-disk"
         files.mkdir()
-        for name, content in (("Declaração do responsável.docx", DECLARACAO), ("Folha de frequência.docx", FREQUENCIA),
-                              ("Folha de frequência 2026.docx", FREQUENCIA_2026),
+        for name, content in (("Anexo 3.docx", ANEXO_3), ("Anexo 5.docx", ANEXO_5),
+                              ("Anexo 5 - ACC rev6.docx", ANEXO_5_REV6),
                               ("Com macro.docx", make_docx(vba_project=True))):
             (files / name).write_bytes(content)
         server = LiveServer(main.app)
@@ -220,29 +222,29 @@ def test_admin_maintains_the_documentation_of_a_draft_in_the_browser(workspace):
         _open(session, edit_url)
         assert _texts(session, "[data-doc-empty]") == ["Nenhum comprovante exigido cadastrado."]
         # A. Comprovantes exigidos: add three, move the third up, remove the second.
-        for text in ("Certificado de participação", "Lista de presença", "Declaração assinada pelo responsável"):
+        for text in ("Certificado de participação", "Lista de presença", "Relatório da atividade (Anexo 3)"):
             session.click_in_view("[data-doc-add]")
             _type(session, "#documentos-exigidos-list li:last-child input", text)
         session.click_in_view("#documentos-exigidos-list li:nth-child(3) [data-doc-move='-1']")
         session.click_in_view("#documentos-exigidos-list li:nth-child(3) [data-doc-remove]")
         assert _texts(session, "#documentos-exigidos-list input") == [
-            "Certificado de participação", "Declaração assinada pelo responsável",
+            "Certificado de participação", "Relatório da atividade (Anexo 3)",
         ]
         assert _texts(session, "#documentos-exigidos-list .doc-list-index") == ["1", "2"]
         # Unsaved changes hold the template actions (they would reload the page).
         assert session.evaluate("document.querySelector('[data-templates-dirty]').hidden") is False
         assert session.evaluate("document.querySelector(\"button[form='modelo-novo-form']\").disabled") is True
         _submit_and_wait(session, "#btn-salvar-versao")
-        assert _stored(version_id)[0] == ["Certificado de participação", "Declaração assinada pelo responsável"]
+        assert _stored(version_id)[0] == ["Certificado de participação", "Relatório da atividade (Anexo 3)"]
         _open(session, edit_url)
         assert _texts(session, "#documentos-exigidos-list input") == [
-            "Certificado de participação", "Declaração assinada pelo responsável",
+            "Certificado de participação", "Relatório da atividade (Anexo 3)",
         ]
         assert session.evaluate("document.querySelector('[data-templates-dirty]').hidden") is True
 
         # B. Modelos: two uploads through the browser's own multipart form.
-        for title, filename in (("Declaração do responsável", "Declaração do responsável.docx"),
-                                ("", "Folha de frequência.docx")):
+        for title, filename in ((ANEXO_3_TITULO, "Anexo 3.docx"),
+                                ("", "Anexo 5.docx")):
             _type(session, "input[form='modelo-novo-form'][name='modelo_titulo']", title)
             session.set_files("input[form='modelo-novo-form'][type='file']", workspace["files"] / filename)
             session.pump(0.2)
@@ -250,7 +252,7 @@ def test_admin_maintains_the_documentation_of_a_draft_in_the_browser(workspace):
             _submit_and_wait(session, "button[form='modelo-novo-form']")
             assert "Modelo adicionado." in session.evaluate("document.body.innerText")
         assert _texts(session, ".doc-templates > .doc-template-list .doc-template-title") == [
-            "Declaração do responsável", "Folha de frequência",
+            ANEXO_3_TITULO, "Anexo 5",
         ]
         # A macro document is refused with the reason, and nothing is stored.
         session.set_files("input[form='modelo-novo-form'][type='file']", workspace["files"] / "Com macro.docx")
@@ -261,26 +263,26 @@ def test_admin_maintains_the_documentation_of_a_draft_in_the_browser(workspace):
         session.screenshot("admin-versao-documentacao-390", width=390, height=844)
 
         # Download: the browser saves exactly the uploaded bytes.
-        session.click_in_view(".doc-template[data-modelo-id] a[aria-label='Baixar modelo Declaração do responsável']")
-        assert session.downloaded("Declaração do responsável.docx") == DECLARACAO
+        session.click_in_view(".doc-template[data-modelo-id] a[aria-label='Baixar modelo %s']" % ANEXO_3_TITULO)
+        assert session.downloaded("Anexo 3.docx") == ANEXO_3
 
         # Replace the second template's file and title; withdraw the first.
         second = session.evaluate("document.querySelectorAll('.doc-template-list li.doc-template')[1].dataset.modeloId")
         session.click_in_view(f"li[data-modelo-id='{second}'] [data-template-toggle]")
         assert session.evaluate(f"document.getElementById('modelo-editor-{second}').hidden") is False
-        _type(session, f"input[form='modelo-atualizar-{second}'][name='modelo_titulo']", "Folha de frequência 2026")
+        _type(session, f"input[form='modelo-atualizar-{second}'][name='modelo_titulo']", ANEXO_5_TITULO)
         session.set_files(f"input[form='modelo-atualizar-{second}'][type='file']",
-                          workspace["files"] / "Folha de frequência 2026.docx")
+                          workspace["files"] / "Anexo 5 - ACC rev6.docx")
         _submit_and_wait(session, f"button[form='modelo-atualizar-{second}']")
         first = session.evaluate("document.querySelectorAll('.doc-template-list li.doc-template')[0].dataset.modeloId")
         _submit_and_wait(session, f"button[form='modelo-retirar-{first}']")
-        assert _texts(session, ".doc-templates > .doc-template-list .doc-template-title") == ["Folha de frequência 2026"]
+        assert _texts(session, ".doc-templates > .doc-template-list .doc-template-title") == [ANEXO_5_TITULO]
         assert "Histórico de modelos (2)" in session.evaluate("document.body.innerText")
         documentos, rows = _stored(version_id)
         assert rows == [
-            ("Declaração do responsável", "retirado", _sha(DECLARACAO)),
-            ("Folha de frequência", "substituido", _sha(FREQUENCIA)),
-            ("Folha de frequência 2026", "ativo", _sha(FREQUENCIA_2026)),
+            (ANEXO_3_TITULO, "retirado", _sha(ANEXO_3)),
+            ("Anexo 5", "substituido", _sha(ANEXO_5)),
+            (ANEXO_5_TITULO, "ativo", _sha(ANEXO_5_REV6)),
         ]
         session.screenshot("admin-versao-modelos-historico")
 
@@ -303,7 +305,7 @@ def test_admin_maintains_the_documentation_of_a_draft_in_the_browser(workspace):
 
 #: The longest fill-in annex title of the ACC rev6 regulation, as an
 #: administrator would give it. The file itself is a synthetic test document.
-LONG_ANNEX_TITLE = "Anexo 5 — Atividades de monitoria, apoio institucional e visitas técnicas"
+LONG_ANNEX_TITLE = ANEXO_5_TITULO
 
 
 @browser_only
