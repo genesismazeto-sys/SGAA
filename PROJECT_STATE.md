@@ -193,10 +193,10 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   (an isolated worktree on top of the RC; the RC branch is unchanged), with the owner-requested
   student guidance sentence: UI-B41 the processing page reads the request's frozen record; UI-B42
   the request lists keep Status in view (shared DS status column, DS README section 2.6b); UI-B43
-  the KPI cards stack on a phone; UI-B44 a long proof name opens whole while edited (owner-approved);
-  UI-B45 the guidance text. UI-B41-B43 and UI-B45 await the owner's visual confirmation, as do the
-  28 historical rows (none has an acceptance on record) and UI-B15 (clean in Chromium; the owner's
-  own Chrome decides). Package outside the repository: `D:\SGAA_tmp\bl02\package`. Taking the
+  the KPI cards stack on a phone; UI-B44 a long proof name opens whole while edited; UI-B45 the
+  guidance text. The owner approved all five visually (2026-11-20). Separate and unchanged: the 28
+  historical rows awaiting confirmation (none has an acceptance on record) and UI-B15 (clean in
+  Chromium; the owner's own Chrome decides). Package outside the repository: `D:\SGAA_tmp\bl02\package`. Taking the
   branch into a release needs a delta qualification of its CSS, templates and tests against the RC
   (TEP section 6), then the owner's push and GF1 authorizations.
 
