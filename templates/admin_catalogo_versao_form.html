@@ -568,23 +568,28 @@ document.addEventListener('DOMContentLoaded', function(){
   // submit button of the form), and only while that button is enabled.
   docList?.addEventListener('keydown', event => {
     const name = event.target.closest(DOC_NAME);
-    if (event.key !== 'Enter' || event.isComposing || !name) return;
+    // keyCode 229: the Enter that ends an IME composition (Safari reports it
+    // with isComposing false); it only commits the text.
+    if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229 || !name) return;
     event.preventDefault();
     const form = name.form;
     const submitter = form && Array.from(form.elements).find(el => el.matches('button:not([type]), button[type="submit"], input[type="submit"]'));
-    if (submitter && !submitter.disabled) form.requestSubmit(submitter);
+    if (submitter && !submitter.matches(':disabled')) form.requestSubmit(submitter);
   });
   // Focus opens the field (.is-open); leaving it closes it at the start of the
   // name. Closing shrinks the row, so when a press of the pointer took the
   // focus away (Adicionar, an arrow, another field) the field closes only
   // after that press is released: otherwise the button would move away from
   // the pointer between press and release and the click would be lost.
-  // A press lasts until its click (or a cancel, or 1 s): on touch the
-  // browser sends pointerup before the mousedown that moves the focus.
-  let docPressAt = 0;
-  const pressing = () => docPressAt && Date.now() - docPressAt < 1000;
-  document.addEventListener('pointerdown', () => { docPressAt = Date.now(); }, true);
-  ['click', 'pointercancel'].forEach(type => document.addEventListener(type, () => { docPressAt = 0; }, true));
+  // A press lasts until its click or a cancel. On touch the browser sends
+  // pointerup before the mousedown that moves the focus, so the release is
+  // not the end; a release that brings no click (a right-click, a press on a
+  // scrollbar) ends it 1 s later. A held button is still pressing.
+  let docPress = null;  // null | {up: false} | {up: true, at: ms}
+  const pressing = () => !!docPress && (!docPress.up || Date.now() - docPress.at < 1000);
+  document.addEventListener('pointerdown', () => { docPress = {up: false}; }, true);
+  document.addEventListener('pointerup', () => { if (docPress) docPress = {up: true, at: Date.now()}; }, true);
+  ['click', 'pointercancel'].forEach(type => document.addEventListener(type, () => { docPress = null; }, true));
   function closeDocName(name){
     if (document.activeElement === name) return;
     name.classList.remove('is-open');
@@ -602,13 +607,15 @@ document.addEventListener('DOMContentLoaded', function(){
     let timer = 0;
     const release = () => {
       clearTimeout(timer);
-      document.removeEventListener('click', release, true);
-      document.removeEventListener('pointercancel', release, true);
+      ['click', 'pointercancel'].forEach(type => document.removeEventListener(type, release, true));
+      document.removeEventListener('pointerup', countdown, true);
       setTimeout(() => closeDocName(name));
     };
-    document.addEventListener('click', release, true);
-    document.addEventListener('pointercancel', release, true);
-    timer = setTimeout(release, 1000);
+    // The 1 s fallback runs from the release, never while a button is held.
+    const countdown = () => { clearTimeout(timer); timer = setTimeout(release, 1000); };
+    ['click', 'pointercancel'].forEach(type => document.addEventListener(type, release, true));
+    if (docPress && docPress.up) countdown();
+    else document.addEventListener('pointerup', countdown, true);
   });
   window.addEventListener('resize', growDocNames);
   renumberDocs();
