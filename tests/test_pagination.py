@@ -62,7 +62,11 @@ def test_aluno_request_uses_canonical_version_identifier_and_fits_long_status(pa
     assert 'class="version-identifier aluno-snapshot-chip"' in html
     assert 'class="aluno-activity-name"' in html
     assert "Deferida Parcialmente" in html
-    assert "minmax(164px, var(--col-status))" in html
+    # The status track is the shared contract's, sized for the domain's
+    # longest label (O2: the student list joined it).
+    assert "--imp-status-col-chars: 21;" in html
+    assert "var(--imp-status-col);" in html and "--col-status" not in html
+    assert '<div class="cell status-col">' in html
     assert "border-radius:999px; background:var(--surface)" not in html
 
 

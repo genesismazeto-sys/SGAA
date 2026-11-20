@@ -8,8 +8,11 @@
   <style>
     /* Colunas da lista do Aluno, iguais no header e nas linhas */
     .imp-areq {
-      /* Rebalanceia o grid para acomodar os labels longos das colunas de horas. */
-      --imp-list-min-width: 1212px;
+      /* Rebalanceia o grid para acomodar os labels longos das colunas de horas.
+         Status segue o contrato compartilhado (list-cards.css, .cell.status-col):
+         trilha var(--imp-status-col) para "Deferida Parcialmente". */
+      --imp-status-col-chars: 21;
+      --imp-list-min-width: calc(1048px + var(--imp-status-col));
       --col-id:       0.10fr;
       --col-sol:      0.85fr;
       --col-proc:     0.85fr;
@@ -18,7 +21,6 @@
       --col-atv:      3.05fr;
       --col-horas:    0.62fr;
       --col-defer:    0.56fr;
-      --col-status:   1.55fr;
       --imp-cols:
         minmax(30px, 30px)
         minmax(112px, var(--col-sol))
@@ -28,7 +30,7 @@
         minmax(220px, var(--col-atv))
         minmax(104px, var(--col-horas))
         minmax(94px,  var(--col-defer))
-        minmax(164px, var(--col-status));
+        var(--imp-status-col);
     }
     /* Evita "inflar" visualmente a primeira coluna com padding */
     .imp-areq .impresso-card .cell:first-child,
@@ -220,7 +222,7 @@
       <div class="cell left">{{ user_message("Atividade") }}</div>
       <div class="cell center {% if request.args.get('sort') == 'horas_solicitadas' %}sorted{% endif %}">{{ user_message("Solicitadas (h)") }}</div>
       <div class="cell center {% if request.args.get('sort') == 'horas_deferidas' %}sorted{% endif %}">{{ user_message("Deferidas (h)") }}</div>
-      <div class="cell center {% if request.args.get('sort') == 'status' %}sorted{% endif %}">{{ user_message("Status") }}</div>
+      <div class="cell status-col {% if request.args.get('sort') == 'status' %}sorted{% endif %}">{{ user_message("Status") }}</div>
     </div>
 
       {% for r in requisicoes %}
@@ -301,7 +303,7 @@
           <!-- Horas deferidas (0 se nulas) -->
           <div class="cell center">{{ r.horas_deferidas if r.horas_deferidas is not none else 0 }}</div>
           <!-- Status (badges) -->
-          <div class="cell center">
+          <div class="cell status-col">
             {#- The tone is the shared DS mapping (app/status_presentation.py);
                 this page must not decide it locally again. It used to, and the
                 copy had no `Deferida Parcialmente` branch at all, so a partial

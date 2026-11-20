@@ -397,6 +397,39 @@
    placeholder above -- otherwise the header renders a stray "—".
    Scoped to .imp-req so every other list keeps the placeholder. */
 .imp-req .impresso-card .cell.req-email-cell:empty::before{ content:none; }
+/* The e-mail flag qualifies the status (this decision still awaits its
+   e-mail), so on screen it is pinned just left of the pinned status cell
+   (shared contract, below) and the pair fades in as one: the flag carries the
+   fade, and the status cell's reach over the gap between them is opaque, one
+   pixel wider than the gap so no sliver opens between the two. The offset is
+   the status track plus the gap, rounded to a whole pixel (the track is
+   fractional) so the icon's strokes stay on the pixel grid. The track's `ch`
+   resolves where the token is used, so this text-free cell takes the row's
+   own font, the one the track is sized in: at the cell's 13px the offset came
+   out 11px short and the status cell covered the icon, and the header cells'
+   bold `0` made it 6px long. overflow:visible lets the fade show: the rule
+   above that was meant to set it is dropped by the browser, because the
+   `--imp-cols` block before it ends in a stray `;`. */
+@media screen{
+  .imp-req .impresso-card .cell.req-email-cell{
+    position:sticky; right:round(calc(var(--imp-status-col) + var(--imp-col-gap)), 1px); z-index:1;
+    align-self:stretch; margin:1px 0;
+    font:inherit;
+    background-color:inherit;
+    overflow:visible;
+  }
+  .imp-req .impresso-card .cell.req-email-cell::after{
+    content:""; position:absolute; top:0; bottom:0; right:100%; width:var(--imp-col-gap);
+    background-color:inherit;
+    mask-image:linear-gradient(to right, transparent, black);
+    pointer-events:none;
+  }
+  .imp-req .impresso-card.header > .req-email-cell,
+  .imp-req .impresso-card.header > .req-email-cell::after{ background-color:var(--bg); }
+  .imp-req.impressoes-cards-scroll .impresso-card .cell.status-col::after{
+    mask-image:none; width:calc(var(--imp-col-gap) + 1px);
+  }
+}
 .imp-req .impresso-card .cell:first-child{ padding:0 4px; }
 .imp-req .impresso-card.header .cell:first-child{ padding:0 4px; }
 .imp-req .impresso-card .cell:nth-child(2){ justify-content:start; }
@@ -733,4 +766,48 @@
   .impresso-card.header { display:table-row !important; background:#f5f5f5 !important; font-weight:bold !important; border-bottom:2px solid #333 !important; }
   .impresso-card .cell { display:table-cell !important; padding:4px 8px !important; text-align:center !important; vertical-align:middle !important; border-right:1px solid #ddd !important; white-space:nowrap !important; overflow:hidden !important; text-overflow:ellipsis !important; }
   .impresso-card .cell:last-child { border-right:none !important; }
+}
+
+/* =============================================================
+   STATUS COLUMN -- PINNED WHILE THE LIST SCROLLS  (.cell.status-col)
+   -------------------------------------------------------------
+   The second half of the shared status-column contract above: that
+   block owns alignment and `--imp-status-col` owns width; this one only
+   keeps the cell in view. It sets no column width.
+   ============================================================= */
+/* The status stays in view. A list keeps its minimum width and scrolls
+   sideways inside its own box (§2.7), which used to leave the last column
+   past the box's right edge -- at 1440px on Requisições, on every list on a
+   phone. On screen the cell is pinned to that edge instead (sticky; the row
+   is the grid container, so the cell may travel the whole row) while the
+   other columns scroll under it; scrolled to the end, or when the list fits,
+   the cell is exactly where it always was.
+   The cell takes the row's background (hover included) and stretches to the
+   row's inner height, 1px short of each edge, so a taller cell beneath cannot
+   show above or below it and an inset selection ring stays visible. An
+   ::after just outside it, over the column gap, fades in from transparent,
+   so what scrolls under the cell fades instead of being cut; at rest the gap
+   shows the row's background either way. Only that pseudo-element is masked
+   (a mask reads alpha only, so its opaque stop is plain `black`, not a UI
+   colour): masking the cell put its text on its own compositing layer and
+   cost it its subpixel antialiasing. The header row is transparent, so its
+   cell and fade paint the page background it sits on (a page's own header
+   tint, such as a sorted column, still wins on the cell: this rule is (0,4,0)
+   and loads first). Width, alignment, content position and order are
+   unchanged; print keeps the unpinned row. */
+@media screen{
+  .impressoes-cards .impresso-card .cell.status-col{
+    position:sticky; right:0; z-index:1;
+    align-self:stretch; margin:1px 0;
+    background-color:inherit;
+    overflow:visible;
+  }
+  .impressoes-cards .impresso-card .cell.status-col::after{
+    content:""; position:absolute; top:0; bottom:0; right:100%; width:var(--imp-col-gap);
+    background-color:inherit;
+    mask-image:linear-gradient(to right, transparent, black);
+    pointer-events:none;
+  }
+  .impressoes-cards .impresso-card.header > .status-col,
+  .impressoes-cards .impresso-card.header > .status-col::after{ background-color:var(--bg); }
 }

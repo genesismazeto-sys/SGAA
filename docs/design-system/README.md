@@ -203,8 +203,34 @@ For any data list/table that carries a **semantic status/situação column**
   **descriptive columns absorb the remaining space** (they own every `fr` on the
   row);
 * no supported pill ever wraps;
+* **the status stays in view.** When the list is wider than its box and
+  scrolls sideways (§2.7), the status cell is pinned to the box's right edge
+  (`position:sticky`, on screen only) and the other columns scroll under it,
+  fading in over the column gap; scrolled to the end, or when the list fits,
+  the cell is exactly where it always was (measured: the four lists below
+  render pixel-identical where they fit). On Requisições the e-mail flag,
+  which qualifies the status, is pinned with it;
 * **actions are a separate contract.** The floating action bar is not a grid
-  column and does not change any of the above.
+  column and does not change any of the above. On hover it overlays the right
+  end of its row, Status included, as it always did where the list fits.
+
+**The pinned cell, in detail** (O2, 2026-11-20). The row is the grid
+container, so the sticky cell may travel the whole row. It takes the row's
+background (`inherit`, hover included) and stretches to the row's inner height
+1px short of each edge, so a taller cell beneath never shows above or below it
+and an inset selection ring stays visible. The fade is an `::after` just
+outside the cell, over the gap; only that pseudo-element is masked, because
+masking the cell itself put its text on its own compositing layer and cost it
+its subpixel antialiasing. The transparent header row's cell paints `--bg`,
+at `(0,4,0)` so a page's own header tint (the student list's sorted column)
+still wins. Measured cost, unavoidable with sticky positioning: while a list
+overflows, Chromium composites its pinned cells, and at device-pixel-ratio 1
+the column-header labels then render with grayscale instead of subpixel
+antialiasing; row text is unaffected, and where the list fits nothing changes.
+On Requisições the flag's offset is the status track plus the gap rounded to a
+whole pixel, resolved in the row's own font (the token's `ch` resolves where it
+is used: at the cell's 13px, or in the bold header, it came out 11px short or
+6px long). Pinned by `tests/test_request_lists_status_in_view_browser.py`.
 
 **How to opt in.** Owner: `components/list-cards.css`.
 
@@ -281,7 +307,10 @@ needs no `!important` and no per-list `nth-child` rule.
 old `minmax(120px, 160px)` track clipped below 1920px), `admin_reportes.html`
 (`.imp-reportes`, 10 — `Em análise`) and `admin_catalogo_versao_detalhe.html`
 (`.imp-version-detail`, 13 — `Descontinuada`). The last two had Status before
-`Data` / `Matrizes`; it is now the last column.
+`Data` / `Matrizes`; it is now the last column. `aluno_minhas_requisicoes.html`
+(`.imp-areq`, 21) joined with O2: its page-local `minmax(164px, 1.55fr)` was a
+flexible status track; its minimum width is now `calc(1048px +
+var(--imp-status-col))`, 10px more than the old 1212px.
 
 **Status is always the last column** of any table that has one. The
 Banco de dados provider-log `<table>`s (`Data · Provedor · Arquivo · Tamanho ·
@@ -1065,6 +1094,15 @@ review. These were recorded and deliberately left in the tree.
   in the codebase that delivers CSS this way. The modal core it duplicated was
   removed in DS-4; the rest still has no owner.
 * `@media print` rules live in `components/list-cards.css` and have no owner.
+* **Nine rules in `components/list-cards.css` never apply** (found by O2,
+  2026-11-20; not fixed). Nine `--imp-cols` blocks end in `};`: the stray `;`
+  opens the next rule's prelude, so the browser drops the rule right after each
+  one: `.imp-req … .req-email-cell{ padding:0; overflow:visible }`,
+  `.imp-cursos .badge.status-badge{…}`, `.imp-atividades .cell.left{…}` and six
+  `.impressoes-cards-scroll.imp-<list>{ width:100% … }` (Turmas, Alunos,
+  Matrizes, Curso-Turmas with its margins, Arquivos, Mapeamento). Removing the semicolons
+  would switch those rules on, a visible change on those lists that needs its
+  own acceptance; O2's own rule restates the one property it needs.
 
 **Responsive / layout**
 
