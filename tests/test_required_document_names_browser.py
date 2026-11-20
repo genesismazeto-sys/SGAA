@@ -159,3 +159,79 @@ def test_a_press_that_closes_an_open_name_still_clicks(workspace):
         assert session.evaluate("window.__errors") == []
     finally:
         session.close()
+
+
+def _tap(session, selector):
+    """A finger tap where ``selector`` is now. On touch Chromium sends pointerup
+    before the mousedown that moves the focus -- the order that lost the click."""
+    box = session.evaluate(
+        "(() => { const r = document.querySelector(%r).getBoundingClientRect();"
+        " return {x: r.left + r.width / 2, y: r.top + r.height / 2}; })()" % selector
+    )
+    session.call("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": box["x"], "y": box["y"]}]})
+    session.pump(0.05)
+    session.call("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+    session.pump(0.6)
+
+
+@browser_only
+def test_a_tap_that_closes_an_open_name_still_clicks(workspace):
+    base_id, version_id = _draft_version()
+    login_admin(workspace["client"])
+    session = Session(workspace["client"], BINARY, workspace["downloads"], workspace["base_url"])
+    try:
+        _open(session, f"/admin/catalogo-versoes/{base_id}/versoes/{version_id}/editar")
+        for width, height in ((390, 844), (768, 1024)):
+            session.call("Emulation.setDeviceMetricsOverride",
+                         {"width": width, "height": height, "deviceScaleFactor": 1, "mobile": width < 768})
+            session.call("Emulation.setTouchEmulationEnabled", {"enabled": True, "maxTouchPoints": 5})
+            session.pump(0.4)
+            if not session.evaluate(f"document.querySelectorAll({FIELD!r}).length"):
+                _add(session, LONG[0])
+            for _ in range(2):
+                before = session.evaluate(f"document.querySelectorAll({FIELD!r}).length")
+                session.evaluate("document.getElementById('documentacao-exigida').scrollIntoView({block: 'start'}); true")
+                session.evaluate(f"document.querySelector({FIELD!r}).focus(); true")
+                session.pump(0.3)
+                assert session.evaluate(f"document.querySelector({FIELD!r}).clientHeight") > 40, width
+                _tap(session, "[data-doc-add]")
+                assert session.evaluate(f"document.querySelectorAll({FIELD!r}).length") == before + 1, width
+        assert session.evaluate("window.__errors") == []
+    finally:
+        session.close()
+
+
+def _enter(session):
+    for kind in ("keyDown", "keyUp"):
+        session.call("Input.dispatchKeyEvent", {"type": kind, "key": "Enter", "code": "Enter",
+                                                "windowsVirtualKeyCode": 13, "text": "\r" if kind == "keyDown" else ""})
+    session.pump(0.4)
+
+
+@browser_only
+def test_enter_in_a_name_adds_no_break_and_saves_as_the_input_did(workspace):
+    base_id, version_id = _draft_version()
+    edit_url = f"/admin/catalogo-versoes/{base_id}/versoes/{version_id}/editar"
+    login_admin(workspace["client"])
+    session = Session(workspace["client"], BINARY, workspace["downloads"], workspace["base_url"])
+    try:
+        _open(session, edit_url)
+        _add(session, SHORT)
+        _submit_and_wait(session, "#btn-salvar-versao")
+        _open(session, edit_url)
+        # Nothing changed: the save button is disabled, so Enter does nothing at all.
+        session.evaluate(f"document.querySelector({FIELD!r}).focus(); true")
+        _enter(session)
+        assert session.evaluate(f"document.querySelector({FIELD!r}).value") == SHORT
+        assert session.evaluate("location.pathname") == edit_url
+        # A change enables it: Enter saves the form, as the single-line input did.
+        session.evaluate("window.__leaving = true; true")
+        session.evaluate(
+            f"(() => {{ const f = document.querySelector({FIELD!r}); f.focus();"
+            f" f.setSelectionRange(f.value.length, f.value.length);"
+            f" document.execCommand('insertText', false, ' (cópia)'); return true; }})()")
+        _enter(session)
+        session.wait_for("!window.__leaving && document.readyState === 'complete'", timeout=20)
+        assert _stored(version_id)[0] == [SHORT + " (cópia)"]
+    finally:
+        session.close()

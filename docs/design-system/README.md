@@ -604,8 +604,9 @@ See [form-contract.md](form-contract.md) for the measured detail.
   phone track is narrower (288px at 320). At a track of **≤383px** `.kpi-grid`
   stacks in one column (O3, 2026-11-20): before, its second column ran past the
   content column on both dashboards (+26px at 390, +96 at 320) and the page
-  scrolled sideways. Its fallback is a 415px viewport, exactly (the phone
-  shell's track is the viewport less 32px). Pinned by
+  scrolled sideways. Its fallback, like the 791 one, is conservative: a 432px
+  viewport (the phone shell's track is the viewport less 32px, less a classic
+  17px scrollbar where one is drawn). Pinned by
   `tests/test_dashboard_kpi_phone_browser.py`.
 * An `@supports not (container-type: inline-size)` fallback with an identical
   rule body exists for engines without inline-size container queries. Its
@@ -1110,6 +1111,13 @@ review. These were recorded and deliberately left in the tree.
   Matrizes, Curso-Turmas with its margins, Arquivos, Mapeamento). Removing the semicolons
   would switch those rules on, a visible change on those lists that needs its
   own acceptance; O2's own rule restates the one property it needs.
+* **The pinned-status fade is written twice** (BL-02 review, non-material; kept so
+  the accepted render is the reviewed one): the `::after` fade and the header
+  `--bg` rule appear once for `.cell.status-col` and once for the Requisições
+  e-mail flag in `components/list-cards.css`. One selector list would own both;
+  merging them needs its own pixel check. Also pre-existing: pages link
+  `components/list-cards.css` without the `static_asset_version` query, so a
+  change to it is not cache-busted the way the foundation files are.
 
 **Responsive / layout**
 

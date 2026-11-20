@@ -135,6 +135,13 @@ def test_the_form_gets_the_guidance_of_each_version_and_nothing_for_versions_wit
     assert OLDER_TEXT not in html
 
 
+def test_the_guidance_says_what_every_proof_must_hold(env):
+    """UI-B45 (owner's wording): proof names stay short; the lead says once what each proof carries."""
+    html = env["client"].get("/aluno/nova-requisicao").get_data(as_text=True)
+    lead = re.search(r'<p class="doc-guidance-lead">(.*?)</p>', html, re.S).group(1)
+    assert "Os comprovantes deverão conter os dados, informações e assinaturas exigidas no regulamento." in lead
+
+
 @pytest.mark.parametrize("name", ["anexo_3", "anexo_5", "vigente"])
 def test_the_student_downloads_the_exact_bytes_of_an_offered_template(env, name):
     response = env["client"].get(f"/aluno/modelos/{env['templates'][name]}/baixar")

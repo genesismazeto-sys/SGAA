@@ -79,6 +79,17 @@ def test_a_valid_request_shows_its_frozen_record(env):
     assert _all_rows() == before
 
 
+def test_the_optional_comparison_shows_the_frozen_name(env, monkeypatch):
+    client, created = env
+    stored = json.loads(created["regra_snapshot_json"])
+    html = client.get(f"/admin/processar_requisicao/{created['id']}").get_data(as_text=True)
+    assert "Versão registrada" not in html  # off by default
+    monkeypatch.setenv("SGAA_VERSIONED_REQUISICAO_SNAPSHOT_DISPLAY", "1")
+    block = _record_block(client.get(f"/admin/processar_requisicao/{created['id']}").get_data(as_text=True))
+    recorded = block[block.index("Versão registrada"):]
+    assert re.search(r'Nome no momento da solicitação</span><div>\s*' + re.escape(stored["nome_exibivel"]), recorded)
+
+
 def test_an_unreadable_record_says_so_and_shows_no_field(env):
     client, created = env
     with main.app.app_context():

@@ -1099,9 +1099,10 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
   @media (max-width:1125px){
     .kpi-grid{ grid-template-columns:repeat(2, minmax(180px,1fr)); }
   }
-  /* Below 768 the phone shell's track is the viewport less 32px, so a 383px
-     track is a 415px viewport, exactly. */
-  @media (max-width:415px){
+  /* Below 768 the phone shell's track is the viewport less 32px, and less a
+     classic 17px scrollbar where one is drawn: 432px is the last viewport
+     whose track can still be under 384, so it switches early, never late. */
+  @media (max-width:432px){
     .kpi-grid{ grid-template-columns:minmax(0, 1fr); }
   }
 }

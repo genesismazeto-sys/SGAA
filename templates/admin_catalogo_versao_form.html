@@ -493,8 +493,8 @@ document.addEventListener('DOMContentLoaded', function(){
   // list compares equal and keeps the stored text.
   // Each name is a one-row textarea: one line at rest, opened to the whole
   // name while it is edited (a name of up to 60 characters does not fit a
-  // narrow form). It is still one line of data: Enter adds no break and a
-  // pasted break becomes a space.
+  // narrow form). It is still one line of data: Enter adds no break (it
+  // submits, as before) and a pasted break becomes a space.
   const docList = document.getElementById('documentos-exigidos-list');
   const docEmpty = document.querySelector('[data-doc-empty]');
   const docTemplate = document.getElementById('documento-exigido-template');
@@ -563,8 +563,16 @@ document.addEventListener('DOMContentLoaded', function(){
     if (name) autoGrow(name);
     refresh();
   });
+  // Enter adds no line break. As in the single-line input this field
+  // replaced, it submits the form through its default button (the first
+  // submit button of the form), and only while that button is enabled.
   docList?.addEventListener('keydown', event => {
-    if (event.key === 'Enter' && !event.isComposing && event.target.closest(DOC_NAME)) event.preventDefault();
+    const name = event.target.closest(DOC_NAME);
+    if (event.key !== 'Enter' || event.isComposing || !name) return;
+    event.preventDefault();
+    const form = name.form;
+    const submitter = form && Array.from(form.elements).find(el => el.matches('button:not([type]), button[type="submit"], input[type="submit"]'));
+    if (submitter && !submitter.disabled) form.requestSubmit(submitter);
   });
   // Focus opens the field (.is-open); leaving it closes it at the start of the
   // name. Closing shrinks the row, so when a press of the pointer took the
