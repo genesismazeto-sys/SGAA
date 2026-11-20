@@ -25,6 +25,7 @@ import main
 from app.activity_documentation import read_required_documents
 from tests.canonical_matrix_test_support import login_admin
 from tests.docx_test_support import make_docx
+from tests.test_activity_documentation_student import insert_template
 from tests.versioned_test_support import isolated_versioned_app_env
 
 cdp = pytest.importorskip("tests.cdp_browser_support")
@@ -295,6 +296,49 @@ def test_admin_maintains_the_documentation_of_a_draft_in_the_browser(workspace):
         assert _texts(session, "#documentos-exigidos-list input") == documentos
         assert session.evaluate("Array.from(document.querySelectorAll('#documentos-exigidos-list input')).every(i => i.matches(':disabled'))")
         session.screenshot("admin-versao-congelada")
+        assert session.evaluate("window.__errors") == []
+    finally:
+        session.close()
+
+
+#: The longest fill-in annex title of the ACC rev6 regulation, as an
+#: administrator would give it. The file itself is a synthetic test document.
+LONG_ANNEX_TITLE = "Anexo 5 — Atividades de monitoria, apoio institucional e visitas técnicas"
+
+
+@browser_only
+def test_a_template_title_stays_readable_on_the_version_form_at_any_width(workspace):
+    """The template rows follow the width their list gets: from 768 px up the
+    sidebar is back and the form column is narrow, where a one-line title was
+    cut away entirely beside its three buttons. A title wraps instead, and the
+    buttons move below it when the list is narrow."""
+    base_id, version_id = _draft_version()
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        insert_template(conn, version_id, LONG_ANNEX_TITLE,
+                        make_docx("Arquivo sintético de teste; não é o formulário oficial do Regulamento."), slot=1)
+        conn.commit()
+    login_admin(workspace["client"])
+    session = Session(workspace["client"], BINARY, workspace["downloads"], workspace["base_url"])
+    try:
+        _open(session, f"/admin/catalogo-versoes/{base_id}/versoes/{version_id}/editar")
+        for width, height, stacked in ((1440, 900, False), (768, 1024, True), (390, 844, True)):
+            session.call("Emulation.setDeviceMetricsOverride",
+                         {"width": width, "height": height, "deviceScaleFactor": 1, "mobile": width < 768})
+            session.pump(0.4)
+            row = session.evaluate(
+                "(() => { const li = document.querySelector('.doc-templates > .doc-template-list li.doc-template');"
+                " const t = li.querySelector('.doc-template-title'), m = li.querySelector('.doc-template-meta');"
+                " const a = li.querySelector('.doc-template-actions');"
+                " const tr = t.getBoundingClientRect(), ar = a.getBoundingClientRect();"
+                " return {title: t.textContent.trim(), titleCut: t.scrollWidth - t.clientWidth,"
+                " metaCut: m.scrollWidth - m.clientWidth, overflow: li.scrollWidth - li.clientWidth,"
+                " actionsBelow: ar.top >= tr.bottom - 1, actionsBeside: ar.left >= tr.right - 1}; })()"
+            )
+            assert row["title"] == LONG_ANNEX_TITLE
+            assert row["titleCut"] <= 0 and row["metaCut"] <= 0 and row["overflow"] <= 0, (width, row)
+            assert row["actionsBelow"] is stacked, (width, row)
+            assert row["actionsBelow"] or row["actionsBeside"], (width, row)
         assert session.evaluate("window.__errors") == []
     finally:
         session.close()

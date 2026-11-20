@@ -64,12 +64,18 @@
 .doc-templates-note{ margin:0; }
 .doc-templates-dirty{ margin:0; color:var(--text-primary); }
 .doc-templates-dirty[hidden]{ display:none; }
+/* The rows follow the width the list gets, not the window's: from 768px up the
+   sidebar is back and leaves the form column narrow. A title (an annex of the
+   Regulamento, up to a full line long) and its file name are never cut: they
+   wrap, and the buttons move below them when the list is narrow. */
 .doc-template-list{
   display:grid;
   row-gap:6px;
   margin:0;
   padding:0;
   list-style:none;
+  container-type:inline-size;
+  container-name:doc-template-list;
 }
 .doc-template-list[hidden]{ display:none; }
 .doc-template{
@@ -92,7 +98,7 @@
 .doc-template--ended .doc-template-icon{ color:var(--text-tertiary); }
 .doc-template-text{ display:grid; min-width:0; row-gap:2px; }
 .doc-template-title,
-.doc-template-meta{ overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.doc-template-meta{ overflow-wrap:anywhere; }
 .doc-template-title{ font-weight:600; color:var(--text-primary); }
 .doc-template-meta{ font-size:var(--font-size-small); color:var(--text-secondary); }
 .doc-template-actions{ display:inline-flex; flex-wrap:wrap; justify-content:flex-end; gap:6px; }
@@ -107,9 +113,17 @@
 }
 .doc-template-history[open] > summary{ margin-bottom:6px; }
 
-@media (max-width:720px){
+@container doc-template-list (max-width:560px){
   .doc-template-row{ grid-template-columns:auto minmax(0, 1fr); }
   .doc-template-actions{ grid-column:1 / -1; justify-content:flex-start; }
+}
+/* Without container queries, the phone rule this replaced. Rule body
+   identical to the container rule above, on purpose. */
+@supports not (container-type: inline-size){
+  @media (max-width:720px){
+    .doc-template-row{ grid-template-columns:auto minmax(0, 1fr); }
+    .doc-template-actions{ grid-column:1 / -1; justify-content:flex-start; }
+  }
 }
 
 /* =============================================================
@@ -165,12 +179,18 @@
   font-size:var(--font-size-small);
   line-height:1.45;
 }
+/* The rows follow the width the list gets, not the window's: from 768px up the
+   sidebar is back and leaves the block about as narrow as on a phone. A title
+   (an annex of the Regulamento, up to a full line long) is never cut: it
+   wraps, and the button moves below it when the list is narrow. */
 .doc-guidance-templates{
   display:grid;
   row-gap:6px;
   margin:0;
   padding:0;
   list-style:none;
+  container-type:inline-size;
+  container-name:doc-guidance-templates;
 }
 .doc-guidance-template{
   display:grid;
@@ -186,16 +206,21 @@
 .doc-guidance-template-icon{ width:18px; height:18px; color:var(--accent-blue); }
 .doc-guidance-template-text{ display:grid; min-width:0; row-gap:2px; }
 .doc-guidance-template-title{
-  overflow:hidden;
-  white-space:nowrap;
-  text-overflow:ellipsis;
+  overflow-wrap:anywhere;
   font-weight:600;
   font-size:var(--font-size-small);
 }
 .doc-guidance-download{ white-space:nowrap; }
 
-@media (max-width:720px){
+@container doc-guidance-templates (max-width:400px){
   .doc-guidance-template{ grid-template-columns:auto minmax(0, 1fr); }
-  .doc-guidance-template-title{ white-space:normal; overflow-wrap:anywhere; }
   .doc-guidance-download{ grid-column:1 / -1; justify-content:center; }
+}
+/* Without container queries, the phone rule this replaced. Rule body
+   identical to the container rule above, on purpose. */
+@supports not (container-type: inline-size){
+  @media (max-width:720px){
+    .doc-guidance-template{ grid-template-columns:auto minmax(0, 1fr); }
+    .doc-guidance-download{ grid-column:1 / -1; justify-content:center; }
+  }
 }

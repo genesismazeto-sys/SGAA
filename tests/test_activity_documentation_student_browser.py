@@ -14,6 +14,7 @@ import json
 import main
 from app.student_matrix import get_effective_matrix_for_student
 from tests.canonical_request_test_support import login_student, student_identity
+from tests.docx_test_support import make_docx
 from tests.test_activity_documentation_admin_browser import (
     BINARY,
     EVIDENCE,
@@ -221,6 +222,52 @@ def test_student_sees_the_selected_activity_guidance_and_downloads_its_template(
         assert "Retificar Requisição" in session.evaluate("document.body.innerText")
         assert _block(session)["documentos"] == ["Certificado de participação", "Declaração assinada pelo responsável"]
         session.screenshot("aluno-retificacao-orientacao")
+        assert session.evaluate("window.__errors") == []
+    finally:
+        session.close()
+
+
+#: The longest fill-in annex title of the ACC rev6 regulation, as an
+#: administrator would give it. The file itself is a synthetic test document.
+LONG_ANNEX_TITLE = "Anexo 5 — Atividades de monitoria, apoio institucional e visitas técnicas"
+
+_TEMPLATE_ROW_GEOMETRY = (
+    "(() => { const row = document.querySelector('#orientacao-comprovantes .doc-guidance-template');"
+    " const t = row.querySelector('.doc-guidance-template-title'); const d = row.querySelector('.doc-guidance-download');"
+    " const tr = t.getBoundingClientRect(), dr = d.getBoundingClientRect();"
+    " return {title: t.textContent, cut: t.scrollWidth - t.clientWidth, rowOverflow: row.scrollWidth - row.clientWidth,"
+    " buttonBelow: dr.top >= tr.bottom - 1, buttonBeside: dr.left >= tr.right - 1}; })()"
+)
+
+
+@browser_only
+def test_a_template_title_is_never_cut_at_any_width(workspace):
+    """The template rows follow the width the list gets, not the window's: from
+    768 px up the sidebar is back and leaves the block about as narrow as on a
+    phone, where a one-line title used to shrink to its first letter. A title
+    wraps instead of being cut, and the button moves below it when the list is
+    narrow."""
+    catalogue = _seed_student_catalogue()
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        insert_template(conn, catalogue["plain"]["id"], LONG_ANNEX_TITLE,
+                        make_docx("Arquivo sintético de teste; não é o formulário oficial do Regulamento."), slot=1)
+        conn.commit()
+    login_student(workspace["client"])
+    session = Session(workspace["client"], BINARY, workspace["downloads"], workspace["base_url"])
+    try:
+        _open(session, "/aluno/nova-requisicao")
+        _choose(session, catalogue["group"], catalogue["plain"]["id"])
+        assert _block(session)["modelos"] == [LONG_ANNEX_TITLE]
+        for width, height, stacked in ((1440, 900, False), (768, 1024, True), (390, 844, True)):
+            session.call("Emulation.setDeviceMetricsOverride",
+                         {"width": width, "height": height, "deviceScaleFactor": 1, "mobile": width < 768})
+            session.pump(0.4)
+            row = session.evaluate(_TEMPLATE_ROW_GEOMETRY)
+            assert row["title"] == LONG_ANNEX_TITLE
+            assert row["cut"] <= 0 and row["rowOverflow"] <= 0, (width, row)
+            assert row["buttonBelow"] is stacked, (width, row)
+            assert row["buttonBelow"] or row["buttonBeside"], (width, row)
         assert session.evaluate("window.__errors") == []
     finally:
         session.close()
