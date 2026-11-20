@@ -8,17 +8,16 @@
 
   - The card is the shared auth shell (`.login-page` / `.login-card`,
     modern-style.css); what sits inside it is styled by
-    static/css/components/auth-recovery.css, which the page links.
+    static/css/components/auth-recovery.css, and its banner is the shared
+    auth alert (components/auth_alert.html, auth-alert.css). The page links
+    both stylesheets.
   - `ttl_minutes` is the configured validity of the link "Enviar novo link"
     sends -- the public recovery always mails a reset link, whatever link was
     lost (app.password_recovery.recovery_link_ttl) -- never a literal.
   - `email` is pre-filled only when the backend identified the account safely
     (app.password_recovery.expired_link_email); otherwise it is blank.
-  - `recovery_alert(message, tone)` is the state's one message banner:
-    `danger` (the dead link) or `positive` (the recovery request's neutral
-    confirmation on forgot_password.html).
 #}
-{% from 'components/icons.html' import alert_circle_icon, circle_check_icon %}
+{% from 'components/auth_alert.html' import auth_feedback %}
 
 {%- macro validity(minutes) -%}
   {%- if minutes % 1440 == 0 -%}{{ minutes // 1440 }} {{ 'dia' if minutes == 1440 else 'dias' }}
@@ -27,24 +26,11 @@
   {%- endif -%}
 {%- endmacro -%}
 
-{% macro recovery_alert(message, tone='danger') -%}
-{%- if tone == 'positive' -%}
-<div class="auth-recovery-alert auth-recovery-alert--positive" role="status">
-  {{ circle_check_icon('auth-recovery-alert-icon') }}
-{%- else -%}
-<div class="auth-recovery-alert" role="alert">
-  {{ alert_circle_icon('auth-recovery-alert-icon') }}
-{%- endif %}
-  {#- No CSS keeps a narrow card from breaking "e-mail" at its hyphen. #}
-  <p>{{ message|e|replace('e-mail', '<span class="auth-recovery-nowrap">e-mail</span>'|safe) }}</p>
-</div>
-{%- endmacro %}
-
 {% macro expired_link_card(ttl_minutes, email='') -%}
 <div class="login-card">
   <img class="auth-recovery-logo" src="{{ url_for('static', filename='images/ej_logo_dark.jpg') }}" alt="Logo" width="64" />
   <h1 class="login-title">Link expirado</h1>
-  {{ recovery_alert('Este link é inválido, expirou ou já foi utilizado.') }}
+  {{ auth_feedback('Este link é inválido, expirou ou já foi utilizado.') }}
   <p class="auth-recovery-lead">O link de redefinição de senha é válido por {{ validity(ttl_minutes) }} e pode ser utilizado apenas uma vez. Informe seu <span class="auth-recovery-nowrap">e-mail</span> para receber um novo link.</p>
   <form method="POST" action="{{ url_for('forgot_password') }}" class="login-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

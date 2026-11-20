@@ -1,0 +1,58 @@
+/* =============================================================
+   Authentication feedback alert (DS README §2.6g)
+
+   The one feedback banner of the public authentication pages (login.html,
+   forgot_password.html, set_password.html and the recovery card).
+   Markup owner: templates/components/auth_alert.html.
+
+   Tones are variant tokens: danger (default), --positive and --info, from
+   the danger, status-positive and info families of tokens.css; no literal
+   colour here. Inside the auth form (.login-form, a flex column with its own
+   gap) the alert takes no margin of its own. Text that wraps is justified,
+   its last line start-aligned.
+   ============================================================= */
+
+.auth-alert{
+  --auth-alert-bg:var(--danger-bg);
+  --auth-alert-border:var(--danger-border);
+  --auth-alert-text:var(--danger-text);
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  margin:16px 0;
+  padding:10px 12px;
+  border:1px solid var(--auth-alert-border);
+  border-radius:var(--radius);
+  background:var(--auth-alert-bg);
+  color:var(--auth-alert-text);
+  text-align:left;
+}
+.auth-alert.auth-alert--positive{
+  --auth-alert-bg:var(--status-positive-bg);
+  --auth-alert-border:var(--status-positive-border);
+  --auth-alert-text:var(--status-positive-text);
+}
+.auth-alert.auth-alert--info{
+  --auth-alert-bg:var(--info-bg);
+  --auth-alert-border:var(--info-border);
+  --auth-alert-text:var(--info-text);
+}
+.login-form > .auth-alert{
+  margin:0;
+}
+.auth-alert-icon{
+  flex:0 0 auto;
+  width:18px;
+  height:18px;
+}
+.auth-alert p{
+  margin:0;
+  font-size:var(--font-size-small);
+  font-weight:500;
+  line-height:18px;
+  text-align:justify;
+  text-align-last:start;
+}
+.auth-alert-nowrap{
+  white-space:nowrap;
+}

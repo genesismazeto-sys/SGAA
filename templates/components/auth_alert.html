@@ -1,0 +1,43 @@
+{#
+  Design System — authentication feedback alert (single owner; DS README §2.6g)
+
+  The one banner every public authentication page (login, password recovery,
+  first access / password reset) uses for a feedback state. Instructions,
+  explanatory text and field hints are never alerts.
+
+  Tones (styles: static/css/components/auth-alert.css, linked by the page):
+  - `danger`   — a refusal or error: Tabler alert-circle, role="alert";
+  - `positive` — a confirmed success: Tabler circle-check, role="status";
+  - `info`     — a neutral notice that confirms nothing (the recovery
+                 request's acknowledgement, a sign-out): Tabler info-circle,
+                 role="status".
+  The message is plain text, escaped here; its wording is the caller's.
+
+  The macros are named *_feedback, never *_alert: the message-catalogue
+  scanner (utils.messages) reads any `alert(` call in a template as a
+  JavaScript alert and would catalogue its string arguments as new messages.
+#}
+{% from 'components/icons.html' import alert_circle_icon, circle_check_icon, info_circle_icon %}
+
+{% macro auth_feedback(message, tone='danger') -%}
+{%- if tone == 'positive' -%}
+<div class="auth-alert auth-alert--positive" role="status">
+  {{ circle_check_icon('auth-alert-icon') }}
+{%- elif tone == 'info' -%}
+<div class="auth-alert auth-alert--info" role="status">
+  {{ info_circle_icon('auth-alert-icon') }}
+{%- else -%}
+<div class="auth-alert" role="alert">
+  {{ alert_circle_icon('auth-alert-icon') }}
+{%- endif %}
+  {#- No CSS keeps a narrow card from breaking "e-mail" at its hyphen. #}
+  <p>{{ message|e|replace('e-mail', '<span class="auth-alert-nowrap">e-mail</span>'|safe) }}</p>
+</div>
+{%- endmacro %}
+
+{#- A flashed message, by its category: errors are danger, successes positive;
+    every other category (info and anything unexpected) is the neutral info
+    tone, which asserts nothing. #}
+{% macro flash_feedback(category, message) -%}
+{{ auth_feedback(message, 'danger' if category in ('error', 'danger') else 'positive' if category == 'success' else 'info') }}
+{%- endmacro %}

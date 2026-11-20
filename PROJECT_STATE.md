@@ -200,7 +200,8 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
 - UI-B46 (AUTH-RECOVERY-01 / UI-LOGIN-ERROR-01, owner request 2026-11-20), not part of the release
   candidate: a dead password link renders the DS recovery card (`docs/design-system/README.md`
   §2.6f) and resends through the existing self-service recovery, pre-filling the address only when
-  safe. Local branch `backlog/auth-recovery-01` on top of the candidate, not pushed or deployed;
+  safe; every feedback message of the public auth pages is the shared DS auth alert (§2.6g).
+  Local branch `backlog/auth-recovery-01` on top of the candidate, not pushed or deployed;
   awaits the owner's visual acceptance (package outside the repository,
   `D:\SGAA_tmp\auth_recovery01\package`).
 

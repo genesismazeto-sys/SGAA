@@ -137,7 +137,8 @@ def test_an_expired_reset_link_renders_the_recovery_card(env):
     assert "<title>Link expirado</title>" in html
     assert '<h1 class="login-title">Link expirado</h1>' in html
     assert "Crie uma nova senha pessoal" not in html and "login-subtitle" not in html
-    assert re.search(r'<div class="auth-recovery-alert" role="alert">\s*<svg[^>]*auth-recovery-alert-icon', html)
+    assert re.search(r'<div class="auth-alert" role="alert">\s*<svg[^>]*icon-tabler-alert-circle[^>]*auth-alert-icon', html)
+    assert "css/components/auth-alert.css" in html
     assert f"<p>{ALERT}</p>" in html
     assert ("O link de redefinição de senha é válido por 1 hora e pode ser utilizado apenas uma vez. "
             'Informe seu <span class="auth-recovery-nowrap">e-mail</span> para receber um novo link.') in html
@@ -423,21 +424,9 @@ def test_the_recovery_state_has_one_design_system_owner():
     assert "auth_recovery.expired_link_card(" in page
     assert ALERT not in page and "auth-recovery-" not in page
     assert "Link expirado" in component
-
-
-def test_the_recovery_confirmation_is_the_positive_alert_of_the_same_component(env):
-    get = env["client"].get("/esqueci-minha-senha").get_data(as_text=True)
-    assert "css/components/auth-recovery.css" in get and "auth-recovery-alert" not in get
-    html = env["client"].post("/esqueci-minha-senha", data={"email": ALUNO_EMAIL}).get_data(as_text=True)
-    assert re.search(
-        r'<div class="auth-recovery-alert auth-recovery-alert--positive" role="status">\s*'
-        r'<svg[^>]*icon-tabler-circle-check[^>]*auth-recovery-alert-icon',
-        html,
-    )
-    assert ("<p>" + NEUTRAL.replace("e-mail", '<span class="auth-recovery-nowrap">e-mail</span>') + "</p>") in html
-    assert "login-feedback" not in html
-    page = _source("templates/forgot_password.html")
-    assert "auth_recovery.recovery_alert(neutral_message, 'positive')" in page and "auth-recovery-" not in page
+    # Its banner is the shared auth alert, not an implementation of its own.
+    assert "import auth_feedback" in component and "auth_feedback('Este link" in component
+    assert "class=\"auth-alert" not in component
 
 
 def test_the_recovery_stylesheet_uses_tokens_and_justifies_wrapped_text():
@@ -445,21 +434,7 @@ def test_the_recovery_stylesheet_uses_tokens_and_justifies_wrapped_text():
     rules = dict(re.findall(r"(?m)^([^\s/@{}][^{]*)\{([^}]*)\}", css))
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b|rgba?\(", re.sub(r"/\*.*?\*/", "", css, flags=re.DOTALL)), (
         "the recovery state takes its colours from tokens.css only")
-    alert = rules[".auth-recovery-alert"]
-    for token in ("var(--danger-bg)", "var(--danger-border)", "var(--danger-text)", "var(--radius)"):
-        assert token in alert
-    positive = rules[".auth-recovery-alert.auth-recovery-alert--positive"]
-    for token in ("var(--status-positive-bg)", "var(--status-positive-border)", "var(--status-positive-text)"):
-        assert token in positive
-    for selector in (".auth-recovery-alert p", ".auth-recovery-lead"):
-        assert "text-align:justify" in rules[selector] and "text-align-last:start" in rules[selector]
+    assert "text-align:justify" in rules[".auth-recovery-lead"]
+    assert "text-align-last:start" in rules[".auth-recovery-lead"]
+    assert not any("alert" in s for s in rules), "the banner belongs to components/auth-alert.css"
     assert not any("login-card" in s or "login-page" in s for s in rules), "the auth shell is not re-opened"
-
-
-def test_every_feedback_colour_of_the_recovery_flow_is_a_token():
-    # The login page shows the "Senha definida com sucesso" line after a reset.
-    modern = _source("static/css/modern-style.css")
-    for selector, token in ((".login-feedback-success", "var(--status-positive-text)"),
-                            (".login-feedback-error", "var(--danger-text)")):
-        body = re.search(r"(?m)^" + re.escape(selector) + r"\{([^}]*)\}", modern).group(1)
-        assert f"color:{token}" in body.replace(" ", ""), selector

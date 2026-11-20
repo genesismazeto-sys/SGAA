@@ -35,11 +35,14 @@ static/css/
                           on .alunos-wide resolve to --surface / --bg.
     auth-recovery.css   ← the authentication recovery state inside the auth
                           shell (a dead password link), §2.6f.
+    auth-alert.css      ← the feedback banner of every public auth page
+                          (danger / positive / info), §2.6g.
 
 templates/components/
   design_system_css.html  ← THE load-order contract. One owner, one list.
   detail_header.html      ← shared semantic markup for detail-page headers.
   auth_recovery.html      ← the recovery card of a dead password link, §2.6f.
+  auth_alert.html         ← the auth feedback banner, §2.6g.
 
 tools/ds_css.py           ← static cascade analyser + equivalence gate.
 tests/test_ds_design_system_contract.py  ← the structural gates.
@@ -478,11 +481,9 @@ link); the component styles only what is new inside it and never re-opens the
 shell (`tests/test_auth_shell_viewport_centering.py`).
 
 Structure, top to bottom: a 64 px logo; the title "Link expirado" (no
-subtitle); the danger alert — the Tabler `alert-circle` icon
-(`components/icons.html` `alert_circle_icon`) and "Este link é inválido,
-expirou ou já foi utilizado.", in the `--danger-bg` / `--danger-border` /
-`--danger-text` tokens; the validity paragraph; the E-mail field; the
-full-width "Enviar novo link"; "Voltar para o login".
+subtitle); the danger auth alert (§2.6g) "Este link é inválido, expirou ou já
+foi utilizado."; the validity paragraph; the E-mail field; the full-width
+"Enviar novo link"; "Voltar para o login".
 
 * **Validity** is the configured TTL of the link "Enviar novo link" sends —
   the public recovery always mails a reset link, whatever link was lost
@@ -492,20 +493,43 @@ full-width "Enviar novo link"; "Voltar para o login".
   safely (`app.password_recovery.expired_link_email`: the link expired
   untouched, at most 24 h ago, and its account may still recover); otherwise
   the field is blank and focused.
-* **One message banner, two tones:** `recovery_alert(message, tone)` —
-  `danger` (default, `role="alert"`, the dead link) and `positive`
-  (`.auth-recovery-alert--positive`, `role="status"`, Tabler `circle-check`,
-  the `--status-positive-*` tokens): the recovery request's neutral
-  confirmation on `forgot_password.html` is this green banner, not a bare text
-  line. Tones are variant tokens (`--auth-alert-bg/-border/-text`), §2.1.
-* The alert text and the paragraph are justified, last line start-aligned,
-  when they wrap (a phone width); "e-mail" never breaks at its hyphen (no CSS
-  can prevent that break, so the macro wraps it in `.auth-recovery-nowrap`).
-  Colours come from tokens only; `.login-feedback-success` (the login page's
-  line after a new password) uses `--status-positive-text`.
+* The paragraph is justified, last line start-aligned, when it wraps (a
+  phone width); "e-mail" never breaks at its hyphen (no CSS can prevent that
+  break, so the macro wraps it in `.auth-recovery-nowrap`). No literal colour.
 
 **Guard:** `tests/test_auth_recovery_expired_link.py` (behaviour, pre-fill
 cases, configured validity, and the single-owner / token-only contract).
+
+### 2.6g Authentication feedback alert (AUTH-RECOVERY-01)
+
+The one banner of every feedback state on the public authentication pages —
+`login.html`, `forgot_password.html`, `set_password.html` and the recovery
+card (§2.6f). Instructions, explanatory text and field hints are never alerts.
+
+**Owner:** `templates/components/auth_alert.html` — `auth_feedback(message, tone)`
+and `flash_feedback(category, message)`; styles in
+`static/css/components/auth-alert.css`, linked by each page after the macro.
+
+| Tone | Used for | Icon (`components/icons.html`) | Role | Tokens |
+|---|---|---|---|---|
+| `danger` (default) | "E-mail ou senha inválidos.", the login throttle, set-password form errors, a dead link | `alert-circle` | `alert` | `--danger-*` |
+| `positive` | "Senha definida com sucesso. Entre com sua nova senha." | `circle-check` | `status` | `--status-positive-*` |
+| `info` | the recovery request's acknowledgement (it confirms neither an account nor a delivery), "Você foi desconectado.", the session-ended notice | `info-circle` | `status` | `--info-*` |
+
+* `flash_feedback` maps a flash category: `error`/`danger` → danger, `success` →
+  positive, anything else → info (neutral; it asserts nothing).
+* Tones are variant tokens (`--auth-alert-bg/-border/-text`, §2.1); no literal
+  colour. Inside the auth form (`.login-form`, a flex column with its own gap)
+  the banner takes no margin; elsewhere it has `16px` above and below.
+* The login keeps its approved layout and logo: the banner sits in the same
+  slot the message line had (after the password, before "Lembrar-me").
+* Text is 13 px / 500, justified with the last line start-aligned when it
+  wraps; "e-mail" never breaks at its hyphen (`.auth-alert-nowrap`, set by the
+  macro). The message wording is the caller's and is escaped.
+* The former `.login-feedback*` line styles are retired.
+
+**Guard:** `tests/test_auth_feedback_alerts.py` (every state, tone mapping,
+escaping, layout slot, single owner and token-only stylesheet).
 
 ### 2.7 Responsive contract
 

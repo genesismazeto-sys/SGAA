@@ -205,7 +205,7 @@ def test_public_password_surfaces_use_the_shared_auth_design_system(tmp_path):
         assert invalid.status_code == 200
         assert invalid.headers["Referrer-Policy"] == "strict-origin"
         assert 'class="login-card"' in invalid_html
-        assert '<div class="auth-recovery-alert" role="alert">' in invalid_html
+        assert '<div class="auth-alert" role="alert">' in invalid_html
         assert "Este link é inválido, expirou ou já foi utilizado." in invalid_html
         assert 'type="password"' not in invalid_html
 

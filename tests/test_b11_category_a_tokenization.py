@@ -212,8 +212,10 @@ def test_no_phantom_token_references_remain():
 
 def test_info_and_danger_families_are_used_at_their_current_values():
     modern = _read("static/css/modern-style.css")
-    assert "color:var(--info-text)" in _rule(modern, ".login-feedback-info")
-    assert "color:var(--danger-text)" in _rule(modern, ".login-feedback-error")
+    # The auth pages' feedback lines became the shared auth alert (DS README §2.6g).
+    auth_alert = _read("static/css/components/auth-alert.css")
+    assert "--auth-alert-text:var(--info-text)" in _rule(auth_alert, ".auth-alert.auth-alert--info")
+    assert "--auth-alert-text:var(--danger-text)" in _rule(auth_alert, ".auth-alert")
     assert "background:var(--danger-bg)" in _rule(modern, ".table-progresso td.progresso-limitado")
     assert "background:var(--danger-bg)" in _rule(_read("templates/admin_diagnostico_atividades_versionadas_view.html"), ".diag-alert")
     assert "border:1px solid var(--danger-border)" in _rule(_read("templates/admin_requisicoes.html"), ".req-email-warnings")

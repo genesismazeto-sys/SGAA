@@ -2,20 +2,16 @@
    Authentication recovery state (DS README §2.6f)
 
    What a public password link renders when it can no longer be used --
-   invalid, expired or already used: a smaller logo, the title, a danger
-   alert with its icon, the link's validity, the e-mail field and the resend
-   button. Markup owner: templates/components/auth_recovery.html.
+   invalid, expired or already used: a smaller logo, the title, the danger
+   alert (the shared auth alert, components/auth-alert.css), the link's
+   validity, the e-mail field and the resend button.
+   Markup owner: templates/components/auth_recovery.html.
 
    The card itself is the shared auth shell (.login-page / .login-card in
    modern-style.css), as are the title, form, primary button and footer link.
    This file styles only what sits inside the card and is new to it, and it
-   never re-opens the shell.
-
-   The alert has two tones, set through variant tokens: danger (default; the
-   dead link) and --positive (the recovery request's neutral confirmation on
-   forgot_password.html). Colours are the danger and status-positive families
-   of tokens.css; no literal colour here. Text that wraps is justified, its
-   last line start-aligned.
+   never re-opens the shell. No literal colour here. Text that wraps is
+   justified, its last line start-aligned.
    ============================================================= */
 
 .auth-recovery-logo{
@@ -23,40 +19,6 @@
   width:64px;
   height:auto;
   margin:0 auto 16px;
-}
-
-.auth-recovery-alert{
-  --auth-alert-bg:var(--danger-bg);
-  --auth-alert-border:var(--danger-border);
-  --auth-alert-text:var(--danger-text);
-  display:flex;
-  align-items:flex-start;
-  gap:8px;
-  margin:16px 0;
-  padding:10px 12px;
-  border:1px solid var(--auth-alert-border);
-  border-radius:var(--radius);
-  background:var(--auth-alert-bg);
-  color:var(--auth-alert-text);
-  text-align:left;
-}
-.auth-recovery-alert.auth-recovery-alert--positive{
-  --auth-alert-bg:var(--status-positive-bg);
-  --auth-alert-border:var(--status-positive-border);
-  --auth-alert-text:var(--status-positive-text);
-}
-.auth-recovery-alert-icon{
-  flex:0 0 auto;
-  width:18px;
-  height:18px;
-}
-.auth-recovery-alert p{
-  margin:0;
-  font-size:var(--font-size-small);
-  font-weight:500;
-  line-height:18px;
-  text-align:justify;
-  text-align-last:start;
 }
 
 .auth-recovery-lead{
