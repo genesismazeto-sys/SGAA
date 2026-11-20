@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
 from pathlib import Path
 from urllib.parse import quote
@@ -162,8 +163,10 @@ def test_public_recovery_response_is_neutral_and_does_not_send_for_unknown_accou
             "/esqueci-minha-senha", data={"email": "absent@example.test"}
         )
     assert known_response.status_code == unknown_response.status_code == 200
-    assert password_views.RECOVERY_NEUTRAL_MESSAGE in known_response.get_data(as_text=True)
-    assert password_views.RECOVERY_NEUTRAL_MESSAGE in unknown_response.get_data(as_text=True)
+    # Visible text: the banner keeps "e-mail" in a nowrap span.
+    for response in (known_response, unknown_response):
+        visible = re.sub(r"<[^>]+>", "", response.get_data(as_text=True))
+        assert password_views.RECOVERY_NEUTRAL_MESSAGE in visible
     assert len(calls) == 1
 
 

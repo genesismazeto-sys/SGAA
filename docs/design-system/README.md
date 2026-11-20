@@ -492,8 +492,17 @@ full-width "Enviar novo link"; "Voltar para o login".
   safely (`app.password_recovery.expired_link_email`: the link expired
   untouched, at most 24 h ago, and its account may still recover); otherwise
   the field is blank and focused.
+* **One message banner, two tones:** `recovery_alert(message, tone)` —
+  `danger` (default, `role="alert"`, the dead link) and `positive`
+  (`.auth-recovery-alert--positive`, `role="status"`, Tabler `circle-check`,
+  the `--status-positive-*` tokens): the recovery request's neutral
+  confirmation on `forgot_password.html` is this green banner, not a bare text
+  line. Tones are variant tokens (`--auth-alert-bg/-border/-text`), §2.1.
 * The alert text and the paragraph are justified, last line start-aligned,
-  when they wrap (a phone width). Colours come from tokens only.
+  when they wrap (a phone width); "e-mail" never breaks at its hyphen (no CSS
+  can prevent that break, so the macro wraps it in `.auth-recovery-nowrap`).
+  Colours come from tokens only; `.login-feedback-success` (the login page's
+  line after a new password) uses `--status-positive-text`.
 
 **Guard:** `tests/test_auth_recovery_expired_link.py` (behaviour, pre-fill
 cases, configured validity, and the single-owner / token-only contract).

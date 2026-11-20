@@ -164,7 +164,8 @@ def test_recovery_answers_neutrally_and_only_mails_an_existing_account(env):
 
     for response in (unknown, known):
         assert response.status_code == 200
-        assert NEUTRAL in response.get_data(as_text=True)
+        # Visible text: the banner keeps "e-mail" in a nowrap span.
+        assert NEUTRAL in re.sub(r"<[^>]+>", "", response.get_data(as_text=True))
     assert [s["recipient"] for s in sent] == [email]
     assert sent[0]["purpose"] == passwords_view.PURPOSE_PASSWORD_RESET
 

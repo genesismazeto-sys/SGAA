@@ -105,6 +105,10 @@ def _prefill(html):
     return match.group(1)
 
 
+def _visible(html):
+    return re.sub(r"<[^>]+>", "", html)
+
+
 def _token_from(message):
     link = next(line for line in message.body_text.splitlines() if "token=" in line)
     parts = urlsplit(link.strip())
@@ -322,7 +326,7 @@ def _resend_and_redeem(env, email, password):
     client = env["client"]
     before = len(env["sent"])
     answer = client.post("/esqueci-minha-senha", data={"email": email}).get_data(as_text=True)
-    assert NEUTRAL in answer
+    assert NEUTRAL in _visible(answer)
     assert len(env["sent"]) == before + 1
     message = env["sent"][-1]
     assert message.to_address == email and message.subject == "Redefinição de senha do SGAA"
@@ -396,7 +400,7 @@ def test_the_resend_form_passes_production_https_csrf(env):
             assert refused.status_code == 400, (headers, sorted(data))
         assert env["sent"] == []
         accepted = client.post("/esqueci-minha-senha", data=form, headers=own, base_url=origin)
-        assert accepted.status_code == 200 and NEUTRAL in accepted.get_data(as_text=True)
+        assert accepted.status_code == 200 and NEUTRAL in _visible(accepted.get_data(as_text=True))
         assert [message.to_address for message in env["sent"]] == [ALUNO_EMAIL]
     finally:
         main.app.config.update(saved)
@@ -421,6 +425,21 @@ def test_the_recovery_state_has_one_design_system_owner():
     assert "Link expirado" in component
 
 
+def test_the_recovery_confirmation_is_the_positive_alert_of_the_same_component(env):
+    get = env["client"].get("/esqueci-minha-senha").get_data(as_text=True)
+    assert "css/components/auth-recovery.css" in get and "auth-recovery-alert" not in get
+    html = env["client"].post("/esqueci-minha-senha", data={"email": ALUNO_EMAIL}).get_data(as_text=True)
+    assert re.search(
+        r'<div class="auth-recovery-alert auth-recovery-alert--positive" role="status">\s*'
+        r'<svg[^>]*icon-tabler-circle-check[^>]*auth-recovery-alert-icon',
+        html,
+    )
+    assert ("<p>" + NEUTRAL.replace("e-mail", '<span class="auth-recovery-nowrap">e-mail</span>') + "</p>") in html
+    assert "login-feedback" not in html
+    page = _source("templates/forgot_password.html")
+    assert "auth_recovery.recovery_alert(neutral_message, 'positive')" in page and "auth-recovery-" not in page
+
+
 def test_the_recovery_stylesheet_uses_tokens_and_justifies_wrapped_text():
     css = _source("static/css/components/auth-recovery.css")
     rules = dict(re.findall(r"(?m)^([^\s/@{}][^{]*)\{([^}]*)\}", css))
@@ -429,6 +448,18 @@ def test_the_recovery_stylesheet_uses_tokens_and_justifies_wrapped_text():
     alert = rules[".auth-recovery-alert"]
     for token in ("var(--danger-bg)", "var(--danger-border)", "var(--danger-text)", "var(--radius)"):
         assert token in alert
+    positive = rules[".auth-recovery-alert.auth-recovery-alert--positive"]
+    for token in ("var(--status-positive-bg)", "var(--status-positive-border)", "var(--status-positive-text)"):
+        assert token in positive
     for selector in (".auth-recovery-alert p", ".auth-recovery-lead"):
         assert "text-align:justify" in rules[selector] and "text-align-last:start" in rules[selector]
     assert not any("login-card" in s or "login-page" in s for s in rules), "the auth shell is not re-opened"
+
+
+def test_every_feedback_colour_of_the_recovery_flow_is_a_token():
+    # The login page shows the "Senha definida com sucesso" line after a reset.
+    modern = _source("static/css/modern-style.css")
+    for selector, token in ((".login-feedback-success", "var(--status-positive-text)"),
+                            (".login-feedback-error", "var(--danger-text)")):
+        body = re.search(r"(?m)^" + re.escape(selector) + r"\{([^}]*)\}", modern).group(1)
+        assert f"color:{token}" in body.replace(" ", ""), selector

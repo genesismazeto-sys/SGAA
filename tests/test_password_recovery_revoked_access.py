@@ -123,7 +123,7 @@ def test_a_revoked_account_gets_no_link_and_the_same_neutral_answer(env):
         response = _request_recovery(client, email)
         assert response.status_code == 200
         html = response.get_data(as_text=True)
-        assert NEUTRAL in html
+        assert NEUTRAL in re.sub(r"<[^>]+>", "", html)  # the banner wraps "e-mail" in a span
         answers[key] = _normalized(html, email)
         if key == "revogado":
             assert _account(env["ids"][key]) == before  # no token, nothing written
