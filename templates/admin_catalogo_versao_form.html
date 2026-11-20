@@ -588,9 +588,13 @@ document.addEventListener('DOMContentLoaded', function(){
     const name = event.target.closest(DOC_NAME);
     if (!name) return;
     if (!docPointerDown){ closeDocName(name); return; }
-    const release = () => setTimeout(() => closeDocName(name));
-    document.addEventListener('pointerup', release, {once: true, capture: true});
-    document.addEventListener('pointercancel', release, {once: true, capture: true});
+    const release = () => {
+      document.removeEventListener('pointerup', release, true);
+      document.removeEventListener('pointercancel', release, true);
+      setTimeout(() => closeDocName(name));
+    };
+    document.addEventListener('pointerup', release, true);
+    document.addEventListener('pointercancel', release, true);
   });
   window.addEventListener('resize', growDocNames);
   renumberDocs();
