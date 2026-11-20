@@ -573,7 +573,7 @@ document.addEventListener('DOMContentLoaded', function(){
     if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229 || !name) return;
     event.preventDefault();
     const form = name.form;
-    const submitter = form && Array.from(form.elements).find(el => el.matches('button:not([type]), button[type="submit"], input[type="submit"]'));
+    const submitter = form && Array.from(form.elements).find(el => el.type === 'submit');
     if (submitter && !submitter.matches(':disabled')) form.requestSubmit(submitter);
   });
   // Focus opens the field (.is-open); leaving it closes it at the start of the
