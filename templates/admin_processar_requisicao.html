@@ -37,36 +37,17 @@
 
   <div style="margin-bottom:12px; padding:12px; border:1px solid var(--border-strong); border-radius:var(--radius); background:var(--surface);">
     <div class="help" style="margin-bottom:8px;">Registro da solicitação</div>
-    {% if snapshot_diag %}
-      {% if snapshot_diag.diagnostico_disponivel %}
+    {# snapshot_diag is the owner's verdict, {status, reason, payload}
+       (app.versioning.snapshots._build_admin_requisicao_snapshot_diagnostic):
+       only a validated payload is read here. #}
+    {% set snap = snapshot_diag.payload if snapshot_diag and snapshot_diag.status == 'valid' else none %}
+    {% if snap %}
         <div class="form-grid" style="gap:10px 16px;">
-          {% if snapshot_diag.atividade_versao_id is defined %}
-            <div><span class="help">atividade_versao_id</span><div>{{ snapshot_diag.atividade_versao_id }}</div></div>
-          {% endif %}
-          {% if snapshot_diag.eixo is defined %}
-            <div><span class="help">eixo</span><div>{{ snapshot_diag.eixo }}</div></div>
-          {% endif %}
-          {% if snapshot_diag.grupo is defined %}
-            <div><span class="help">grupo</span><div>{{ snapshot_diag.grupo }}</div></div>
-          {% endif %}
-          {% if snapshot_diag.ch_por_evento is defined %}
-            <div><span class="help">ch_por_evento</span><div>{{ snapshot_diag.ch_por_evento }}</div></div>
-          {% endif %}
-          {% if snapshot_diag.limite_semestre is defined %}
-            <div><span class="help">limite_semestre</span><div>{{ snapshot_diag.limite_semestre }}</div></div>
-          {% endif %}
-          {% if snapshot_diag.limite_total is defined %}
-            <div><span class="help">limite_total</span><div>{{ snapshot_diag.limite_total }}</div></div>
-          {% endif %}
-          {% if snapshot_diag.flow_origin is defined %}
-            <div><span class="help">flow_origin</span><div>{{ snapshot_diag.flow_origin }}</div></div>
-          {% endif %}
-          {% if snapshot_diag.snapshot_written_at is defined %}
-            <div><span class="help">snapshot_written_at</span><div>{{ snapshot_diag.snapshot_written_at }}</div></div>
-          {% endif %}
-          {% if snapshot_diag.resolver_status is defined %}
-            <div><span class="help">resolver_status</span><div>{{ snapshot_diag.resolver_status }}</div></div>
-          {% endif %}
+          {% for key in ('atividade_versao_id', 'eixo', 'grupo', 'ch_por_evento', 'limite_semestre', 'limite_total', 'flow_origin', 'snapshot_written_at') %}
+            {% if snap.get(key) is not none %}
+            <div><span class="help">{{ key }}</span><div>{{ snap.get(key) }}</div></div>
+            {% endif %}
+          {% endfor %}
         </div>
         {% if snapshot_display_enabled %}
         <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
@@ -83,24 +64,13 @@
             </div>
             <div>
               <div class="help" style="margin-bottom:6px;"><strong>Versão registrada</strong></div>
-              {% if snapshot_diag.nome_exibivel is defined %}
-                <div><span class="help">Nome no momento da solicitação</span><div>{{ snapshot_diag.nome_exibivel }}</div></div>
-              {% elif snapshot_diag.nome_legacy is defined %}
-                <div><span class="help">Nome no momento da solicitação</span><div>{{ snapshot_diag.nome_legacy }}</div></div>
-              {% endif %}
-              {% if snapshot_diag.tipo_atividade_legacy is defined %}
-                <div><span class="help">Tipo no momento da solicitação</span><div>{{ snapshot_diag.tipo_atividade_legacy }}</div></div>
-              {% endif %}
-              {% if snapshot_diag.nome_legacy is defined %}
-                <div><span class="help">Nome registrado na solicitação</span><div>{{ snapshot_diag.nome_legacy }}</div></div>
-              {% endif %}
+              <div><span class="help">Nome no momento da solicitação</span><div>{{ snap.nome_exibivel }}</div></div>
             </div>
           </div>
         </div>
         {% endif %}
-      {% else %}
-        <div class="help">Registro da solicitação presente, mas leitura indisponível.</div>
-      {% endif %}
+    {% elif snapshot_diag and snapshot_diag.reason != 'mandatory_snapshot_missing' %}
+      <div class="help">Registro da solicitação presente, mas leitura indisponível.</div>
     {% else %}
       <div class="help">Sem registro de versão para esta requisição.</div>
     {% endif %}
