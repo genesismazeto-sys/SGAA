@@ -188,14 +188,17 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   `8c8d8e0` found no product regression (results and the GF1 plan outside the repository,
   `D:\SGAA_tmp\rc_8c8d8e0`); the served code identity changes from `902a0be4…` to `b37c2daf…`
   (14 files). Publication waits for the owner's push and GF1 authorizations.
-- Observations from VA-01 (found by the executor, not reported by the owner, so not backlog
-  items and not scheduled; behaviour unchanged; screenshots in the VA-01 package; the owner
-  decides whether any becomes work): O1, the legacy "Processar Requisição" page reads "Registro da
-  solicitação presente, mas leitura indisponível." for every request, because the template asks
-  for `diagnostico_disponivel`, which `_build_admin_requisicao_snapshot_diagnostic` never returns
-  (the same code is in PROD); O2, the request lists reach the Status column only by scrolling
-  sideways at 1440 px and on phones; O3, the student Painel cards run past the right edge at
-  390 px; O4, a long proof name is clipped inside its input on the version form at 768 px.
+- BL-02 (2026-11-20, owner charter; publication HOLD): the VA-01 observations O1-O4, found by the
+  executor and then scheduled by the owner, are fixed on the local branch `backlog/va01-findings`
+  (an isolated worktree on top of the RC; the RC branch is unchanged), with the owner-requested
+  student guidance sentence: UI-B41 the processing page reads the request's frozen record; UI-B42
+  the request lists keep Status in view (shared DS status column, DS README section 2.6b); UI-B43
+  the KPI cards stack on a phone; UI-B44 a long proof name opens whole while edited (owner-approved);
+  UI-B45 the guidance text. UI-B41-B43 and UI-B45 await the owner's visual confirmation, as do the
+  28 historical rows (none has an acceptance on record) and UI-B15 (clean in Chromium; the owner's
+  own Chrome decides). Package outside the repository: `D:\SGAA_tmp\bl02\package`. Taking the
+  branch into a release needs a delta qualification of its CSS, templates and tests against the RC
+  (TEP section 6), then the owner's push and GF1 authorizations.
 
 ## Environment facts
 
