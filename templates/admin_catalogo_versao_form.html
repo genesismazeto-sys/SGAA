@@ -211,7 +211,7 @@
               {% for item in documentos_exigidos %}
               <li class="field-card doc-list-item" data-doc-item>
                 <div class="field-chip doc-list-index" aria-hidden="true">{{ loop.index }}</div>
-                <input class="control" type="text" name="documentos_exigidos" value="{{ item }}" maxlength="60" aria-label="Comprovante exigido {{ loop.index }}" aria-describedby="documentacao-exigida-orientacao">
+                <textarea class="control auto-grow" name="documentos_exigidos" rows="1" maxlength="60" aria-label="Comprovante exigido {{ loop.index }}" aria-describedby="documentacao-exigida-orientacao">{{ item }}</textarea>
                 {% if not readonly %}
                 <div class="doc-list-actions">
                   <button type="button" class="file-list-action" data-doc-move="-1" aria-label="Mover para cima"><i class="lucide" data-lucide="arrow-up" aria-hidden="true"></i></button>
@@ -228,7 +228,7 @@
             <template id="documento-exigido-template">
               <li class="field-card doc-list-item" data-doc-item>
                 <div class="field-chip doc-list-index" aria-hidden="true"></div>
-                <input class="control" type="text" name="documentos_exigidos" value="" maxlength="60" placeholder="Ex.: Certificado de participação" aria-describedby="documentacao-exigida-orientacao">
+                <textarea class="control auto-grow" name="documentos_exigidos" rows="1" maxlength="60" placeholder="Ex.: Certificado de participação" aria-describedby="documentacao-exigida-orientacao"></textarea>
                 <div class="doc-list-actions">
                   <button type="button" class="file-list-action" data-doc-move="-1" aria-label="Mover para cima"><i class="lucide" data-lucide="arrow-up" aria-hidden="true"></i></button>
                   <button type="button" class="file-list-action" data-doc-move="1" aria-label="Mover para baixo"><i class="lucide" data-lucide="arrow-down" aria-hidden="true"></i></button>
@@ -491,12 +491,18 @@ document.addEventListener('DOMContentLoaded', function(){
   // Documentação exigida: an ordered list edited in place. The server
   // normalizes the same way (app.activity_documentation), so an unchanged
   // list compares equal and keeps the stored text.
+  // Each name is a one-row textarea: one line at rest, opened to the whole
+  // name while it is edited (a name of up to 60 characters does not fit a
+  // narrow form). It is still one line of data: Enter adds no break and a
+  // pasted break becomes a space.
   const docList = document.getElementById('documentos-exigidos-list');
   const docEmpty = document.querySelector('[data-doc-empty]');
   const docTemplate = document.getElementById('documento-exigido-template');
+  const DOC_NAME = '[name="documentos_exigidos"]';
+  function growDocNames(){ docList?.querySelectorAll(DOC_NAME).forEach(autoGrow); }
   function documentosExigidos(){
     const items = [];
-    docList?.querySelectorAll('input[name="documentos_exigidos"]').forEach(input => {
+    docList?.querySelectorAll(DOC_NAME).forEach(input => {
       const text = String(input.value || '').split(/\s+/).filter(Boolean).join(' ');
       if (text && !items.includes(text)) items.push(text);
     });
@@ -508,7 +514,7 @@ document.addEventListener('DOMContentLoaded', function(){
     rows.forEach((row, index) => {
       const chip = row.querySelector('.doc-list-index');
       if (chip) chip.textContent = String(index + 1);
-      const input = row.querySelector('input');
+      const input = row.querySelector(DOC_NAME);
       if (input) input.setAttribute('aria-label', `Comprovante exigido ${index + 1}`);
       const up = row.querySelector('[data-doc-move="-1"]');
       const down = row.querySelector('[data-doc-move="1"]');
@@ -523,7 +529,8 @@ document.addEventListener('DOMContentLoaded', function(){
     docList.appendChild(row);
     if (window.lucide) lucide.createIcons();
     renumberDocs();
-    row.querySelector('input')?.focus();
+    const name = row.querySelector(DOC_NAME);
+    if (name){ autoGrow(name); name.focus(); }
     refresh();
   });
   docList?.addEventListener('click', event => {
@@ -534,7 +541,7 @@ document.addEventListener('DOMContentLoaded', function(){
       const next = row.nextElementSibling || row.previousElementSibling;
       row.remove();
       renumberDocs();
-      (next?.querySelector('input') || document.querySelector('[data-doc-add]'))?.focus();
+      (next?.querySelector(DOC_NAME) || document.querySelector('[data-doc-add]'))?.focus();
     } else if (button.dataset.docMove === '-1' && row.previousElementSibling){
       docList.insertBefore(row, row.previousElementSibling);
       renumberDocs();
@@ -546,7 +553,46 @@ document.addEventListener('DOMContentLoaded', function(){
     }
     refresh();
   });
-  docList?.addEventListener('input', () => refresh());
+  docList?.addEventListener('input', event => {
+    const name = event.target.closest(DOC_NAME);
+    if (name && /[\r\n]/.test(name.value)){
+      const at = name.selectionStart;
+      name.value = name.value.replace(/\r?\n|\r/g, ' ');
+      name.setSelectionRange(at, at);
+    }
+    if (name) autoGrow(name);
+    refresh();
+  });
+  docList?.addEventListener('keydown', event => {
+    if (event.key === 'Enter' && !event.isComposing && event.target.closest(DOC_NAME)) event.preventDefault();
+  });
+  // Focus opens the field (.is-open); leaving it closes it at the start of the
+  // name. Closing shrinks the row, so when a press of the pointer took the
+  // focus away (Adicionar, an arrow, another field) the field closes only
+  // after that press is released: otherwise the button would move away from
+  // the pointer between press and release and the click would be lost.
+  let docPointerDown = false;
+  document.addEventListener('pointerdown', () => { docPointerDown = true; }, true);
+  ['pointerup', 'pointercancel'].forEach(type => document.addEventListener(type, () => { docPointerDown = false; }, true));
+  function closeDocName(name){
+    if (document.activeElement === name) return;
+    name.classList.remove('is-open');
+    autoGrow(name);
+    name.scrollTop = 0; name.scrollLeft = 0;
+  }
+  docList?.addEventListener('focusin', event => {
+    const name = event.target.closest(DOC_NAME);
+    if (name){ name.classList.add('is-open'); autoGrow(name); }
+  });
+  docList?.addEventListener('focusout', event => {
+    const name = event.target.closest(DOC_NAME);
+    if (!name) return;
+    if (!docPointerDown){ closeDocName(name); return; }
+    const release = () => setTimeout(() => closeDocName(name));
+    document.addEventListener('pointerup', release, {once: true, capture: true});
+    document.addEventListener('pointercancel', release, {once: true, capture: true});
+  });
+  window.addEventListener('resize', growDocNames);
   renumberDocs();
 
   function currentPayload(){

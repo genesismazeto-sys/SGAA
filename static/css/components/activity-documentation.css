@@ -30,6 +30,10 @@
   color:var(--text-primary);
 }
 .doc-section > .form-note.form-note--guide{ margin:0; }
+/* The section's other notes wrap to two or three lines at narrow widths:
+   justified like the guide above, the last line start-aligned, so a
+   one-line note reads exactly as before. */
+.doc-section .form-note:not(.form-note--guide){ text-align:justify; text-align-last:start; }
 
 /* ---- Comprovantes exigidos: the ordered list editor ---- */
 .doc-list{ display:grid; row-gap:8px; min-width:0; }
@@ -42,6 +46,18 @@
 }
 .doc-list-items:empty{ display:none; }
 .field-card.doc-list-item{ grid-template-columns:40px minmax(0, 1fr) auto; }
+/* A proof name may take 60 characters: 415-532px on one line, in a field
+   144px wide at 768 and 230px at 390. At rest, and in a frozen version, the
+   field is the approved one line. While it is being edited (.is-open, set by
+   the form) it opens to the whole name, the form's autoGrow following the
+   text, and the wrapped text is justified, its last line start-aligned, like
+   every multi-line text here. */
+.doc-list-item textarea.control{
+  display:block; resize:none; overflow:hidden; white-space:nowrap;
+}
+.doc-list-item textarea.control.is-open{
+  white-space:pre-wrap; text-align:justify; text-align-last:start;
+}
 .doc-list-index{
   font-size:var(--font-size-small);
   font-weight:600;

@@ -144,10 +144,12 @@ def _form(**overrides):
 
 
 def _rendered_items(html: str) -> list[str]:
+    import html as html_lib
     import re
 
     section = html.split('id="documentos-exigidos-list"', 1)[1].split("</ol>", 1)[0]
-    return re.findall(r'name="documentos_exigidos" value="([^"]*)"', section)
+    return [html_lib.unescape(text) for text in
+            re.findall(r'<textarea[^>]*name="documentos_exigidos"[^>]*>([^<]*)</textarea>', section)]
 
 
 def test_new_version_form_lists_the_source_proofs_in_order(env):
@@ -172,7 +174,8 @@ def test_the_name_inputs_take_at_most_the_stored_limit():
     template = (Path(__file__).resolve().parents[1] / "templates" / "admin_catalogo_versao_form.html").read_text(
         encoding="utf-8"
     )
-    inputs = [line for line in template.splitlines() if "<input" in line and 'name="documentos_exigidos"' in line]
+    # Each name is a one-row textarea that wraps (O4); the limit is the same.
+    inputs = [line for line in template.splitlines() if "<textarea" in line and 'name="documentos_exigidos"' in line]
     assert len(inputs) == 2
     assert all(f'maxlength="{REQUIRED_DOCUMENT_MAX_LENGTH}"' in line for line in inputs)
 

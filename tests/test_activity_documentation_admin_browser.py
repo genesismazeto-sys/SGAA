@@ -156,7 +156,7 @@ def _submit_and_wait(session, selector):
 
 def _texts(session, selector):
     return session.evaluate(
-        "Array.from(document.querySelectorAll(%s)).map(el => (el.value !== undefined && el.tagName === 'INPUT')"
+        "Array.from(document.querySelectorAll(%s)).map(el => (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')"
         " ? el.value : el.textContent.trim())" % _js(selector)
     )
 
@@ -224,10 +224,10 @@ def test_admin_maintains_the_documentation_of_a_draft_in_the_browser(workspace):
         # A. Comprovantes exigidos: add three, move the third up, remove the second.
         for text in ("Certificado de participação", "Lista de presença", "Relatório da atividade (Anexo 3)"):
             session.click_in_view("[data-doc-add]")
-            _type(session, "#documentos-exigidos-list li:last-child input", text)
+            _type(session, "#documentos-exigidos-list li:last-child [name=documentos_exigidos]", text)
         session.click_in_view("#documentos-exigidos-list li:nth-child(3) [data-doc-move='-1']")
         session.click_in_view("#documentos-exigidos-list li:nth-child(3) [data-doc-remove]")
-        assert _texts(session, "#documentos-exigidos-list input") == [
+        assert _texts(session, "#documentos-exigidos-list [name=documentos_exigidos]") == [
             "Certificado de participação", "Relatório da atividade (Anexo 3)",
         ]
         assert _texts(session, "#documentos-exigidos-list .doc-list-index") == ["1", "2"]
@@ -237,7 +237,7 @@ def test_admin_maintains_the_documentation_of_a_draft_in_the_browser(workspace):
         _submit_and_wait(session, "#btn-salvar-versao")
         assert _stored(version_id)[0] == ["Certificado de participação", "Relatório da atividade (Anexo 3)"]
         _open(session, edit_url)
-        assert _texts(session, "#documentos-exigidos-list input") == [
+        assert _texts(session, "#documentos-exigidos-list [name=documentos_exigidos]") == [
             "Certificado de participação", "Relatório da atividade (Anexo 3)",
         ]
         assert session.evaluate("document.querySelector('[data-templates-dirty]').hidden") is True
@@ -295,8 +295,8 @@ def test_admin_maintains_the_documentation_of_a_draft_in_the_browser(workspace):
         assert session.evaluate("document.querySelector('[data-doc-add]')") is None
         assert session.evaluate("document.querySelector('[form=modelo-novo-form]')") is None
         assert "crie uma nova versão" in session.evaluate("document.body.innerText").lower()
-        assert _texts(session, "#documentos-exigidos-list input") == documentos
-        assert session.evaluate("Array.from(document.querySelectorAll('#documentos-exigidos-list input')).every(i => i.matches(':disabled'))")
+        assert _texts(session, "#documentos-exigidos-list [name=documentos_exigidos]") == documentos
+        assert session.evaluate("Array.from(document.querySelectorAll('#documentos-exigidos-list [name=documentos_exigidos]')).every(i => i.matches(':disabled'))")
         session.screenshot("admin-versao-congelada")
         assert session.evaluate("window.__errors") == []
     finally:
