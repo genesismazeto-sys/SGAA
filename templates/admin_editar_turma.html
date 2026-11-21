@@ -342,18 +342,13 @@
 {% endblock %}
 {% block extra_head %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/components/turma-alunos.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components/turma-form.css') }}">
   <style>
     .page-m30{ margin: 0 30px; }
     /* Gap padrao entre cards (ajustavel globalmente) */
     :root{ --card-gap: 2px; }
-    /* Largura padrao do formulario: vem de .form-cards-narrow (F-5B). */
-    .split-2-card-row{ display:grid; grid-template-columns: 1fr 1fr; gap: var(--card-gap, 2px); align-items:start; }
-    .inicio-grid{ display:grid; grid-template-columns: 0.4fr 0.6fr; gap:8px; padding:0 10px; width:100%; }
-    .inicio-grid .control{ width:100%; }
-    .inicio-grid .input-with-icon{ width:100%; }
-    .calendar-btn{ position:absolute; right:6px; top:50%; transform:translateY(-50%); width:22px; height:22px; padding:0; border:0; background:transparent; color:#94a3b8; cursor:pointer; display:grid; place-items:center; }
-    .calendar-btn .lucide{ width:16px; height:16px; }
-    .month-picker-hidden{ position:absolute; opacity:0; width:0; height:0; pointer-events:none; }
+    /* Largura padrao do formulario: vem de .form-cards-narrow (F-5B).
+       The Início/fim row is components/turma-form.css. */
     /* Mantem labels externas alinhadas iguais ao contrato atual */
     .form-cards-narrow .row-label{ right: calc(100% + var(--form-gap)); width: var(--form-label-w); }
     /* Centraliza acoes do formulario nesta pagina */

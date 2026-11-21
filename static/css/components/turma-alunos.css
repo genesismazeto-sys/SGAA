@@ -146,3 +146,13 @@
 .turma-aluno-card select{
   width:100%; border:0; background:transparent; outline:0; text-align:center; font-size:12px; min-height: var(--btn-h); font-family: inherit; color: var(--text-primary);
 }
+
+/* Phone (below 768px): the percentage columns left Matrícula and Situação about
+   35px wide and cut their captions. The list keeps a readable width and scrolls
+   sideways (a list with a visible scrollbar is the DS behaviour); the right
+   padding keeps each selected row's remove button, which sits outside the row,
+   inside the scroll area. (DS-CONSISTENCY-01 A8) */
+@media (max-width:767.98px){
+  .turma-alunos-content{ overflow-x:auto; padding-right:48px; }
+  .turma-alunos-content .turma-aluno-row{ min-width:600px; }
+}

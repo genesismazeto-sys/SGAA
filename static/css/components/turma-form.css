@@ -1,0 +1,25 @@
+/* ==========================================================================
+   Turma form -- the "Início/fim" row, shared component (DS-CONSISTENCY-01 A8)
+   --------------------------------------------------------------------------
+   Consumers: templates/admin_adicionar_turma.html,
+              templates/admin_editar_turma.html
+   (linked from each page's {% block extra_head %}, before its <style>).
+
+   Both pages carried a copy of these rules. The row puts the start (semester
+   select + year field with its month picker) beside the computed end.
+
+   Phone (below 768px): side by side each card got about 150px and the
+   semester and year controls were crushed, so start and end take their own
+   lines.
+   ========================================================================== */
+.split-2-card-row{ display:grid; grid-template-columns: 1fr 1fr; gap: var(--card-gap, 2px); align-items:start; }
+.inicio-grid{ display:grid; grid-template-columns: 0.4fr 0.6fr; gap:8px; padding:0 10px; width:100%; }
+.inicio-grid .control{ width:100%; }
+.inicio-grid .input-with-icon{ width:100%; }
+.calendar-btn{ position:absolute; right:6px; top:50%; transform:translateY(-50%); width:22px; height:22px; padding:0; border:0; background:transparent; color:var(--text-tertiary); cursor:pointer; display:grid; place-items:center; }
+.calendar-btn .lucide{ width:16px; height:16px; }
+.month-picker-hidden{ position:absolute; opacity:0; width:0; height:0; pointer-events:none; }
+
+@media (max-width:767.98px){
+  .split-2-card-row{ grid-template-columns:minmax(0, 1fr); gap:8px; }
+}

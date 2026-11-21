@@ -262,7 +262,7 @@ TEMPLATES_DIR = PROJECT_ROOT / "templates"
 # Current volume of CSS still living inside templates. These are ceilings:
 # migration phases lower them. Raising one means CSS moved the wrong way.
 MAX_TEMPLATES_WITH_STYLE_BLOCKS = 42
-MAX_STATIC_INLINE_STYLE_ATTRS = 198
+MAX_STATIC_INLINE_STYLE_ATTRS = 131  # DS-CONSISTENCY-01: 198 -> 131 (measured; the gain cannot be spent)
 
 
 def _template_texts():
@@ -288,7 +288,7 @@ def test_templates_with_style_blocks_does_not_grow():
 # UI-B21: 536 -> 308. The Turma student list moved out of admin_adicionar_turma
 # and admin_editar_turma into components/turma-alunos.css; the ceiling is reset
 # to the measured count so the gain cannot be spent silently.
-MAX_DUPLICATED_TEMPLATE_DECLARATIONS = 308  # F-5B: 541 -> 536; UI-B21: -> 308
+MAX_DUPLICATED_TEMPLATE_DECLARATIONS = 198  # F-5B: 541 -> 536; UI-B21: -> 308; DS-CONSISTENCY-01: -> 198
 
 
 def test_cross_template_duplication_does_not_grow():

@@ -32,7 +32,10 @@ static/css/
     actions-float.css   ← the floating actions bar (#pedido-actions-float).
     turma-alunos.css    ← the Turma student list ("Alunos da turma") shared by
                           Adicionar turma and Editar turma. Component tokens
-                          on .alunos-wide resolve to --surface / --bg.
+                          on .alunos-wide resolve to --surface / --bg. On a
+                          phone the list scrolls sideways at a readable width.
+    turma-form.css      ← the Turma form's Início/fim row, shared by the same
+                          two pages; start and end stack on a phone.
     auth-recovery.css   ← the authentication recovery state inside the auth
                           shell (a dead password link), §2.6f.
     auth-alert.css      ← the feedback banner of every public auth page

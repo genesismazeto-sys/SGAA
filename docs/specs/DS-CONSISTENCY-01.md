@@ -163,5 +163,10 @@ None beyond `docs/OPERATING_MODEL.md` §7.
   `.actions--pairs`. Not material.
 - A7 2026-11-21 — Slices 1–3 land as one commit: the components, the screens and the guards change the same
   templates and tests, and no intermediate state passes the browser contract on its own. Not material.
+- A8 2026-11-21 — Owner-requested addition ("Sim, corrija"): two phone defects found by this phase on
+  Adicionar / Editar turma. The Início/fim row (copied in both pages) becomes `components/turma-form.css` and
+  stacks below 768px; the "Alunos da turma" list keeps a 600px row and scrolls sideways on a phone. The
+  calendar icon takes `--text-tertiary` instead of a literal grey. The template ratchets are reset to the
+  measured counts (duplicated declarations 308 -> 198, static inline styles 198 -> 131). Presentation only.
 
 ## 17. Closure
