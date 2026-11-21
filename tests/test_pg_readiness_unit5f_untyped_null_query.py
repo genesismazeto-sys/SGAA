@@ -35,6 +35,7 @@ engine.  REAL-PG EVIDENCE: ABSENT (route-level smoke owed to E-PG1).
 from __future__ import annotations
 
 import ast
+import os
 import re
 from pathlib import Path
 
@@ -48,6 +49,7 @@ from tests.pg_shaped_support import PostgresShapedConnection
 from tests.versioned_test_support import isolated_versioned_app_env
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+PG_URL = os.environ.get("SGAA_PG_TEST_URL", "").strip()
 SAVE_ROUTE = "/admin/acesso/salvar"
 DUPLICATE_EMAIL_MESSAGE = "Já existe um usuário com este e-mail."
 
@@ -56,6 +58,10 @@ _UNTYPED_NULL_CONTEXT_RE = re.compile(r"\s*\)?\s*IS\s+(?:NOT\s+)?NULL\b", re.IGN
 #: The row-exclusion predicate on the ``usuarios`` primary key.
 _ID_EXCLUSION_RE = re.compile(r"(?<![\w.])(?:\w+\.)?id\s*(?:<>|!=)\s*$", re.IGNORECASE)
 _ANY_ID_EXCLUSION_RE = re.compile(r"(?<![\w.])(?:\w+\.)?id\s*(?:<>|!=)", re.IGNORECASE)
+#: ``name(`` right before a placeholder: the placeholder is a call's argument.
+_CALL_OPEN_RE = re.compile(r"(?<![\w.])([A-Za-z_][\w.]*)\(\s*$")
+#: Words that open a parenthesised expression, not a call, when written against ``(``.
+_KEYWORDS = frozenset({"and", "or", "not", "where", "when", "then", "else", "select", "on", "having", "in"})
 
 
 # ---------------------------------------------------------------------------
@@ -86,6 +92,23 @@ def _placeholders(pg_sql):
         index += 1
 
 
+def _only_context_is_null_test(pg_sql, start, end):
+    """Whether ``IS [NOT] NULL`` is the placeholder's only SQL context.
+
+    ``(%s) IS NULL`` is: the parentheses only group it. ``to_regclass(%s) IS
+    NULL`` is not: the placeholder is the call's argument, which PostgreSQL types
+    from the function's signature (even bound to NULL), and the test applies to
+    the call's result.
+    """
+    context = _UNTYPED_NULL_CONTEXT_RE.match(pg_sql, end)
+    if context is None:
+        return False
+    if ")" not in context.group(0):
+        return True
+    call = _CALL_OPEN_RE.search(pg_sql, 0, start)
+    return call is None or call.group(1).lower() in _KEYWORDS
+
+
 def untyped_null_positions(pg_sql, params):
     """Ordinals of placeholders PostgreSQL could not type (42P18 class).
 
@@ -94,8 +117,8 @@ def untyped_null_positions(pg_sql, params):
     """
     values = tuple(params or ())
     positions = []
-    for ordinal, _start, end in _placeholders(pg_sql):
-        if not _UNTYPED_NULL_CONTEXT_RE.match(pg_sql, end):
+    for ordinal, start, end in _placeholders(pg_sql):
+        if not _only_context_is_null_test(pg_sql, start, end):
             continue
         if ordinal < len(values) and values[ordinal] is None:
             positions.append(ordinal)
@@ -106,8 +129,8 @@ def is_null_placeholder_positions(pg_sql):
     """Ordinals of placeholders used as ``%s IS [NOT] NULL`` whatever the value."""
     return [
         ordinal
-        for ordinal, _start, end in _placeholders(pg_sql)
-        if _UNTYPED_NULL_CONTEXT_RE.match(pg_sql, end)
+        for ordinal, start, end in _placeholders(pg_sql)
+        if _only_context_is_null_test(pg_sql, start, end)
     ]
 
 
@@ -323,6 +346,43 @@ def test_detector_discriminates_bad_and_good_shapes():
     # Literal percent and quoted '?' are not placeholders.
     quoted = adapt_sql_for_postgres("SELECT '? IS NULL', 'a%' WHERE x = ?")
     assert list(_placeholders(quoted)) == [(0, quoted.rindex("%s"), len(quoted))]
+
+
+#: ``(sql, untyped)``: whether PostgreSQL refuses the statement with 42P18 when
+#: every placeholder is bound to None. Grouping parentheses leave a placeholder
+#: untyped; a function call's argument is typed by the function.
+DETECTOR_VS_POSTGRESQL = (
+    pytest.param("SELECT ? IS NULL", True, id="bare"),
+    pytest.param("SELECT ? IS NOT NULL", True, id="bare-not"),
+    pytest.param("SELECT (?) IS NULL", True, id="grouped"),
+    pytest.param("SELECT 1 WHERE (? IS NULL OR 1 <> 2)", True, id="inside-group"),
+    pytest.param("SELECT 1 WHERE NOT(?) IS NULL", True, id="keyword-against-paren"),
+    pytest.param("SELECT to_regclass(?) IS NOT NULL", False, id="to_regclass-argument"),
+    pytest.param("SELECT lower(?) IS NULL", False, id="lower-argument"),
+    pytest.param("SELECT coalesce(?) IS NULL", False, id="coalesce-argument"),
+)
+
+
+@pytest.mark.parametrize("sql,untyped", DETECTOR_VS_POSTGRESQL)
+def test_detector_types_a_call_argument_but_not_a_grouped_placeholder(sql, untyped):
+    pg_sql = adapt_sql_for_postgres(sql)
+    assert bool(is_null_placeholder_positions(pg_sql)) is untyped
+    assert bool(untyped_null_positions(pg_sql, (None,) * pg_sql.count("%s"))) is untyped
+
+
+@pytest.mark.skipif(not PG_URL, reason="SGAA_PG_TEST_URL is not configured -- REAL-PG EVIDENCE: ABSENT")
+@pytest.mark.parametrize("sql,untyped", DETECTOR_VS_POSTGRESQL)
+def test_real_postgresql_agrees_with_the_detector(sql, untyped):
+    """E-PG1: each verdict above is PostgreSQL's own. A read-only SELECT; nothing is written."""
+    psycopg = pytest.importorskip("psycopg")
+    pg_sql = adapt_sql_for_postgres(sql)
+    with psycopg.connect(PG_URL, prepare_threshold=None, autocommit=True, connect_timeout=10) as conn:
+        try:
+            conn.execute(pg_sql, (None,) * pg_sql.count("%s"))
+            refused = False
+        except psycopg.errors.IndeterminateDatatype:
+            refused = True
+    assert refused is untyped
 
 
 def test_pg_shaped_create_path_has_no_other_obstacle(env, monkeypatch):

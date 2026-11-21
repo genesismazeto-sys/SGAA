@@ -159,7 +159,8 @@ def test_field_fills_accent_primary_hover_and_focus_use_their_tokens():
     assert _rule(modern, ".btn.primary:hover").strip() == "background:var(--btn-primary-strong); border-color:var(--btn-primary-strong);"
     assert "background:var(--field-bg)" in _rule(_read("templates/admin_atividades.html"), "#grupos-modal .presets-col-right input.control")
     assert "background:var(--field-bg)" in _rule(_read("templates/admin_acesso.html"), ".access-scope-card select")
-    assert "background:var(--field-bg)" in _rule(_read("templates/admin_requisicoes.html"), "#req-presets-modal .presets-col-right textarea.control")
+    # The Requisições presets rules live in their component stylesheet (moved unchanged by 5b989cd).
+    assert "background:var(--field-bg)" in _rule(_read("static/css/components/request-presets.css"), "#req-presets-modal .presets-col-right textarea.control")
     cards = _read("static/css/components/list-cards.css")
     assert "border-color:var(--accent-blue)" in _rule(cards, "#sort-menu .menu-item.selected")
     assert "border-color:var(--accent-blue)" in _rule(cards, ".impresso-card:hover:not(.selected)")
@@ -177,7 +178,7 @@ def test_surface_layer_fills_use_the_surface_token():
         assert re.search(r"background\s*:\s*var\(--surface\)", _rule(modern, selector)), selector
     assert "background:var(--surface)" in _rule(_read("templates/admin_banco_dados.html"), ".db-folder-btn-close")
     for rel, prefix in (("templates/admin_atividades.html", "#grupos-modal .actions-mini #grp-"),
-                        ("templates/admin_requisicoes.html", "#req-presets-modal .actions-mini #preset-")):
+                        ("static/css/components/request-presets.css", "#req-presets-modal .actions-mini #preset-")):
         source = _read(rel)
         for selector in (prefix + "add", prefix + "del:hover"):
             assert "background:var(--surface)" in _rule(source, selector), (rel, selector)
@@ -228,7 +229,7 @@ def test_info_and_danger_families_are_used_at_their_current_values():
     assert "border-color:var(--danger-border)" in _rule(_read("static/css/components/form.css"), '.file-list-item[data-state="error"]')
     grupos = _read("templates/admin_atividades.html")
     assert "background:var(--info-bg); border-color:var(--info-border);" in _rule(grupos, "#grupos-modal .menu-item.is-selected")
-    presets = _read("templates/admin_requisicoes.html")
+    presets = _read("static/css/components/request-presets.css")
     assert "background:var(--info-bg); border-color:var(--info-border); color:var(--info-text);" in _rule(presets, ".presets-ph:hover")
 
 

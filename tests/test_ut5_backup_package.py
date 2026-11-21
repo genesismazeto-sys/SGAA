@@ -169,7 +169,13 @@ CANONICAL_ORCHESTRATOR_SYMBOLS = (
 )
 
 
-def _canonical_database_fingerprint() -> tuple[int, str]:
+def _canonical_database_fingerprint() -> tuple[int, str] | None:
+    """Size and hash of the canonical database.db, or ``None`` where it does not exist.
+
+    The file is gitignored: a clean checkout has none, and the CLI must not create it either.
+    """
+    if not CANONICAL_DATABASE.exists():
+        return None
     data = CANONICAL_DATABASE.read_bytes()
     return len(data), hashlib.sha256(data).hexdigest()
 
@@ -472,7 +478,7 @@ def test_cli_backup_sync_runs_isolated_with_app_context_only(tmp_path):
         EXTERNAL_BACKUP_ENABLED="0",
     )
 
-    before_size, before_hash = _canonical_database_fingerprint()
+    before = _canonical_database_fingerprint()
 
     result = subprocess.run(
         [sys.executable, "-B", "-m", "app.backup.sync"],
@@ -483,11 +489,11 @@ def test_cli_backup_sync_runs_isolated_with_app_context_only(tmp_path):
         timeout=60,
     )
 
-    after_size, after_hash = _canonical_database_fingerprint()
-    # (D) canonical database.db size/hash unchanged.
-    assert (after_size, after_hash) == (before_size, before_hash), (
-        "canonical database.db was mutated by the CLI run: "
-        f"before=({before_size}, {before_hash}) after=({after_size}, {after_hash})"
+    after = _canonical_database_fingerprint()
+    # (D) canonical database.db size/hash unchanged -- or still absent.
+    assert after == before, (
+        "canonical database.db was created or mutated by the CLI run: "
+        f"before={before} after={after}"
     )
 
     assert result.returncode == 0, (

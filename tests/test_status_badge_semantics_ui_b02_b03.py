@@ -172,36 +172,50 @@ def test_b3_pendente_and_deferida_parcialmente_no_longer_collide():
     )
 
 
-def test_b4_shared_tones_are_only_within_one_semantic_category():
-    """Two statuses may share a tone only inside the same category.
+def _shared_tone_violations(tones):
+    """Why each status breaks its shared tone's category; empty when every share is justified.
 
-    caution  = open, no final decision, student-editable, non-notifying.
+    caution  = open: the classification may still be corrected, no grant or denial.
     negative = terminal, nothing granted.
+    Since v18 a return (Devolvida) notifies the student, so notification does
+    not define the open category; editability does.
     """
-    from app.request_email_notifications import (
-        FINAL_DECISION_STATUSES,
-        NON_NOTIFYING_STATUSES,
-    )
+    from app.prod1_request_reclassification_ddl import RECLASSIFIABLE_REQUEST_STATUSES
 
     by_tone: dict[str, set[str]] = {}
-    for name, tone in REQUEST_STATUS_TONES.items():
+    for name, tone in tones.items():
         by_tone.setdefault(tone, set()).add(name)
+    violations = []
+    for name in sorted(by_tone.get("caution", ())):
+        if name not in RECLASSIFIABLE_REQUEST_STATUSES:
+            violations.append(f"{name} shares the 'open / awaiting action' tone but is no longer editable")
+    multi = {t for t, names in by_tone.items() if len(names) > 1}
+    if multi - {"caution", "negative"}:
+        violations.append(f"an unjustified shared tone appeared: {sorted(multi)}")
+    return by_tone, violations
 
+
+def test_b4_shared_tones_are_only_within_one_semantic_category():
+    """Two statuses may share a tone only inside the same category (see ``_shared_tone_violations``)."""
+    from app.request_email_notifications import FINAL_DECISION_STATUSES
+
+    by_tone, violations = _shared_tone_violations(REQUEST_STATUS_TONES)
+    assert violations == []
     assert by_tone["caution"] == {"Pendente", "Devolvida"}
-    for name in by_tone["caution"]:
-        assert name in NON_NOTIFYING_STATUSES, (
-            f"{name} shares the 'open / awaiting action' tone but is a "
-            "notifying final decision"
-        )
 
     assert by_tone["negative"] == {"Indeferida", "Encerrada"}
     assert "Indeferida" in FINAL_DECISION_STATUSES
+    assert {t for t, names in by_tone.items() if len(names) > 1} == {"caution", "negative"}
 
-    # Every tone with more than one member must be justified above.
-    multi = {t for t, names in by_tone.items() if len(names) > 1}
-    assert multi == {"caution", "negative"}, (
-        f"an unjustified shared tone appeared: {sorted(multi)}"
-    )
+
+@pytest.mark.parametrize(
+    "status,tone",
+    [("Deferida Parcialmente", "caution"), ("Indeferida", "caution"), ("Deferida", "info")],
+    ids=["partial-grant-as-open", "denial-as-open", "unjustified-shared-tone"],
+)
+def test_b4_negative_control_an_unjustified_share_is_caught(status, tone):
+    _by_tone, violations = _shared_tone_violations({**REQUEST_STATUS_TONES, status: tone})
+    assert violations
 
 
 # ---------------------------------------------------------------------------

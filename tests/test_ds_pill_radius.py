@@ -40,7 +40,7 @@ ROUND_ALLOWED = {
     ("static/css/modern-style.css", ".badge.status-pill::before"): "status dot",
     ("templates/admin_banco_dados.html", ".db-provider-head .db-badge::before"): "status dot",
     ("templates/admin_requisicoes.html", ".pedido-actions-float .act-count"): "selection counter circle",
-    ("templates/admin_requisicoes.html", ".presets-ph"): "placeholder-insert button",
+    ("static/css/components/request-presets.css", ".presets-ph"): "placeholder-insert button",
 }
 
 # Every rule that consumes the pill token, by owner. A new consumer is a

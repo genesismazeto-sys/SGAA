@@ -177,8 +177,12 @@ def _pg_verdict(conn, table, row, index):
 def test_pg_authority_is_v15(db):
     conn = _raw(db)
     try:
-        assert pg_schema.PG_SCHEMA_VERSION == 16
-        assert pg_schema.validate_pg_schema(conn)["schema_version"] == 16
+        # v15 is in the authority, and a fresh database validates at the owner's head.
+        assert pg_schema.PG_SCHEMA_VERSION >= 15
+        assert pg_schema.validate_pg_schema(conn)["schema_version"] == pg_schema.PG_SCHEMA_VERSION
+        assert [tuple(r) for r in conn.execute(
+            "SELECT version, name FROM schema_migrations WHERE version = 15").fetchall()] == [
+            (15, "canonical_document_custody")]
     finally:
         conn.close()
 

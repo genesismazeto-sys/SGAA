@@ -137,12 +137,16 @@ U5A_CURRENT_STATE_SHA256 = "dc66f9b0b4c20eaa45d922f657bd4d3972ccea57e0515fa24943
 #: indexes, six triggers and baseline row 14; STORAGE S3-A (prod-1/v15) added
 #: the canonical ``supabase`` provider to the ``admin_arquivos`` provider CHECK
 #: (restored below to its declared U5-A expression; the custody trigger
-#: FUNCTION bodies are not a U5-A section) and baseline row 15.  Everything
-#: else in the U5-A sections must still be byte-identical.
+#: FUNCTION bodies are not a U5-A section) and baseline row 15.  v18 (returns
+#: notify) adds ``Devolvida`` to the ``requisicao_email_eventos`` decision CHECK
+#: and baseline row 18; v19 (DOCX fill-in templates) adds two tables, their
+#: index, two triggers and baseline row 19.  Everything else in the U5-A
+#: sections must still be byte-identical.
 LATER_ADDED_TABLES = (
     "usuarios_foto", "alunos_foto", "reportes_captura",
     "storage_objects", "storage_upload_intents", "storage_worker_status",
     "auth_throttle_events", "admin_import_previews",
+    "modelo_documento_arquivos", "atividade_versao_modelos",
 )
 #: ``table: (column, foreign key or None, check or None)``.
 LATER_ADDED_COLUMNS = {
@@ -156,21 +160,27 @@ LATER_ADDED_INDEXES = (
     "ux_admin_arquivos_storage_object", "idx_cloud_accounts_provider_account_key",
     "idx_auth_throttle_events_lookup", "idx_auth_throttle_events_expiry",
     "idx_admin_import_previews_expiry",
+    "idx_atividade_versao_modelos_versao",
 )
 LATER_ADDED_TRIGGERS = (
     "trg_requisicao_arquivos_storage_object_insert", "trg_requisicao_arquivos_storage_object_update",
     "trg_admin_arquivos_storage_object_insert", "trg_admin_arquivos_storage_object_update",
     "trg_storage_upload_intents_transition", "trg_storage_objects_drive_account_bound",
+    "trg_modelo_documento_arquivos_immutable", "trg_atividade_versao_modelos_history",
 )
 # v17 (request reclassification) changes a trigger function body only: its
 # declaration and every table are U5-A's, so the version row is its whole delta.
-LATER_ADDED_BASELINE_VERSIONS = (13, 14, 15, 16, 17)
+LATER_ADDED_BASELINE_VERSIONS = (13, 14, 15, 16, 17, 18, 19)
 #: ``(table, check name): (U5-A expression, later expression)`` -- a later unit's
 #: declared change of an existing CHECK, reverted before the digest.
 LATER_CHANGED_CHECKS = {
     ("admin_arquivos", "ck_admin_arquivos_provider"): (
         "provider IN ('local_legacy','google')",
         "provider IN ('local_legacy','google','supabase')",
+    ),
+    ("requisicao_email_eventos", "ck_requisicao_email_eventos_status_decisao"): (
+        "status_decisao IN ('Deferida','Deferida Parcialmente','Indeferida')",
+        "status_decisao IN ('Deferida','Deferida Parcialmente','Indeferida','Devolvida')",
     ),
 }
 U5A_SCHEMA_VERSION = 12
@@ -975,6 +985,13 @@ def test_control_u5a_guard_still_detects_an_undeclared_change():
     payload = copy.deepcopy(pg_schema.pg_contract_payload())
     payload["tables"]["usuarios_foto_extra"] = payload["tables"]["usuarios_foto"]
     assert _sections_digest(_u5a_sections(payload)) != U5A_CURRENT_STATE_SHA256
+    # A declared CHECK change covers exactly its declared expression, nothing beside it.
+    payload = copy.deepcopy(pg_schema.pg_contract_payload())
+    [check] = [ck for ck in payload["tables"]["requisicao_email_eventos"]["checks"]
+               if ck["name"] == "ck_requisicao_email_eventos_status_decisao"]
+    check["expression"] = check["expression"].replace("'Devolvida'", "'Devolvida','Encerrada'")
+    with pytest.raises(AssertionError, match="declared later CHECK change missing"):
+        _u5a_sections(payload)
 
 
 def test_control_no_unaccent_or_extension_dependency():

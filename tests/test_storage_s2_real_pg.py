@@ -182,8 +182,10 @@ def test_fresh_v14_authority_validates_and_is_empty(db):
     conn = _raw(db)
     try:
         status = pg_schema.validate_pg_schema(conn)
-        # The v15 head (STORAGE S3-A) adds no trigger: it re-declares the custody functions.
-        assert (status["schema_version"], status["trigger_count"]) == (16, 17)
+        # The fresh authority validates at the owner's head, whatever later units added on top
+        # of v14; the head is pinned by the schema guards, not here.
+        assert status["schema_version"] == pg_schema.PG_SCHEMA_VERSION >= 14
+        assert status["trigger_count"] == len(pg_schema.pg_contract_payload()["triggers"])
         assert [tuple(r) for r in conn.execute(
             "SELECT version, name FROM schema_migrations WHERE version = 14").fetchall()] == [(14, "canonical_storage")]
         for table in ("storage_objects", "storage_upload_intents", "storage_worker_status"):
