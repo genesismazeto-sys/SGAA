@@ -1,6 +1,7 @@
 # SPEC DS-CONSISTENCY-01 — One section card and one button contract
 
-Status: CLOSED 2026-11-21 (pushed on `backlog/ds-consistency-01`; integration awaits owner acceptance)
+Status: CLOSED 2026-11-21 — accepted by the owner and integrated into the development branch by fast-forward
+(not deployed; production HOLD)
 Charter: the owner approved the DS consolidation proposal on 2026-11-21 ("Aprovar e aplicar tudo"),
 including the defaults it put to him (four buttons in two rows of two; one order for the request decision
 buttons; header and in-row buttons unchanged). Publication: push to `backlog/ds-consistency-01`;
