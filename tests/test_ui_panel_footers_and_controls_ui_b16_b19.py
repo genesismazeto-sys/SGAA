@@ -70,7 +70,7 @@ def test_banco_destinos_footer_and_provider_separator_do_not_stack():
     destinos = source.split("{# ────────── Destinos e sincronização ────────── #}", 1)[1]
     destinos = destinos.split("{# ────────── Operações ────────── #}", 1)[0]
     assert re.search(
-        r'<div class="db-actions">.*?Salvar destinos.*?</div>\s*</form>\s*'
+        r'<div class="db-actions btn-row">.*?Salvar destinos.*?</div>\s*</form>\s*'
         r"\{% else %\}.*?\{% endif %\}\s*<div class=\"db-drive-sep\"></div>",
         destinos,
         re.S,
@@ -88,11 +88,11 @@ def test_banco_three_sections_each_end_in_one_footer_form():
         start = source.index(f'<span class="db-section-label">{label}</span>')
         article = source[start: source.index("</article>", start)]
         assert re.search(
-            r'<div class="db-actions">(?:(?!</div>).)*' + re.escape(action),
+            r'<div class="db-actions btn-row">(?:(?!</div>).)*' + re.escape(action),
             article,
             re.S,
         ), label
-        footer = article.split('<div class="db-actions">')[-1].split("</form>", 1)[0]
+        footer = article.split('<div class="db-actions btn-row">')[-1].split("</form>", 1)[0]
         assert "style=" not in footer, label
 
 

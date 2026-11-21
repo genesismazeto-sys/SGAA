@@ -23,7 +23,7 @@
     .modal-header{ padding:10px 12px; }
 
     .modal-body{ padding:10px 12px; }
-    .modal-footer{ justify-content:center; padding:10px 12px; }
+    .modal-footer{ padding:10px 12px; }
     /* F-5C: was 0.78 (717.59px), an unmotivated singleton — it made this
        form WIDER than the requisicao form while living in a SMALLER modal
        card (1020 vs 1200), leaving the tightest label gutter in the system.
@@ -212,7 +212,7 @@
         </div>
       </form>
     </div>
-    <div class="modal-footer">
+    <div class="modal-footer btn-row">
       <button class="btn" id="admin-arquivo-cancelar" type="button">Cancelar</button>
       {% if can_arquivos_edit %}
         <button class="btn primary btn--raised" type="submit" form="admin-arquivo-form"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar</span></button>

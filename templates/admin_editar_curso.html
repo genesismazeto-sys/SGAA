@@ -57,7 +57,7 @@
     {#- No footer in view mode: the page-level Back action lives in the header.
         Same shape as admin_catalogo_versao_form.html after UI-A01. -#}
     {% if not readonly %}
-      <div class="form-actions center">
+      <div class="form-actions center btn-row">
         <a class="btn" href="{{ request.args.get('return_to') or url_for('admin_cursos') }}">Cancelar</a>
         <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar</span></button>
       </div>

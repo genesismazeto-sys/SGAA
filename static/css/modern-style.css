@@ -445,7 +445,7 @@ body{
 .rejection-decision .modal-body p{ margin:0 0 8px; }
 .rejection-decision .modal-body ul{ margin:0; padding-left:18px; display:grid; gap:6px; }
 .rejection-decision .modal-body strong{ color:var(--text-primary); font-weight:600; }
-.rejection-decision .modal-footer{ justify-content:flex-end; flex-wrap:nowrap; padding:12px 20px 16px; }
+.rejection-decision .modal-footer{ padding:12px 20px 16px; }
 @media (max-width:640px){
   .rejection-decision .modal-footer{ flex-direction:column; align-items:stretch; }
 }
@@ -1193,6 +1193,30 @@ form .btn:has(.lucide[data-lucide="save"], .lucide.lucide-save, .btn-icon-save) 
 .app-main .toolbar .actions{
   flex-wrap:wrap;
   row-gap:8px;
+}
+/* The button contract on the phone (DS README §3.1, DS-CONSISTENCY-01): no
+   empty space beside the toolbar's controls. The search takes the first line
+   (phone block above); sort and filter share the next; the action buttons
+   fill theirs, and when they do not fit, the last one -- the primary, e.g.
+   Adicionar -- goes on top with the whole line and the others share the line
+   below. A toolbar with four actions (.actions--pairs) takes two rows of two,
+   the primary bottom right. Kept here, after the wrap rule above, because the
+   toolbar is this sheet's component and these selectors must outrank it. */
+@media (max-width:767.98px){
+  .app-main .toolbar .filters,
+  .app-main .toolbar .actions{ flex:1 1 100%; }
+  .app-main .toolbar .filters > .input-group:not([id^="grp-busca"]){ flex:1 1 0; min-width:max-content; }
+  .app-main .toolbar .filters > .input-group:not([id^="grp-busca"]) > .btn,
+  .app-main .toolbar .filters > .input-group:not([id^="grp-busca"]) > button.input-chip:only-child{
+    flex:1 1 auto; justify-content:center;
+  }
+  .app-main .toolbar .actions{ flex-wrap:wrap-reverse; }
+  .app-main .toolbar .actions > *{ flex:1 1 0; min-width:max-content; }
+  .app-main .toolbar .actions > .btn{ justify-content:center; }
+  .app-main .toolbar .actions > .toolbar-actions-shell{ display:flex; }
+  .app-main .toolbar .actions > .toolbar-actions-shell > .btn{ flex:1 1 auto; justify-content:center; }
+  .app-main .toolbar .actions.actions--pairs{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .app-main .toolbar .actions.actions--pairs > *{ min-width:0; }
 }
 .app-main .toolbar .toolbar-actions-shell > .btn{
   padding-right: calc(var(--btn-px) - 4px);

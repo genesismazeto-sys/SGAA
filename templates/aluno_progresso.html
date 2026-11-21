@@ -4,72 +4,18 @@
 
 {% block extra_head %}
 <style>
-  .cfg-card {
-    background:var(--surface);
-    border:1px solid var(--border-strong);
-    border-radius:var(--radius);
-    overflow:hidden;
-  }
-  .cfg-card-head {
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:12px;
-    padding:7px 16px;
-    background:var(--bg-underpanel) !important;
-  }
-  .cfg-section-label {
-    font-size:13px;
-    font-weight:500;
-    color:var(--text-secondary);
-  }
-  .cfg-chips {
-    display:flex;
-    align-items:center;
-    gap:6px;
-    flex-wrap:wrap;
-    justify-content:flex-end;
-  }
-  .cfg-chip {
-    display:inline-flex;
-    align-items:center;
-    height:24px;
-    padding:0 8px;
-    border-radius:var(--radius);
-    background:var(--bg);
-    border:0.5px solid var(--border);
-    color:var(--text-secondary);
-    font-size:12px;
-    font-weight:400;
-    white-space:nowrap;
-  }
-  .cfg-chip.is-active {
-    background:var(--info-bg);
-    border-color:transparent;
-    color:var(--accent-blue);
-    font-weight:500;
-  }
+  /* The card is the shared section card (components/section-card.css);
+     this page keeps its under-panel surface, a block body and its count chips. */
+  .progresso-block .cfg-card-head,
+  .progresso-block .cfg-card-body,
+  .progresso-block .cfg-card-footer { background:var(--bg-underpanel); }
+  .progresso-block .cfg-card-body { display:block; }
+  .progresso-block .cfg-chips { justify-content:flex-end; }
   .cfg-chip.progresso-type-count {
     min-height:24px;
     padding:0 8px;
     border-radius:var(--radius);
     font-size:12px;
-  }
-  .cfg-chip.progresso-type-count.is-active {
-    background:var(--info-bg);
-    border-color:transparent;
-    color:var(--accent-blue);
-    font-weight:500;
-  }
-  .cfg-card-body {
-    padding:16px;
-    border-top:1px solid var(--border-strong);
-    background:var(--bg-underpanel) !important;
-  }
-  .cfg-card-footer {
-    padding:11px 16px;
-    border-top:1px solid var(--border-strong);
-    background:var(--bg-underpanel) !important;
   }
   /* The DS .form-note under the section description. It wraps at narrow
      widths, so the icon sits on the first line (the .form-note--guide
@@ -79,12 +25,6 @@
     margin-top:6px;
   }
   .progresso-type-note > .lucide { margin-top:1px; }
-  .cfg-footer-note {
-    margin:0;
-    font-size:12px;
-    color:var(--text-tertiary);
-    line-height:1.4;
-  }
 </style>
 {% endblock %}
 

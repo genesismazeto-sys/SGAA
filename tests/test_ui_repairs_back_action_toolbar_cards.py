@@ -302,7 +302,8 @@ def test_the_grouping_matches_every_unreported_toolbar():
     for name in REFERENCE_TOOLBARS:
         html = (ROOT / "templates" / f"{name}.html").read_text(encoding="utf-8")
         parser = _toolbar(html)
-        classes = [cls for _tag, cls, _id in parser.children]
+        # The group's first class is its role; `.actions--pairs` (DS-CONSISTENCY-01) is a layout modifier.
+        classes = [cls.split()[0] for _tag, cls, _id in parser.children]
         assert classes == ["filters", "actions"], (name, classes)
         assert any(
             "toolbar-actions-shell" in cls or "btn" in cls

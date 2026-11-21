@@ -60,8 +60,8 @@
     #grupos-modal .modal-filter{ margin-bottom:0; padding:0 24px 10px; grid-template-columns:1fr; border-bottom:0; }
     #grupos-modal .grupos-tipo-label{ display:block; margin-bottom:6px; font-size:11px; font-weight:500; color:#71717a; text-transform:uppercase; letter-spacing:.04em; }
     #grupos-modal .grupos-divider{ margin:0 24px; border:0; border-top:1px solid #e4e4e7; }
-    .modal-footer{ justify-content:center; padding:10px 12px; border-top:1px solid var(--border); }
-    #grupos-modal .modal-footer{ justify-content:center; padding:10px 12px; border-top:1px solid var(--border); }
+    .modal-footer{ padding:10px 12px; border-top:1px solid var(--border); }
+    #grupos-modal .modal-footer{ padding:10px 12px; border-top:1px solid var(--border); }
     .section-title{ font-weight: 600; color: var(--text-secondary); }
     .badge{ display:inline-flex; align-items:center; justify-content:center; height:18px; min-width:18px; padding:0 6px; font-size:11px; border:1px solid var(--border-strong); border-radius:var(--pill-radius); background:var(--surface); color:var(--text-secondary); }
     .ellipsis{ max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -162,7 +162,7 @@
 
   </div>
 
-  <div class="actions">
+  <div class="actions actions--pairs">
     {% if auth_can('atividades', 'full') %}
       <button class="btn" id="btn-grupos" type="button">
         <i class="lucide" data-lucide="layers"></i> Grupos
@@ -254,9 +254,9 @@
         </div>
       </div>
     </div>
-    <div class="modal-footer">
+    <div class="modal-footer btn-row">
       <button class="btn" id="grupos-ok" type="button">Fechar</button>
-      <button class="btn btn-primary" id="grupos-save" type="button" title="Salvar alterações"><i class="lucide btn-icon-save" data-lucide="check"></i> Salvar</button>
+      <button class="btn primary" id="grupos-save" type="button" title="Salvar alterações"><i class="lucide btn-icon-save" data-lucide="check"></i> Salvar</button>
     </div>
   </div>
 </div>
@@ -276,9 +276,9 @@
           {% include 'partials/admin_importar_atividades_form.html' %}
         </div>
       </div>
-      <div class="modal-footer">
-        <button type="submit" class="btn primary btn--raised"><i class="lucide" data-lucide="scan-search"></i> Validar e gerar preview</button>
+      <div class="modal-footer btn-row">
         <button type="button" class="btn" id="importar-atividades-cancel">Cancelar</button>
+        <button type="submit" class="btn primary btn--raised"><i class="lucide" data-lucide="scan-search"></i> Validar e gerar preview</button>
       </div>
     </form>
   </div>

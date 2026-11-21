@@ -59,7 +59,7 @@
     .modal-card.access-confirm-card{ width:min(460px, calc(100vw - 32px)); }
     .modal-header{ padding:10px 12px; }
     .modal-body{ padding:12px 16px; }
-    .modal-footer{ justify-content:flex-end; padding:10px 12px; }
+    .modal-footer{ padding:10px 12px; }
     /* Content of this modal's header: a subtitle the shared component does not
        define, and the icon-only close button. */
     .modal-header p{ margin:4px 0 0; color:var(--text-secondary); font-size:12.5px; line-height:1.45; max-width:62ch; }
@@ -367,7 +367,7 @@
         </div>
       </div>
     </div>
-    <div class="access-defaults-footer">
+    <div class="access-defaults-footer btn-row">
       <button class="btn primary btn--raised" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ user_message("Salvar") }}</span></button>
     </div>
   </form>
@@ -403,7 +403,7 @@
   </div>
 
   <div class="actions">
-    <div class="access-toolbar-actions">
+    <div class="access-toolbar-actions btn-row">
       <div class="toolbar-actions-shell access-actions-shell">
         <button class="btn" type="button" id="btn-acesso-actions" aria-haspopup="menu" aria-expanded="false">
           <i class="lucide" data-lucide="rows-3"></i>
@@ -567,9 +567,9 @@
         </div>
         <div class="access-email-tally">
           <span class="badge status-pill status-info" id="access-email-progress-state">Em andamento</span>
-          <span class="badge status-pill status-neutral" data-email-tally="sent">Enviados: <strong>0</strong></span>
-          <span class="badge status-pill status-neutral" data-email-tally="failed">Falhas: <strong>0</strong></span>
-          <span class="badge status-pill status-neutral" data-email-tally="indeterminate">Indeterminados: <strong>0</strong></span>
+          <span class="cfg-chip" data-email-tally="sent">Enviados: <strong>0</strong></span>
+          <span class="cfg-chip" data-email-tally="failed">Falhas: <strong>0</strong></span>
+          <span class="cfg-chip" data-email-tally="indeterminate">Indeterminados: <strong>0</strong></span>
         </div>
         <p class="sr-only" id="access-email-progress-live" aria-live="polite"></p>
       </section>
@@ -612,7 +612,7 @@
       <p id="access-email-invalid" class="form-note access-email-note"></p>
       <ul id="access-email-results" class="access-email-results" aria-label="Destinatários e resultados"></ul>
     </div>
-    <div class="modal-footer">
+    <div class="modal-footer btn-row">
       <button class="btn" type="button" id="access-email-cancel">Cancelar</button>
       <button class="btn primary" type="button" id="access-email-submit" disabled>Confirmar envio</button>
     </div>
@@ -702,7 +702,7 @@
                         <div>
                           <strong>{{ item.label }}</strong>
                         </div>
-                        <span class="badge status-pill status-neutral" data-resource-effective-pill="{{ item.resource }}" data-scope="none">Nenhum</span>
+                        <span class="cfg-chip" data-resource-effective-pill="{{ item.resource }}" data-scope="none">Nenhum</span>
                       </div>
                       <select name="scope_{{ item.resource }}" data-resource-select="{{ item.resource }}">
                         {% for option in access_scope_options %}
@@ -747,7 +747,7 @@
       </form>
     </div>
 
-    <div class="modal-footer">
+    <div class="modal-footer btn-row">
       <button class="btn" type="button" id="access-modal-cancel">Cancelar</button>
       <button class="btn primary btn--raised" type="submit" form="access-form"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar acesso</span></button>
     </div>
@@ -763,7 +763,7 @@
       </div>
       <button class="btn" type="button" id="access-confirm-close" aria-label="Fechar"><i class="lucide" data-lucide="x"></i></button>
     </div>
-    <div class="modal-footer">
+    <div class="modal-footer btn-row">
       <button class="btn" type="button" id="access-confirm-cancel">Cancelar</button>
       <button class="btn primary btn--raised" type="button" id="access-confirm-submit">Confirmar</button>
     </div>
@@ -837,7 +837,7 @@
       </form>
     </div>
 
-    <div class="modal-footer">
+    <div class="modal-footer btn-row">
       <button class="btn" type="button" id="access-password-modal-cancel">Cancelar</button>
       <button class="btn primary btn--raised" type="submit" form="access-password-form"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar senha</span></button>
     </div>
@@ -1119,8 +1119,8 @@
         select.disabled = student;
         if (defaultLabel) defaultLabel.textContent = scopeLabels[defaultScope] || 'Nenhum';
         if (effectivePill){
-          // The scope is an access-level value, not a status, so every card
-          // keeps the same neutral DS pill and carries the value in data-scope.
+          // The scope is an access-level value, not a status: a DS chip
+          // (status pills carry statuses only), the value in data-scope.
           effectivePill.textContent = scopeLabels[effectiveScope] || 'Nenhum';
           effectivePill.dataset.scope = effectiveScope;
         }

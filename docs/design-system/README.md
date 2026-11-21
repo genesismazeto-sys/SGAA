@@ -37,6 +37,10 @@ static/css/
                           shell (a dead password link), §2.6f.
     auth-alert.css      ← the feedback banner of every public auth page
                           (danger / positive / info), §2.6g.
+    section-card.css    ← the section card (.cfg-card head / body / footer),
+                          §2.8. Loaded globally.
+    actions.css         ← the button placement contract (.btn-row), §3.1.
+                          Loaded globally.
 
 templates/components/
   design_system_css.html  ← THE load-order contract. One owner, one list.
@@ -730,6 +734,36 @@ See [form-contract.md](form-contract.md) for the measured detail.
 * `.content-block-body` may **wrap** when its children no longer fit, instead of
   running past the card edge. `gap:16px` already supplies the row gap.
 
+### 2.8 Section card contract (DS-CONSISTENCY-01)
+
+A section or settings panel is the shared section card, owned by
+`components/section-card.css` (the owner's reference is "Prazo de adequação"
+on Configurações):
+
+```
+.cfg-card
+  .cfg-card-head     .cfg-section-label (title)  ·  .cfg-chips (right)
+  .cfg-card-body     the content
+  .cfg-card-footer   .cfg-footer-left (.cfg-footer-note)  ·  .cfg-footer-actions.btn-row (right)
+```
+
+* Header tags are chips (`.cfg-chip`, `.is-active` for the value chip), never
+  status pills (§2.9).
+* Footer buttons follow §3.1: on the right on the desktop; on the phone the
+  note sits on top and the buttons fill the line below.
+* Multi-line notes are justified with the last line at the start.
+* A page may restyle the surface (Reportar and Progresso keep their
+  under-panel fill) but never redefine the anatomy. Before this phase the rules
+  were copied into three templates; a new copy fails
+  `test_the_section_card_is_defined_once`.
+
+### 2.9 Chip versus status pill (DS-CONSISTENCY-01)
+
+`.badge.status-pill` (the dotted pill, `--status-*` tones) carries a
+**status** only: Pendente, Deferida, Ativo, Conectado, Em andamento. A label,
+a level, a count or a tag is a chip (`.cfg-chip`): "Admin-only", "Total",
+"Enviados: 3", "28 atividade(s)".
+
 ---
 
 ## 3. The button contract
@@ -752,6 +786,44 @@ just want the standard primary, use `.btn.primary` and nothing else.
 > cascade order, not a decision. DS-3 preserved the rendering exactly and made
 > the intent explicit. Do not reintroduce a `.btn.primary` rule in a component
 > stylesheet.
+
+### 3.1 Placement contract (DS-CONSISTENCY-01)
+
+Owner: `components/actions.css`. A group of action buttons is a `.btn-row`:
+card footers, modal footers (`.modal-footer.btn-row`), data-entry form
+actions (`.form-actions.center.btn-row`) and page or section actions. The list
+toolbar implements the same rules in `modern-style.css`, its owner.
+
+**Order.** Secondary action(s) first, the primary last: the primary is always
+the rightmost button and always blue (`btn primary`; `btn-primary` does not
+exist in the DS and renders white).
+
+**Desktop.** Card footers, modals and page actions: the buttons together on the
+right (`.btn-row`). Data-entry forms (Salvar + Voltar / Cancelar): centered
+(`.form-actions.center`, or `.btn-row--center`).
+
+**Phone (below 768px).** No empty space beside the buttons. Every visible
+button grows from a zero basis and keeps its label as its minimum width, so:
+
+| Buttons | Layout |
+|---|---|
+| 1 | the whole line |
+| 2 | side by side, half each, primary on the right; one above the other (primary on top) when a label does not fit half the line |
+| 3 | one line when the labels fit; otherwise the primary on top with the whole line and the other two sharing the line below |
+| 4 | `.btn-row--pairs`: two rows of two, primary bottom right |
+
+The rows wrap in reverse (`flex-wrap:wrap-reverse`), which is what puts the
+primary on top. Hidden buttons (`[hidden]`) take no part, so a row may carry
+mode-dependent buttons. A `<form>` that only wraps one button is transparent
+to the row (`display:contents`).
+
+**Outside the contract** (owner decision, DS-CONSISTENCY-01 D4): the back
+button in a page header, header actions such as Nova versão / Criar versão /
+Nova requisição, and buttons inside a row or field (Baixar, Retificar,
+Adicionar comprovante, Conectar Microsoft).
+
+Enforced by `test_ds_button_contract.py`: the static rules and a browser
+contract over every page and modal at 1440 and 390px.
 
 ### No remaining load-order divergence
 

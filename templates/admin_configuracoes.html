@@ -6,59 +6,10 @@
     /* ─── Settings page ────────────────────────────────────────── */
     .cfg-page { display:grid; gap:16px; max-width:780px; margin:0 auto; }
     .cfg-page-header { display:grid; gap:4px; }
-    .cfg-page-note { margin:0; font-size:12.5px; color:var(--text-secondary); line-height:1.45; }
+    .cfg-page-note { margin:0; font-size:12.5px; color:var(--text-secondary); line-height:1.45; text-align:justify; text-align-last:left; }
 
-    /* Card shell — flat surface, no shadow, no gradient */
-    .cfg-card {
-      background:var(--surface);
-      border:1px solid var(--border-strong);
-      border-radius:var(--radius);
-      overflow:hidden;
-    }
-
-    /* ── Card header: section label + status chips ── */
-    .cfg-card-head {
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-      padding:7px 16px;
-    }
-    .cfg-section-label {
-      font-size:13px;
-      font-weight:500;
-      color:var(--text-secondary);
-    }
-    .cfg-chips { display:flex; align-items:center; gap:6px; }
-    /* inactive chip */
-    .cfg-chip {
-      display:inline-flex;
-      align-items:center;
-      height:24px;
-      padding:0 8px;
-      border-radius:var(--radius);
-      background:var(--bg);
-      border:0.5px solid var(--border);
-      color:var(--text-secondary);
-      font-size:12px;
-      font-weight:400;
-      white-space:nowrap;
-    }
-    /* active chip — info bg, no border */
-    .cfg-chip.is-active {
-      background:var(--info-bg);
-      border-color:transparent;
-      color:var(--accent-blue);
-      font-weight:500;
-    }
-
-    /* ── Card body ── */
-    .cfg-card-body {
-      padding:16px;
-      border-top:1px solid var(--border-strong);
-      display:grid;
-      gap:14px;
-    }
+    /* The card itself (.cfg-card, head, chips, body, footer) is the shared
+       section card: static/css/components/section-card.css. */
     /* 2-column field grid */
     .cfg-fields {
       display:grid;
@@ -76,6 +27,8 @@
       font-size:12px;
       color:var(--text-tertiary);
       line-height:1.4;
+      text-align:justify;
+      text-align-last:left;
     }
     .cfg-field input,
     .cfg-field select {
@@ -110,29 +63,6 @@
     #horas_padrao_academica,
     #horas_padrao_extensao { text-align:left; width:40%; }
 
-    /* ── Card footer ── */
-    .cfg-card-footer {
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-      padding:11px 16px;
-      border-top:1px solid var(--border-strong);
-    }
-    .cfg-footer-left {
-      display:flex;
-      align-items:center;
-      gap:10px;
-      min-width:0;
-    }
-    .cfg-footer-left form { margin:0; }
-    .cfg-footer-note {
-      margin:0;
-      font-size:12px;
-      color:var(--text-tertiary);
-      line-height:1.4;
-    }
-
     /* ── Input + toggle na mesma linha ── */
     .cfg-field-bottom-row {
       display:flex;
@@ -153,8 +83,6 @@
     }
     @media (max-width:640px) {
       .cfg-fields { grid-template-columns:1fr; }
-      .cfg-card-footer { flex-direction:column; align-items:flex-start; }
-      .cfg-card-head { flex-wrap:wrap; }
       .cfg-field-bottom-row { flex-wrap:wrap; }
       .cfg-toggle-field > span { white-space:normal; }
     }
@@ -206,9 +134,11 @@
       <div class="cfg-footer-left">
         <p class="cfg-footer-note">Padrão: 160h. Afeta só o valor sugerido.</p>
       </div>
-      <button type="submit" form="horas-padrao-form" class="btn primary">
-        <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar alterações
-      </button>
+      <div class="cfg-footer-actions btn-row">
+        <button type="submit" form="horas-padrao-form" class="btn primary">
+          <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar alterações
+        </button>
+      </div>
     </div>
 
   </div>
@@ -252,9 +182,11 @@
       <div class="cfg-footer-left">
         <p class="cfg-footer-note">Padrão: 7 dias. Use 0 para desativar. O status é atualizado ao abrir o painel ou a lista de requisições.</p>
       </div>
-      <button type="submit" form="return-response-form" class="btn primary">
-        <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar alterações
-      </button>
+      <div class="cfg-footer-actions btn-row">
+        <button type="submit" form="return-response-form" class="btn primary">
+          <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar alterações
+        </button>
+      </div>
     </div>
 
   </div>
@@ -301,6 +233,9 @@
     <!-- Card footer -->
     <div class="cfg-card-footer">
       <div class="cfg-footer-left">
+        <p class="cfg-footer-note">Resetar contagem reinicia a apuração para hoje, sem alterar o histórico das requisições.</p>
+      </div>
+      <div class="cfg-footer-actions btn-row">
         <form method="post" action="{{ url_for('admin_configuracoes_tempo_resposta_resetar') }}"
               onsubmit="return confirm('Resetar a apuração do tempo de resposta para hoje?');">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -308,11 +243,10 @@
             <i class="lucide" data-lucide="rotate-ccw"></i>Resetar contagem
           </button>
         </form>
-        <p class="cfg-footer-note">Reinicia a apuração para hoje, sem alterar o histórico das requisições.</p>
+        <button type="submit" form="response-settings-form" class="btn primary">
+          <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar alterações
+        </button>
       </div>
-      <button type="submit" form="response-settings-form" class="btn primary">
-        <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar alterações
-      </button>
     </div>
 
   </div>

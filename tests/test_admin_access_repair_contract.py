@@ -213,9 +213,9 @@ GLOBAL_CSS = ROOT / "static" / "css" / "modern-style.css"
 
 # The shared primitive every Novo acesso permission card must render. The scope
 # ("Nenhum" / "Leitura" / "Edição" / "Total") is an access-level value, not a
-# status, so the tone is the neutral one for all cards: a success/caution tone
-# would claim a judgement the value does not carry.
-SCOPE_PILL_CLASS = "badge status-pill status-neutral"
+# status: a DS chip, never a status pill (DS-CONSISTENCY-01 -- status pills carry
+# statuses only), the same neutral chip on every card.
+SCOPE_PILL_CLASS = "cfg-chip"
 
 
 def _scope_pill_tags(html: str) -> list[str]:

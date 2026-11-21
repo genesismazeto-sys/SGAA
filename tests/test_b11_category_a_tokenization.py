@@ -142,7 +142,8 @@ def test_surfaces_use_the_surface_token():
         "templates/admin_atividades.html": (".import-help-code",),
         "templates/admin_importar_atividades.html": (".import-help-code",),
         "templates/admin_dashboard.html": (".dashboard-empty-state",),
-        "templates/admin_diagnostico_atividades_versionadas_view.html": (".diag-card",),
+        # DS-CONSISTENCY-01: the diagnostic panels are the shared section card.
+        "static/css/components/section-card.css": (".cfg-card",),
     }
     for rel, selectors in sites.items():
         source = _read(rel)

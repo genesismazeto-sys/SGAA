@@ -160,7 +160,7 @@ def test_editar_aluno_uses_the_shared_header_and_keeps_cancel_save(env):
     assert 'class="main-title detail-header__title">Editar Aluno</h1>' in _header(html)
     assert _back(html) == (f"/admin/turma/{turma}", "Turma")
     content = _content(html)
-    footer = re.search(r'<div class="form-actions center">(.*?)</div>', content, re.S)
+    footer = re.search(r'<div class="form-actions center btn-row">(.*?)</div>', content, re.S)
     assert footer, "Editar lost its form footer"
     assert f'<a class="btn" href="/admin/turma/{turma}">Cancelar</a>' in footer.group(1)
     assert 'class="btn primary" type="submit"' in footer.group(1) and "Salvar" in footer.group(1)

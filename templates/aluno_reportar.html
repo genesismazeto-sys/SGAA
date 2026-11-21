@@ -10,58 +10,12 @@
     .rpt-page { display:grid; gap:40px; }
 
     /* â”€â”€ cfg-card (Relatar problema) â”€â”€ */
-    .cfg-card {
-      background:var(--surface);
-      border:1px solid var(--border-strong);
-      border-radius:var(--radius);
-      overflow:hidden;
-    }
-    .cfg-card-head {
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-      padding:7px 16px;
-      background:var(--bg-underpanel) !important;
-    }
-    .cfg-section-label {
-      font-size:13px;
-      font-weight:500;
-      color:var(--text-secondary);
-    }
-    .cfg-chips { display:flex; align-items:center; gap:6px; }
-    .cfg-chip {
-      display:inline-flex;
-      align-items:center;
-      height:24px;
-      padding:0 8px;
-      border-radius:var(--radius);
-      background:var(--bg);
-      border:0.5px solid var(--border);
-      color:var(--text-secondary);
-      font-size:12px;
-      font-weight:400;
-      white-space:nowrap;
-    }
-    .cfg-card-body {
-      padding:16px;
-      border-top:1px solid var(--border-strong);
-      display:grid;
-      gap:14px;
-      background:var(--bg-underpanel) !important;
-    }
-    .cfg-page-note { margin:0; font-size:12.5px; color:var(--text-secondary); line-height:1.45; }
-    .cfg-card-footer {
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-      padding:11px 16px;
-      border-top:1px solid var(--border-strong);
-      background:var(--bg-underpanel) !important;
-    }
-    .cfg-footer-left { display:flex; align-items:center; gap:10px; min-width:0; }
-    .cfg-footer-note { margin:0; font-size:12px; color:var(--text-tertiary); line-height:1.4; }
+    /* The card is the shared section card (components/section-card.css);
+       this page keeps its under-panel surface. */
+    .rpt-page .cfg-card-head,
+    .rpt-page .cfg-card-body,
+    .rpt-page .cfg-card-footer { background:var(--bg-underpanel); }
+    .cfg-page-note { margin:0; font-size:12.5px; color:var(--text-secondary); line-height:1.45; text-align:justify; text-align-last:left; }
 
     /* â”€â”€ Relatar problema: label esquerda + field-card esticado â”€â”€ */
     .rpt-form { display:grid; gap:14px; }
@@ -137,7 +91,7 @@
     .modal-header{ padding:10px 14px; border-bottom:1px solid var(--border-strong); }
 
     .modal-body{ padding:14px 16px; display:grid; row-gap:12px; }
-    .modal-footer{ justify-content:flex-end; padding:10px 14px; border-top:1px solid var(--border-strong); }
+    .modal-footer{ padding:10px 14px; border-top:1px solid var(--border-strong); }
     .reporte-modal-meta { display:grid; grid-template-columns:1fr 1fr; gap:8px 20px; font-size:13px; margin:0; }
     .reporte-modal-meta dt { font-weight:600; color:var(--text-primary); }
     .reporte-modal-meta dd { margin:0; color:var(--text-secondary); }
@@ -149,8 +103,6 @@
     .reporte-modal-shot { max-width:100%; border-radius:var(--radius); border:1px solid var(--border-strong); display:block; }
 
     @media (max-width:720px) {
-      .cfg-card-footer { flex-direction:column; align-items:flex-start; }
-      .cfg-card-head { flex-wrap:wrap; }
       .rpt-form-row { grid-template-columns:110px 1fr; }
     }
     @media (max-width:480px) {
@@ -230,12 +182,12 @@
     </div>
 
     <div class="cfg-card-footer">
-      <div class="cfg-footer-left">
+      <div class="cfg-footer-actions btn-row">
         <a class="btn" href="{{ url_for('aluno.aluno_dashboard') }}">Voltar</a>
+        <button class="btn primary btn--raised" type="submit" form="report-form">
+          <i class="lucide" data-lucide="send"></i><span class="btn-label">Enviar reporte</span>
+        </button>
       </div>
-      <button class="btn primary btn--raised" type="submit" form="report-form">
-        <i class="lucide" data-lucide="send"></i><span class="btn-label">Enviar reporte</span>
-      </button>
     </div>
 
   </div>
@@ -317,7 +269,7 @@
         <small style="display:block; margin-top:4px; color:var(--text-secondary);">Clique para abrir em tamanho maior.</small>
       </div>
     </div>
-    <div class="modal-footer">
+    <div class="modal-footer btn-row">
       <button class="btn" id="mrm-fechar" type="button">Fechar</button>
     </div>
   </div>

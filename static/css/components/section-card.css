@@ -1,0 +1,98 @@
+/* =============================================================
+   Section card (DS README §2.8) -- DS-CONSISTENCY-01
+   -------------------------------------------------------------
+   The owner's reference panel ("Prazo de adequação", Configurações):
+
+     .cfg-card
+       .cfg-card-head    .cfg-section-label (title)  ·  .cfg-chips (right)
+       .cfg-card-body    the content
+       .cfg-card-footer  .cfg-footer-left (.cfg-footer-note)  ·  .cfg-footer-actions.btn-row (right)
+
+   Header tags are chips (.cfg-chip; .is-active for the value chip), never
+   status pills. Footer buttons follow the button contract (actions.css):
+   on the right on the desktop; on the phone the note sits on top and the
+   buttons fill the line below.
+
+   Until this phase the rules lived as copies in three templates.
+   ============================================================= */
+
+.cfg-card{
+  background:var(--surface);
+  border:1px solid var(--border-strong);
+  border-radius:var(--radius);
+  overflow:hidden;
+}
+
+.cfg-card-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:7px 16px;
+}
+.cfg-section-label{
+  font-size:13px;
+  font-weight:500;
+  color:var(--text-secondary);
+}
+.cfg-chips{ display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
+.cfg-chip{
+  display:inline-flex;
+  align-items:center;
+  height:24px;
+  padding:0 8px;
+  border-radius:var(--radius);
+  background:var(--bg);
+  border:0.5px solid var(--border);
+  color:var(--text-secondary);
+  font-size:12px;
+  font-weight:400;
+  white-space:nowrap;
+}
+.cfg-chip.is-active{
+  background:var(--info-bg);
+  border-color:transparent;
+  color:var(--accent-blue);
+  font-weight:500;
+}
+
+.cfg-card-body{
+  padding:16px;
+  border-top:1px solid var(--border-strong);
+  display:grid;
+  gap:14px;
+}
+
+.cfg-card-footer{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:11px 16px;
+  border-top:1px solid var(--border-strong);
+}
+.cfg-footer-left{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex:1 1 auto;
+  min-width:0;
+}
+.cfg-footer-note{
+  margin:0;
+  font-size:12px;
+  color:var(--text-tertiary);
+  line-height:1.4;
+  /* Wrapped UI text is justified, last line at the start (owner rule). */
+  text-align:justify;
+  text-align-last:left;
+}
+/* With no note, the buttons still sit on the right; the note wraps, the button group never does. */
+.cfg-footer-actions{ margin-left:auto; flex:0 0 auto; }
+
+@media (max-width:767.98px){
+  .cfg-card-head{ flex-wrap:wrap; }
+  /* Note on top, buttons filling the line below (button contract). */
+  .cfg-card-footer{ flex-direction:column; align-items:stretch; }
+  .cfg-footer-actions{ margin-left:0; }
+}

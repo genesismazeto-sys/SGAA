@@ -31,7 +31,7 @@
     .db-meta > div,
     .db-note,
     .db-table td{ overflow-wrap:anywhere; word-break:break-word; min-width:0; }
-    .db-actions{ display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+    .db-actions{ margin-top:14px; }
     .db-table-wrap{ overflow:auto; }
     .db-table{ width:100%; border-collapse:collapse; min-width:760px; font-size:12.5px; }
     .db-table th,
@@ -330,11 +330,6 @@
       gap:10px;
       align-content:start;
     }
-    .db-provider-secondary{
-      display:grid;
-      gap:8px;
-      grid-template-columns:repeat(2, minmax(0, 1fr));
-    }
     .db-provider-secondary form{
       margin:0;
       width:100%;
@@ -402,15 +397,13 @@
       gap:10px;
       min-width:0;
     }
-    .db-provider-config-footer .btn{
-      flex:0 0 auto;
-      width:auto;
+    @media (min-width:768px){
+      .db-provider-config-footer .btn{
+        flex:0 0 auto;
+        width:auto;
+      }
     }
     .db-provider-footer-actions{
-      display:flex;
-      align-items:center;
-      gap:8px;
-      flex-wrap:wrap;
       /* Holds the action group against the right edge both on the shared row
          and on its own line once the footer wraps, which space-between cannot
          do. Same idiom as the footer's own margin-top:auto -- no spacer. */
@@ -554,8 +547,6 @@
       .db-recovery-row,
       .db-drive-grid { grid-template-columns:1fr; }
       .db-toggle-field{ padding-bottom:0; }
-      .db-card form > .db-actions{ justify-content:flex-start; }
-      .db-provider-secondary{ grid-template-columns:1fr; }
       .db-folder-modal{
         align-items:flex-end;
         padding:0;
@@ -567,10 +558,8 @@
       }
     }
     @media (max-width: 520px){
-      .db-provider-secondary{ grid-template-columns:1fr; }
       .db-provider-config-footer{ flex-direction:column; align-items:stretch; }
-      .db-provider-footer-actions{ flex-direction:column; align-items:stretch; margin-left:0; }
-      .db-provider-config-footer .btn{ width:100%; justify-content:center; }
+      .db-provider-footer-actions{ margin-left:0; }
     }
   </style>
 {% endblock %}
@@ -597,7 +586,7 @@
 
   <div class="db-admin-top">
     <article class="db-card">
-      <h2>Compatibilidade futura</h2>
+      <div class="db-card-head"><span class="db-section-label">Compatibilidade futura</span></div>
       <div class="db-meta">
         <div><strong>Versão atual:</strong> {{ schema_status.schema_version }}</div>
         <div><strong>Versão alvo:</strong> {{ schema_status.target_schema_version }}</div>
@@ -607,7 +596,7 @@
 
     {% if file_backup %}
     <article class="db-card">
-      <h2>Backup local</h2>
+      <div class="db-card-head"><span class="db-section-label">Backup local</span></div>
       <p>Snapshots versionados são salvos em uma pasta local controlada pelo sistema antes de qualquer restauração.</p>
       <div class="db-meta">
         <div><strong>Pasta:</strong> {{ local_backup_dir }}</div>
@@ -618,7 +607,7 @@
        are the full-width sections below (app.backup.pg_posture). #}
     {% set protection = database_protection or {'state': 'UNREADABLE'} %}
     <article class="db-card" data-database-protection="postgresql" data-protection-state="{{ protection.state }}">
-      <h2>Proteção do banco</h2>
+      <div class="db-card-head"><span class="db-section-label">Proteção do banco</span></div>
       <p>Backups do PostgreSQL enviados às contas em nuvem e gerações completas do operador, com restauração de teste. O plano do provedor não inclui backup próprio.</p>
       {% if protection.state == 'UNREADABLE' %}
         <p class="db-cloud-store-warning" role="status">Não foi possível ler os registros de backup deste banco.</p>
@@ -634,7 +623,7 @@
     {% endif %}
 
     <article class="db-card">
-      <h2>{% if file_backup %}Destinos em nuvem e externos{% else %}Contas em nuvem{% endif %}</h2>
+      <div class="db-card-head"><span class="db-section-label">{% if file_backup %}Destinos em nuvem e externos{% else %}Contas em nuvem{% endif %}</span></div>
         <div class="db-meta">
         {% if file_backup %}
           <div>
@@ -769,7 +758,7 @@
           </div>
         </div>
         <p class="db-note">Opcional. Se configurado, o sistema envia o banco e o manifesto do snapshot manual para a URL informada. O token será enviado no header Authorization.</p>
-        <div class="db-actions">
+        <div class="db-actions btn-row">
           <button type="submit" class="btn primary">
             <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar destinos
           </button>
@@ -906,7 +895,7 @@
 
         {% if auth_can('banco_dados', 'edit') %}
           <div class="db-provider-actions">
-            <div class="db-provider-secondary">
+            <div class="db-provider-secondary btn-row btn-row--pairs">
               {% if gdrive_connected %}
                 <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -1013,7 +1002,7 @@
                   </label>
                 </div>
                 {% endif %}
-                <div class="db-provider-footer-actions">
+                <div class="db-provider-footer-actions btn-row">
                   {% if file_backup %}
                   {{ provider_backup_now_button('gdrive-backup-now', gdrive_connected, 'Enviar backup para Google Drive', 'Conecte o Google Drive para enviar backups') }}
                   {% endif %}
@@ -1027,7 +1016,7 @@
             {# Machine store unreadable: no credential form, so the footer stands
                alone and still carries the card's backup action. #}
             <div class="db-provider-config-footer">
-              <div class="db-provider-footer-actions">
+              <div class="db-provider-footer-actions btn-row">
                 {{ provider_backup_now_button('gdrive-backup-now', gdrive_connected, 'Enviar backup para Google Drive', 'Conecte o Google Drive para enviar backups') }}
               </div>
             </div>
@@ -1124,7 +1113,7 @@
 
         {% if auth_can('banco_dados', 'edit') %}
           <div class="db-provider-actions">
-            <div class="db-provider-secondary">
+            <div class="db-provider-secondary btn-row btn-row--pairs">
               {% if onedrive_connected %}
                 <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -1226,7 +1215,7 @@
                   </label>
                 </div>
                 {% endif %}
-                <div class="db-provider-footer-actions">
+                <div class="db-provider-footer-actions btn-row">
                   {% if file_backup %}
                   {{ provider_backup_now_button('onedrive-backup-now', onedrive_connected, 'Enviar backup para OneDrive', 'Conecte o OneDrive para enviar backups') }}
                   {% endif %}
@@ -1240,7 +1229,7 @@
             {# Machine store unreadable: no credential form, so the footer stands
                alone and still carries the card's backup action. #}
             <div class="db-provider-config-footer">
-              <div class="db-provider-footer-actions">
+              <div class="db-provider-footer-actions btn-row">
                 {{ provider_backup_now_button('onedrive-backup-now', onedrive_connected, 'Enviar backup para OneDrive', 'Conecte o OneDrive para enviar backups') }}
               </div>
             </div>
@@ -1383,7 +1372,7 @@
     {% if auth_can('banco_dados', 'edit') %}
       <form method="post" action="{{ url_for('admin_banco_dados_backup') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="db-actions">
+        <div class="db-actions btn-row">
           <button type="submit" class="btn primary">
             <i class="lucide" data-lucide="database"></i>Gerar backup agora
           </button>
@@ -1450,7 +1439,7 @@
             </tbody>
           </table>
         </div>
-        <div class="db-actions">
+        <div class="db-actions btn-row">
           <button type="button" class="btn" onclick="resetRetentionForm()">
             <i class="lucide" data-lucide="rotate-ccw"></i>Restaurar padrões
           </button>
@@ -1635,7 +1624,7 @@
     {% if auth_can('banco_dados', 'edit') %}
       <form method="post" action="{{ url_for('admin_banco_dados_backup') }}" data-pg-backup-now>
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="db-actions">
+        <div class="db-actions btn-row">
           <button type="submit" class="btn primary">
             <i class="lucide" data-lucide="database"></i>Gerar backup agora
           </button>
@@ -1684,7 +1673,7 @@
           </table>
         </div>
         <p class="db-note">{% if protection.policy_invalid %}Há valores armazenados inválidos: a rotação não apaga nenhuma geração até a política ser salva novamente.{% elif protection.policy_configured %}Última alteração: {{ protection.policy_updated_label or '—' }}.{% else %}Valores padrão (nenhuma alteração salva).{% endif %}</p>
-        <div class="db-actions">
+        <div class="db-actions btn-row">
           <button type="button" class="btn" onclick="var f=document.getElementById('pg-retention-form');f.querySelectorAll('[data-default]').forEach(function(el){el.value=el.getAttribute('data-default');});">
             <i class="lucide" data-lucide="rotate-ccw"></i>Restaurar padrões
           </button>

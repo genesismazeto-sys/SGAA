@@ -472,13 +472,13 @@
    Scoped Layout Adjustments: Alunos (.imp-alunos)
    (Moved from inline <style> in admin_alunos.html)
    ============================================================= */
-.imp-alunos{ --imp-list-min-width:1160px; }
+.imp-alunos{ --imp-list-min-width:1180px; }
 .imp-alunos { --imp-cols:
   minmax(300px, 1.6fr) /* Nome */
   minmax(260px, 1.3fr) /* E-mail */
   minmax(220px, 2fr)   /* Curso */
   minmax(120px, 160px) /* Turma */
-  minmax(120px, 150px) /* Solicitações pendentes */
+  minmax(140px, 150px) /* Solicitações pendentes: its header needs 130px of text */
   minmax(62px, 70px)   /* Status */
 };
 .impressoes-cards-scroll.imp-alunos{ width:100%; }

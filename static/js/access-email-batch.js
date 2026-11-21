@@ -99,10 +99,10 @@ window.initAccessEmailBatch = function ({ getSelectedRows, buildPostHeaders, onB
     element.classList.add(`status-${tone}`);
   }
   function setTally(totals) {
-    for (const [key, tone] of [['sent', 'positive'], ['failed', 'negative'], ['indeterminate', 'caution']]) {
-      const pill = progress.querySelector(`[data-email-tally="${key}"]`);
-      pill.querySelector('strong').textContent = String(totals[key]);
-      setTone(pill, totals[key] ? tone : 'neutral');
+    for (const key of ['sent', 'failed', 'indeterminate']) {
+      // A count is a chip, not a status: the number changes, never the tone.
+      const chip = progress.querySelector(`[data-email-tally="${key}"]`);
+      chip.querySelector('strong').textContent = String(totals[key]);
     }
   }
   // `done` recipients have a result; `total` is the confirmed queue.

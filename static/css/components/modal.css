@@ -44,4 +44,4 @@
 
 .modal-body{ overflow-y:auto; overflow-x:hidden; box-sizing:border-box; }
 
-.modal-footer{ display:flex; gap:8px; }
+.modal-footer{ display:flex; gap:8px; justify-content:flex-end; align-items:center; }

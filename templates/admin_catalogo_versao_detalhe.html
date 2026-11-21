@@ -50,7 +50,7 @@
     .version-substitute-card{ width:min(480px, calc(100vw - 32px)); max-height:calc(100vh - 32px); }
     .version-substitute-card .modal-header{ padding:16px 18px 8px; }
     .version-substitute-card .modal-body{ padding:12px 18px 18px; }
-    .version-substitute-card .modal-footer{ justify-content:flex-end; padding:12px 18px; border-top:1px solid var(--border); }
+    .version-substitute-card .modal-footer{ padding:12px 18px; border-top:1px solid var(--border); }
     .version-substitute-card label{ display:block; margin-bottom:6px; color:var(--text-secondary); font-size:12px; font-weight:600; }
     .version-substitute-card select{ width:100%; height:var(--btn-h); }
     .transition-table-wrap{ overflow-x:auto; border:1px solid var(--border-strong); border-radius:var(--radius); background:var(--surface); }
@@ -334,7 +334,7 @@
           <label for="version-substitute-select">Versão substituta</label>
           <select id="version-substitute-select" class="control" required></select>
         </div>
-        <div class="modal-footer">
+        <div class="modal-footer btn-row">
           <button class="btn" id="version-substitute-cancel" type="button">Cancelar</button>
           <button class="btn primary" type="submit"><i class="lucide" data-lucide="replace"></i>Substituir</button>
         </div>

@@ -615,8 +615,8 @@ def test_view_mode_has_no_footer_buttons_only_the_header_back(curso_forms):
 def test_edit_mode_centres_salvar_and_cancelar(curso_forms):
     """It rendered a bare .form-actions; every accepted form uses .center."""
     edit = curso_forms["edit"]
-    assert re.findall(r'<div class="(form-actions[^"]*)">', edit) == ["form-actions center"]
-    actions = edit[edit.index('class="form-actions center"'):]
+    assert re.findall(r'<div class="(form-actions[^"]*)">', edit) == ["form-actions center btn-row"]
+    actions = edit[edit.index('class="form-actions center btn-row"'):]
     assert ">Cancelar</a>" in actions
     assert 'type="submit"' in actions and ">Salvar<" in actions
     # Cancel first, primary last -- the order the accepted forms use.
@@ -629,7 +629,7 @@ def test_edit_mode_centres_salvar_and_cancelar(curso_forms):
     )
     # Not invented here: the accepted forms already use the same modifier.
     for reference in (ATIVIDADE_FORM, VERSAO_FORM):
-        assert 'class="form-actions center"' in reference.read_text(encoding="utf-8"), (
+        assert 'class="form-actions center btn-row"' in reference.read_text(encoding="utf-8"), (
             reference.name
         )
 

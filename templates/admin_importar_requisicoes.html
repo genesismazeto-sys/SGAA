@@ -3,21 +3,60 @@
 {% block content %}
 <h1 class="main-title">Importar Requisições</h1>
 
-<form method="post" enctype="multipart/form-data" class="form-grid" style="max-width:700px;">
+<form method="post" enctype="multipart/form-data" autocomplete="off">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <label style="display:flex; align-items:center; gap:8px;">
-    <input type="checkbox" name="usar_arquivo_padrao" />
-    <span>Usar arquivo padrão na pasta de uploads</span>
-  </label>
+  <div class="form-cards-narrow">
+    <!-- Arquivo padrão da pasta de uploads -->
+    <div class="form-row">
+      <label class="row-label" for="usar_arquivo_padrao">Arquivo padrão</label>
+      <div class="field-card" style="grid-template-columns:40px 1fr auto; padding-right:10px;">
+        <div class="field-chip"><i class="lucide" data-lucide="folder-input"></i></div>
+        <span class="control">Usar o arquivo da pasta de uploads</span>
+        <label class="toggle-switch" aria-label="Usar o arquivo padrão da pasta de uploads">
+          <input id="usar_arquivo_padrao" type="checkbox" name="usar_arquivo_padrao">
+          <span class="toggle-switch-slider" aria-hidden="true"></span>
+        </label>
+      </div>
+    </div>
 
-  <label>
-    <div class="help">Ou selecione um arquivo Excel (.xlsx) com a aba "Requisições"</div>
-    <input class="input" type="file" name="arquivo_excel" accept=".xlsx" />
-  </label>
+    <!-- Ou um arquivo Excel -->
+    <div class="form-row">
+      <label class="row-label" for="arquivo_excel">Arquivo Excel</label>
+      <div class="field-card file-card" data-file-card>
+        <div class="field-chip"><i class="lucide" data-lucide="file-spreadsheet"></i></div>
+        <input class="file-input" id="arquivo_excel" name="arquivo_excel" type="file" accept=".xlsx">
+        <div class="control file-name" data-file-name>Nenhum arquivo selecionado</div>
+        <div class="field-chip chip-right" title="Anexar arquivo"><i class="lucide" data-lucide="paperclip"></i><span>Anexar</span></div>
+      </div>
+    </div>
+    <p class="form-note"><i class="lucide" data-lucide="info" aria-hidden="true"></i><span>Sem o arquivo padrão, anexe um .xlsx com a aba "Requisições".</span></p>
 
-  <div style="display:flex; gap:8px;">
-    <button class="btn primary" type="submit"><i class="lucide" data-lucide="upload-cloud"></i>Importar</button>
-    <a class="btn" href="{{ url_for('admin_requisicoes') }}">Voltar</a>
+    <!-- Ações -->
+    <div class="form-actions center btn-row">
+      <a class="btn" href="{{ url_for('admin_requisicoes') }}">Voltar</a>
+      <button class="btn primary" type="submit"><i class="lucide" data-lucide="upload-cloud"></i>Importar</button>
+    </div>
   </div>
 </form>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    try { if (window.lucide) lucide.createIcons(); } catch(_e) {}
+    document.querySelectorAll('[data-file-card]').forEach(card => {
+      const input = card.querySelector('input[type="file"]');
+      const nameEl = card.querySelector('[data-file-name]');
+      const chipRight = card.querySelector('.chip-right');
+      function openPicker(){ if (input) input.click(); }
+      function updateName(){
+        const f = input && input.files && input.files[0];
+        nameEl.textContent = f ? f.name : 'Nenhum arquivo selecionado';
+        if (f) { nameEl.setAttribute('title', f.name); card.classList.add('has-file'); }
+        else { nameEl.removeAttribute('title'); card.classList.remove('has-file'); }
+      }
+      card.addEventListener('click', (e) => { if (e.target && e.target.tagName !== 'INPUT') openPicker(); });
+      if (chipRight) chipRight.addEventListener('click', (e) => { e.stopPropagation(); openPicker(); });
+      if (input) { input.addEventListener('change', updateName); updateName(); }
+    });
+  });
+</script>
 {% endblock %}

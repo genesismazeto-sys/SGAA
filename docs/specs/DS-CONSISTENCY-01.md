@@ -124,9 +124,9 @@ Local only: the synthetic-data harness and the test suite. PROD: none. DEV provi
 
 | # | Goal | Paths | Exit evidence | Status |
 |---|---|---|---|---|
-| 1 | Components (section card, button row, modal footer) + white primaries + README contract | css components, 3 card templates, modal templates | static guards, T3 | |
-| 2 | Action groups on every screen (forms, cards, modals, order, decisions, toolbar) | templates, list toolbar CSS | browser contract, T3 | |
-| 3 | Diagnostic view, Banco de dados cards and provider buttons, Acesso chips, Alunos header, Importar requisições file field | those templates | browser contract, T3 | |
+| 1 | Components (section card, button row, modal footer) + white primaries + README contract | css components, 3 card templates, modal templates | static guards, T3 | landed with 2–3 (A7) |
+| 2 | Action groups on every screen (forms, cards, modals, order, decisions, toolbar) | templates, list toolbar CSS | browser contract, T3 | landed (A7) |
+| 3 | Diagnostic view, Banco de dados cards and provider buttons, Acesso chips, Alunos header, Importar requisições file field | those templates | browser contract, T3 | landed (A7) |
 | 4 | Close: audit 0, prints, T5, SPEC closure | docs, PROJECT_STATE | T5 | |
 
 ## 13. Acceptance criteria
@@ -145,5 +145,23 @@ None beyond `docs/OPERATING_MODEL.md` §7.
 ## 15. Deferred / known non-blockers
 
 ## 16. Amendments
+
+- A1 2026-11-21 — On the request processing page the decision buttons are centered with the page's form
+  actions (Voltar / Salvar), not right-aligned: that page is a data-entry form (D5). The modal keeps them on the
+  right. One order in both places, as decided. Not material (placement inside an approved rule).
+- A2 2026-11-21 — The report detail modal keeps Excluir apart on the left; its Fechar / Salvar group is the
+  `.btn-row`. A destructive action beside the primary was not part of the approved proposal. Not material.
+- A3 2026-11-21 — Configurações, "Tempo de processamento padrão": with Resetar contagem moved beside Salvar, the
+  footer note names it ("Resetar contagem reinicia a apuração…"). Copy only. Not material.
+- A4 2026-11-21 — Importar requisições rebuilt on the form-row pattern: labels "Arquivo padrão" / "Arquivo
+  Excel" and a note on the required tab replace the long inline sentence. Field names unchanged. Not material.
+- A5 2026-11-21 — The Acesso e-mail counts become neutral chips: the colour tone they took from their value
+  (green sent, red failures) goes with the pill; "Em andamento" / "Concluído" stays the status pill.
+  Follows D6. Not material.
+- A6 2026-11-21 — The list toolbar implements the phone rules in `modern-style.css`, its owner, with the
+  specificity of its existing toolbar rules (a `.btn-row` class there would lose to them). Four actions use
+  `.actions--pairs`. Not material.
+- A7 2026-11-21 — Slices 1–3 land as one commit: the components, the screens and the guards change the same
+  templates and tests, and no intermediate state passes the browser contract on its own. Not material.
 
 ## 17. Closure

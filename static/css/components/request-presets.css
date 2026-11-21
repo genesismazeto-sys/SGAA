@@ -26,7 +26,7 @@
 #req-presets-modal .presets-tipo-label{ display:block; margin-bottom:6px; font-size:11px; font-weight:500; color:#71717a; text-transform:uppercase; letter-spacing:.04em; }
 #req-presets-modal .presets-divider{ margin:0 24px; border:0; border-top:1px solid #e4e4e7; }
 /* Footer */
-#req-presets-modal .modal-footer{ justify-content:center; padding:10px 12px; border-top:1px solid var(--border); }
+#req-presets-modal .modal-footer{ padding:10px 12px; border-top:1px solid var(--border); }
 /* Toolbar */
 #req-presets-modal .actions-mini{ display:flex; align-items:center; gap:4px; background:#f4f4f5; border-radius:6px; padding:2px; }
 #req-presets-modal .actions-mini .btn.icon-btn{ display:inline-grid; place-items:center; width:22px; height:22px; min-width:22px; padding:0; gap:0; border:0; border-radius:4px; background:transparent; color:#a1a1aa; box-shadow:none; }

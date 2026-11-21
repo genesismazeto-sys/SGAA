@@ -229,5 +229,5 @@ def test_unlinked_composition_keeps_its_mutation_controls(env):
     panel = html[html.index('<section class="matriz-tab-panel"'):]
     assert '<form method="POST" class="matriz-transfer-form" data-transfer-root data-readonly="0">' in panel
     assert 'data-move=">"' in panel and 'name="selected_activity_ids"' in panel
-    footer = re.search(r'<div class="form-actions center">(.*?)</div>', panel, re.S)
+    footer = re.search(r'<div class="form-actions center btn-row">(.*?)</div>', panel, re.S)
     assert footer and "Cancelar" in footer.group(1) and 'type="submit"' in footer.group(1)

@@ -212,7 +212,7 @@ def test_editar_dados_stays_editable_with_save_and_cancel(pages):
     edit = pages[("edit", "dados")]
     assert _fieldset_attrs(edit) == "", "the edit form is not editable"
     assert "Editar matriz de atividades" in edit
-    actions = edit[edit.index('<div class="form-actions center">'):]
+    actions = edit[edit.index('<div class="form-actions center btn-row">'):]
     assert 'href="/admin/matrizes">Voltar</a>' in actions
     assert 'type="submit"' in actions and "Salvar alterações" in actions
 

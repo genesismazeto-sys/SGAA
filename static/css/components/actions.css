@@ -1,0 +1,74 @@
+/* =============================================================
+   Button contract (DS README §3.1) -- DS-CONSISTENCY-01
+   -------------------------------------------------------------
+   One owner for where action buttons sit. A group of action buttons is a
+   .btn-row: card footers, modal footers, form actions, page and list
+   actions. Order inside the row: secondary action(s) first, the primary
+   (`btn primary`, blue) last, so the primary is always the rightmost.
+
+   Desktop
+     .btn-row            buttons together on the right
+     .btn-row--center    data-entry forms (Salvar + Voltar / Cancelar)
+
+   Phone (below 768px): no empty space beside the buttons
+     every visible button grows from a zero basis and keeps its label as
+     its minimum width, so 1 button takes the whole line, 2 share it, 3
+     share it when their labels fit. Rows wrap in reverse: when the
+     buttons do not fit, the last one -- the primary -- goes on top with
+     the whole line and the others share the line below.
+     .btn-row--pairs     four buttons: two rows of two, primary bottom right
+
+   Hidden buttons ([hidden], display:none) take no part, so a row may
+   carry mode-dependent buttons.
+   ============================================================= */
+
+.btn-row{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  flex-wrap:wrap;
+  gap:var(--btn-gap, 8px);
+}
+.btn-row--center{ justify-content:center; }
+/* A row or a button carrying [hidden] stays hidden: the row's display would beat the UA rule. */
+.btn-row[hidden],
+.btn-row > [hidden]{ display:none !important; }
+/* A form or wrapper that only carries one button is transparent to the row. */
+.btn-row > form,
+.btn-row > .btn-row-item{ display:contents; }
+.btn-row--pairs{
+  display:grid;
+  grid-template-columns:repeat(2, max-content);
+  justify-content:end;
+}
+
+@media (max-width:767.98px){
+  /* No explicit width: a full-bleed footer (negative margins) keeps its edges. */
+  .btn-row{
+    flex-wrap:wrap-reverse;
+    justify-content:stretch;
+  }
+  .btn-row > .btn,
+  .btn-row > button,
+  .btn-row > a,
+  .btn-row > form > .btn,
+  .btn-row > .btn-row-item > .btn{
+    flex:1 1 0;
+    min-width:max-content;
+    max-width:100%;
+    justify-content:center;
+    text-align:center;
+  }
+  /* An actions menu (button + its popover) counts as one button. */
+  .btn-row > .toolbar-actions-shell{ display:flex; flex:1 1 0; min-width:max-content; }
+  .btn-row > .toolbar-actions-shell > .btn{ flex:1 1 auto; justify-content:center; }
+  .btn-row--pairs{
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+  }
+  .btn-row--pairs > .btn,
+  .btn-row--pairs > button,
+  .btn-row--pairs > a{
+    min-width:0;
+    width:100%;
+  }
+}

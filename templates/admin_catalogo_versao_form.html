@@ -338,7 +338,7 @@
     {#- Read-only mode has no form action left: navigation moved to the header
         Back action, so no centred footer button remains. -#}
     {% if not readonly %}
-      <div class="form-actions center">
+      <div class="form-actions center btn-row">
         <a class="btn" href="{{ url_for('admin_catalogo_versao_detalhe', base_id=base.id) }}">Cancelar</a>
         <button type="submit" class="btn primary" id="btn-salvar-versao" {% if form_snapshot_json %}disabled{% endif %}>
           <i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ submit_label }}</span>

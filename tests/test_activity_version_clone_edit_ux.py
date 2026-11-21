@@ -172,7 +172,7 @@ def test_activity_form_parity_and_all_effective_values_preload(client):
     for contract in (
         'form-cards-narrow form-cards-narrow--wide', 'field-card split-2 compact-left',
         'id="grupo_num"', 'id="grupo_desc"', 'id="tipo_limit_card"',
-        'class="form-actions center"', 'data-lucide="check"',
+        'class="form-actions center btn-row"', 'data-lucide="check"',
     ):
         assert contract in html
 

@@ -54,7 +54,7 @@
     .modal-header h3 #rm-title-text{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .modal-header-right{ display:flex; align-items:center; gap:10px; flex-shrink:0; }
     .modal-body{ padding:16px 20px; display:grid; row-gap:14px; }
-    .modal-footer{ justify-content:space-between; align-items:center; padding:10px 14px; border-top:1px solid var(--border-strong); }
+    #reporte-modal .modal-footer{ justify-content:space-between; align-items:center; padding:10px 14px; border-top:1px solid var(--border-strong); }
     .modal-footer-actions{ display:flex; gap:8px; align-items:center; }
     .novo-reporte-form{ display:grid; gap:14px; }
     .novo-reporte-form .form-row{ display:grid; grid-template-columns:150px 1fr; gap:12px; align-items:center; }
@@ -94,6 +94,13 @@
     .reporte-modal-status-form select{ height:var(--btn-h); padding:0 calc(10px + var(--select-arrow-room, 0px)) 0 10px; border:1px solid var(--border-strong); border-radius:var(--radius); background:var(--surface); font:inherit; min-width:200px; }
     /* Footer: divisor vertical sutil entre Fechar e Salvar */
     .modal-footer-actions .footer-sep{ width:1px; height:20px; background:var(--border-strong); margin:0 2px; }
+    /* Phone: the detail footer stacks -- Excluir on its own line, then Fechar / Salvar status filling
+       theirs (button contract, components/actions.css). */
+    @media (max-width:767.98px){
+      #reporte-modal .modal-footer{ flex-direction:column; align-items:stretch; }
+      #reporte-modal .modal-footer > form .btn{ width:100%; justify-content:center; }
+      .modal-footer-actions .footer-sep{ display:none; }
+    }
     @media (max-width: 640px){
       .reporte-modal-meta{ grid-template-columns:max-content 1fr; }
       .reporte-modal-status-block{ flex-direction:column; align-items:stretch; }
@@ -293,7 +300,7 @@
           <i class="lucide" data-lucide="trash-2"></i><span class="btn-label">Excluir</span>
         </button>
       </form>
-      <div class="modal-footer-actions">
+      <div class="modal-footer-actions btn-row">
         <button class="btn" id="reporte-modal-fechar" type="button">Fechar</button>
         {% if can_reportes_edit %}
           <span class="footer-sep" aria-hidden="true"></span>
@@ -372,7 +379,7 @@
         </div>
       </form>
     </div>
-    <div class="modal-footer">
+    <div class="modal-footer btn-row">
       <button class="btn" id="novo-reporte-cancelar" type="button">Cancelar</button>
       <button class="btn primary btn--raised" type="submit" form="novo-reporte-form"><i class="lucide" data-lucide="send"></i> Criar reporte</button>
     </div>

@@ -125,10 +125,12 @@ def test_the_email_modal_and_the_diagnostic_page_take_every_colour_from_tokens()
     assert not offenders, f"e-mail modal rules with a literal colour: {offenders}"
     # Corners are the DS radius, not a page-local 8px.
     assert not [sel for sel, body in modal_rules if "border-radius:8px" in body.replace(" ", "")]
-    # Roles take DS components: the status pill for the page badges, the DS disclosure toggle colour.
+    # Roles take DS components: the section card's chips for the page labels (DS-CONSISTENCY-01: a status
+    # pill carries a status only, and "Admin-only" is a label), the DS disclosure toggle colour.
     page = _source(diag_page)
-    assert 'class="badge status-pill status-info">Admin-only' in page
-    assert 'class="badge status-pill status-caution">Leitura paralela (não operacional)' in page
+    assert '<span class="cfg-chip">Admin-only</span>' in page
+    assert '<span class="cfg-chip">Leitura paralela (não operacional)</span>' in page
+    assert "status-pill" not in page, "the diagnostic page has no status to show"
     assert not re.search(r"diag-(?:badge|pill|chip)\b(?!s)", page), "page-local badges are gone"
     toggle = _rule(_style_block("templates/admin_requisicoes.html"), ".req-email-preview-wrap > summary")
     assert "color:var(--text-secondary)" in toggle and "font-size:var(--font-size-small)" in toggle

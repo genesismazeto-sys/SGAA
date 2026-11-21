@@ -577,7 +577,8 @@ def test_decision_icons_and_labels_carry_no_vertical_offset(env):
         buttons = json.loads(session.evaluate(BUTTON_OFFSETS % json.dumps(".btn-action-ghost")))
     finally:
         session.close()
-    assert [b["label"] for b in buttons] == ["Deferir", "Deferir Parcialmente", "Indeferir",
+    # DS-CONSISTENCY-01: one decision order everywhere -- Indeferir, Deferir Parcialmente, Deferir.
+    assert [b["label"] for b in buttons] == ["Indeferir", "Deferir Parcialmente", "Deferir",
                                              "Enviar para retificação", "Indeferir definitivamente"]
     for b in buttons:
         # Icon and label are both centred by the button's flex box, with no

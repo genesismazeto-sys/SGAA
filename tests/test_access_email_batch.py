@@ -552,5 +552,6 @@ def test_chromium_failures_mark_the_final_state_as_needing_attention(batch_env, 
     tones = page.evaluate(
         "['sent', 'failed', 'indeterminate'].map(k => document.querySelector(`[data-email-tally=\"${k}\"]`).className)"
     )
-    assert "status-positive" in tones[0] and "status-negative" in tones[1] and "status-caution" in tones[2]
+    # DS-CONSISTENCY-01 A5: a count is a chip, not a status -- no tone, whatever the value.
+    assert all(t == "cfg-chip" for t in tones), tones
     assert len(env["sent"]) == 3

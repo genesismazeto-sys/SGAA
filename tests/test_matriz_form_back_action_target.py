@@ -25,7 +25,7 @@ from tests.session_support import stamp_auth_version
 
 
 BACK_ACTION_RE = re.compile(
-    r'<div class="form-actions center">\s*<a class="btn" href="([^"]*)"[^>]*>(.*?)</a>',
+    r'<div class="form-actions center btn-row">\s*<a class="btn" href="([^"]*)"[^>]*>(.*?)</a>',
     re.DOTALL,
 )
 

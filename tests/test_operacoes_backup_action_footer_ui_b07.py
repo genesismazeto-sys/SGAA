@@ -100,7 +100,7 @@ def _lead(article: str) -> str:
 
 
 def _footer(article: str) -> str:
-    return article[article.rindex('<div class="db-actions">') :]
+    return article[article.rindex('<div class="db-actions btn-row">') :]
 
 
 # ==========================================================================
@@ -155,7 +155,7 @@ def test_the_action_is_the_last_thing_in_the_operacoes_card(page):
     assert LABEL in _footer(article)
     # Nothing of the recovery subsection comes after it.
     assert "db-subsection" not in _footer(article)
-    assert article.index("db-subsection") < article.rindex('<div class="db-actions">')
+    assert article.index("db-subsection") < article.rindex('<div class="db-actions btn-row">')
 
 
 def test_the_footer_uses_the_shared_card_action_contract(page, css):
@@ -169,7 +169,7 @@ def test_the_footer_uses_the_shared_card_action_contract(page, css):
     assert footer_form, "the backup form is not the card-level footer form"
     # .db-actions must be a DIRECT child of that form for the rule to apply.
     assert re.match(
-        r'\s*<input type="hidden" name="csrf_token"[^>]*>\s*<div class="db-actions">',
+        r'\s*<input type="hidden" name="csrf_token"[^>]*>\s*<div class="db-actions btn-row">',
         footer_form.group(1),
     ), footer_form.group(1)
 
@@ -192,7 +192,7 @@ def test_no_backup_specific_footer_style_was_added(css, template):
         assert invented not in template, invented
     # And no inline geometry on the moved action.
     article_source = template.split("{# ────────── Operações ────────── #}", 1)[1]
-    footer_source = article_source.split('<div class="db-actions">', 1)[1].split(
+    footer_source = article_source.split('<div class="db-actions btn-row">', 1)[1].split(
         "</div>", 1
     )[0]
     assert "style=" not in footer_source
@@ -265,7 +265,7 @@ def test_the_recovery_subsection_is_untouched(page):
     # Its own controls keep their own row layout, not the footer's.
     assert "Carregar arquivo" in subsection
     for form in re.findall(r"<form[^>]*>(.*?)</form>", subsection, re.S):
-        assert '<div class="db-actions">' not in form, (
+        assert '<div class="db-actions btn-row">' not in form, (
             "a recovery form was given the card footer row"
         )
 

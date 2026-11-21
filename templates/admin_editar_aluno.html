@@ -166,7 +166,7 @@
     {#- No footer in Ver: the page-level Back lives in the header (as on Curso).
         Editar keeps its form contract: Cancelar + Salvar. -#}
     {% if not readonly %}
-    <div class="form-actions center">
+    <div class="form-actions center btn-row">
       <a class="btn" href="{{ back_href }}">{{ user_message("Cancelar") }}</a>
       <button class="btn primary" type="submit"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">{{ user_message("Salvar") }}</span></button>
     </div>

@@ -413,7 +413,7 @@ def test_backup_now_is_in_the_footer_and_not_in_the_card_body(
         assert "Enviar backup agora" in footer
         assert "db-provider-footer-actions" in footer
         # It sits beside Salvar, in that order, inside one action group.
-        group = footer.split('class="db-provider-footer-actions"', 1)[1]
+        group = footer.split('class="db-provider-footer-actions btn-row"', 1)[1]
         assert group.index("Enviar backup agora") < group.index("Salvar")
 
 

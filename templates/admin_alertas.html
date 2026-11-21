@@ -48,7 +48,7 @@
       top:0;
     }
     .modal-body{ padding:12px 16px; }
-    .modal-footer{ justify-content:center; padding:10px 12px; }
+    .modal-footer{ padding:10px 12px; }
     .alerta-form-layout{ width:min(920px, 100%); margin:0 auto; display:grid; row-gap:12px; }
     .alerta-form-row{ display:grid; grid-template-columns:92px minmax(0, 1fr); align-items:center; column-gap:12px; }
     .alerta-form-row.top{ grid-template-columns:92px minmax(0, 1fr) auto; }
@@ -326,7 +326,7 @@
         </div>
       </form>
     </div>
-    <div class="modal-footer">
+    <div class="modal-footer btn-row">
       <button class="btn" id="admin-alerta-cancelar" type="button">Cancelar</button>
       {% if can_alertas_edit %}
         <button class="btn primary btn--raised" type="submit" form="admin-alerta-form" id="admin-alerta-save"><i class="lucide btn-icon-save" data-lucide="check"></i><span class="btn-label">Salvar</span></button>

@@ -4,29 +4,15 @@
 {% block extra_head %}
   <style>
     .diag-wrap{ display:grid; gap:16px; }
-    .diag-card{
-      background:var(--surface);
-      border:1px solid var(--border-strong);
-      border-radius:var(--radius);
-      box-shadow:var(--shadow-sm);
-      padding:16px;
-    }
-    .diag-head{
-      display:flex;
-      flex-wrap:wrap;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      margin-bottom:12px;
-    }
-    .diag-head h1{
+    /* The panels are the shared section card (components/section-card.css):
+       title and chips in the header, the lookup buttons in the footer. */
+    .diag-intro{
       margin:0;
-      font-size:1.05rem;
-    }
-    .diag-badges{
-      display:flex;
-      flex-wrap:wrap;
-      gap:6px;
+      color:var(--text-secondary);
+      font-size:12.5px;
+      line-height:1.45;
+      text-align:justify;
+      text-align-last:left;
     }
     .diag-controls{
       display:grid;
@@ -54,13 +40,6 @@
       font-size:13px;
       color:var(--text-primary);
     }
-    .diag-actions{
-      display:flex;
-      align-items:center;
-      flex-wrap:wrap;
-      gap:8px;
-      margin-top:10px;
-    }
     .diag-note{
       margin:0;
       color:var(--text-secondary);
@@ -73,18 +52,8 @@
       gap:8px;
       font-size:13px;
       color:var(--text-secondary);
-      margin-top:8px;
     }
     .diag-meta strong{ color:var(--text-primary); }
-    .diag-section{
-      margin-top:10px;
-      display:grid;
-      gap:8px;
-    }
-    .diag-section h2{
-      margin:0;
-      font-size:0.98rem;
-    }
     .diag-table-wrap{
       overflow:auto;
       border:1px solid var(--border-strong);
@@ -143,19 +112,20 @@
   {%- endmacro %}
 
   <div class="diag-wrap">
-    <section class="diag-card">
-      <div class="diag-head">
-        <h1>Diagnóstico Administrativo - Atividades Versionadas</h1>
-        <div class="diag-badges">
-          <span class="badge status-pill status-info">Admin-only</span>
-          <span class="badge status-pill status-caution">Leitura paralela (não operacional)</span>
+    <h1 class="main-title">Diagnóstico Administrativo - Atividades Versionadas</h1>
+    <section class="cfg-card">
+      <div class="cfg-card-head">
+        <span class="cfg-section-label">Consulta</span>
+        <div class="cfg-chips">
+          <span class="cfg-chip">Admin-only</span>
+          <span class="cfg-chip">Leitura paralela (não operacional)</span>
         </div>
       </div>
-
-      <p class="diag-note">
+      <div class="cfg-card-body">
+      <p class="diag-intro">
         Visualização de conferência antes de qualquer cutover. Sem checklist obrigatório e sem bloqueio documental nesta tela.
       </p>
-      <p class="diag-note">
+      <p class="diag-intro">
         Os campos estruturados de carga/limite ainda estão em conferência. Nesta tela diagnóstica, as observações textuais são a referência editorial; não há uso operacional automático.
       </p>
 
@@ -183,9 +153,12 @@
           </select>
         </div>
       </form>
-      <div class="diag-actions">
-        <button class="btn primary" type="submit" form="diag-form" formmethod="get" formaction="{{ url_for('admin_diagnostico_atividades_versionadas_view') }}">Carregar visualização</button>
-        <a class="btn" href="{{ json_url }}" target="_blank" rel="noopener">Abrir JSON diagnóstico</a>
+      </div>
+      <div class="cfg-card-footer">
+        <div class="cfg-footer-actions btn-row">
+          <a class="btn" href="{{ json_url }}" target="_blank" rel="noopener">Abrir JSON diagnóstico</a>
+          <button class="btn primary" type="submit" form="diag-form" formmethod="get" formaction="{{ url_for('admin_diagnostico_atividades_versionadas_view') }}">Carregar visualização</button>
+        </div>
       </div>
     </section>
 
@@ -194,7 +167,9 @@
     {% endif %}
 
     {% if payload %}
-      <section class="diag-card" id="diagnostico-versionado" data-total-geral="{{ payload.totais.geral }}" data-total-aac="{{ payload.totais.por_eixo.get('AAC', 0) }}" data-total-aeu="{{ payload.totais.por_eixo.get('AEU', 0) }}">
+      <section class="cfg-card" id="diagnostico-versionado" data-total-geral="{{ payload.totais.geral }}" data-total-aac="{{ payload.totais.por_eixo.get('AAC', 0) }}" data-total-aeu="{{ payload.totais.por_eixo.get('AEU', 0) }}">
+        <div class="cfg-card-head"><span class="cfg-section-label">Resumo</span></div>
+        <div class="cfg-card-body">
         <div class="diag-meta">
           <div><strong>Consulta:</strong> {{ consulta.modo }}</div>
           <div><strong>Turma:</strong> {{ payload.turma.codigo if payload.turma else '-' }}</div>
@@ -203,12 +178,17 @@
           <div><strong>AAC:</strong> {{ payload.totais.por_eixo.get('AAC', 0) }}</div>
           <div><strong>AEU:</strong> {{ payload.totais.por_eixo.get('AEU', 0) }}</div>
         </div>
+        </div>
       </section>
 
       {% for eixo in ['AAC', 'AEU'] %}
         {% set itens = payload.por_eixo.get(eixo, []) %}
-        <section class="diag-card diag-section">
-          <h2>{{ eixo }} - {{ itens|length }} atividade(s)</h2>
+        <section class="cfg-card">
+          <div class="cfg-card-head">
+            <span class="cfg-section-label">{{ eixo }}</span>
+            <div class="cfg-chips"><span class="cfg-chip is-active">{{ itens|length }} atividade(s)</span></div>
+          </div>
+          <div class="cfg-card-body">
           {% if not itens %}
             <p class="diag-empty">Sem atividades para este eixo na consulta atual.</p>
           {% else %}
@@ -243,6 +223,7 @@
               </table>
             </div>
           {% endif %}
+          </div>
         </section>
       {% endfor %}
     {% endif %}
