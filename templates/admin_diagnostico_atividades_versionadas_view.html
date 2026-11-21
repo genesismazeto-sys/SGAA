@@ -162,15 +162,16 @@
       <form id="diag-form" method="get" class="diag-controls">
         <div class="diag-field">
           <label for="turma_codigo">Turma (código)</label>
-          <input id="turma_codigo" name="turma_codigo" value="{{ request.args.get('turma_codigo','') }}" placeholder="Ex.: PPA-T10">
+          <input id="turma_codigo" name="turma_codigo" value="{{ campos.turma_codigo }}" placeholder="Ex.: PPA-T10">
         </div>
+        {#- Text fields: a number field would discard a rejected id the form must send back. #}
         <div class="diag-field">
           <label for="turma_id">Turma (ID)</label>
-          <input id="turma_id" name="turma_id" type="number" value="{{ request.args.get('turma_id','') }}">
+          <input id="turma_id" name="turma_id" type="text" value="{{ campos.turma_id }}">
         </div>
         <div class="diag-field">
           <label for="matriz_id">Matriz (ID)</label>
-          <input id="matriz_id" name="matriz_id" type="number" value="{{ request.args.get('matriz_id','') }}">
+          <input id="matriz_id" name="matriz_id" type="text" value="{{ campos.matriz_id }}">
         </div>
         <div class="diag-field">
           <label for="turma_id_select">Turma (lista rápida)</label>
@@ -184,7 +185,7 @@
       </form>
       <div class="diag-actions">
         <button class="btn primary" type="submit" form="diag-form" formmethod="get" formaction="{{ url_for('admin_diagnostico_atividades_versionadas_view') }}">Carregar visualização</button>
-        <a class="btn" href="{{ url_for('admin_diagnostico_atividades_versionadas', turma_id=request.args.get('turma_id'), turma_codigo=request.args.get('turma_codigo'), matriz_id=request.args.get('matriz_id')) }}" target="_blank" rel="noopener">Abrir JSON diagnóstico</a>
+        <a class="btn" href="{{ json_url }}" target="_blank" rel="noopener">Abrir JSON diagnóstico</a>
       </div>
     </section>
 

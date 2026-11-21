@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from html import unescape
 from urllib.parse import urlencode
 
 import pytest
@@ -68,12 +69,16 @@ def test_diagnostic_requires_admin(tmp_path):
 # Only an absent or blank parameter supplies no identifier. A supplied one that
 # is malformed, zero or names no row fails the lookup (404): it never reads as
 # absent, so it never falls through to the next parameter or to the index. Ids
-# are signed: a stored negative id resolves like any other.
+# are signed: a stored negative id resolves like any other. Every parameter,
+# turma_codigo included, is read by its first nonblank occurrence.
 
 TURMA_SEM_MATRIZ_ID = 50
 MATRIZ_VAZIA_ID = 3
 TURMA_NEGATIVA_ID = -70
 MATRIZ_NEGATIVA_ID = -5
+# The ids of the queries the cross-family review reported (DIAG-500 R3).
+TURMA_RELATADA_ID = -431
+MATRIZ_RELATADA_ID = 910
 TURMA_NAO_ENCONTRADA = "Turma não encontrada para leitura diagnóstica."
 MATRIZ_NAO_ENCONTRADA = "Matriz não encontrada para leitura diagnóstica."
 TURMA_SEM_MATRIZ = "Turma PPA-T50: sem matriz vinculada."
@@ -154,6 +159,9 @@ RESOLVED_BY_PRECEDENCE = (
         "modo": "turma_codigo", "turma_codigo": "PPA-T10", "turma_id": 1, "matriz_id": 1,
     }),
     ("turma_id=&turma_codigo=&matriz_id=2", {"modo": "matriz", "matriz_id": 2}),
+    ("turma_codigo=&turma_codigo=PPA-T10&matriz_id=2", {
+        "modo": "turma_codigo", "turma_codigo": "PPA-T10", "turma_id": 1, "matriz_id": 1,
+    }),
     (f"turma_id={TURMA_NEGATIVA_ID}&matriz_id=1", {
         "modo": "turma", "turma_id": TURMA_NEGATIVA_ID, "matriz_id": MATRIZ_NEGATIVA_ID,
     }),
@@ -216,6 +224,8 @@ def lookup_client(tmp_path):
                 (MATRIZ_NEGATIVA_ID,),
             )
             _insert_turma(conn, TURMA_NEGATIVA_ID, "PPA-T70", 70, MATRIZ_NEGATIVA_ID)
+            _insert_turma(conn, TURMA_RELATADA_ID, "PPA-T43", 43, MATRIZ_NEGATIVA_ID)
+            _insert_matriz(conn, MATRIZ_RELATADA_ID, "Matriz PPA 2026")
             conn.commit()
         client = env["client"]
         with client.session_transaction() as session:
@@ -365,12 +375,94 @@ def test_valid_turma_lookups_still_resolve_to_the_exact_matrix(lookup_client):
 
 
 def test_the_form_id_fields_take_any_stored_id(lookup_client):
-    # A stored id may be negative, so the number fields carry no lower bound.
-    html = lookup_client.get(VIEW).get_data(as_text=True)
+    # A stored id may be negative, so the fields carry no lower bound. They are
+    # text fields: a number field would discard a rejected id the page shows,
+    # and its unmodified form must send that id back.
+    html = lookup_client.get(f"{VIEW}?turma_id=bogus").get_data(as_text=True)
     for name in ("turma_id", "matriz_id"):
         field = re.search(rf'<input id="{name}"[^>]*>', html).group(0)
-        assert 'type="number"' in field
+        assert 'type="text"' in field
         assert "min=" not in field
+    assert 'value="bogus"' in re.search(r'<input id="turma_id"[^>]*>', html).group(0)
+
+
+# -- One reading for the page, its JSON link and its form ---------------------
+#
+# The page's "Abrir JSON diagnóstico" link and its unmodified form submission
+# select what the page selected, or are rejected as it was: the view reads the
+# query once and the page shows that reading, never the raw parameters.
+
+_FORM = re.compile(r'<form id="diag-form"[^>]*>(.*?)</form>', re.S)
+_INPUT = re.compile(r"<input\b([^>]*)>")
+_ATTRIBUTE = re.compile(r'([a-z-]+)="([^"]*)"')
+_JSON_LINK = re.compile(r'<a class="btn" href="([^"]*)"[^>]*>Abrir JSON diagnóstico</a>')
+
+
+def _form_submission(page):
+    """The query a browser sends for the page's form, unmodified."""
+    fields = []
+    for attributes in _INPUT.findall(_FORM.search(page).group(1)):
+        field = {key: unescape(value) for key, value in _ATTRIBUTE.findall(attributes)}
+        # A text field submits its value as shown, less any CR or LF.
+        assert field.get("type", "text") == "text"
+        fields.append((field["name"], field.get("value", "").replace("\r", "").replace("\n", "")))
+    return urlencode(fields)
+
+
+def _selection(client, url):
+    response = client.get(url)
+    body = response.get_json()
+    if response.status_code != 200:
+        return response.status_code, body["message"]
+    turma, matriz = body.get("turma") or {}, body.get("matriz") or {}
+    return 200, body["consulta"]["modo"], turma.get("id"), matriz.get("id")
+
+
+TURMA_RELATADA = (200, "turma", TURMA_RELATADA_ID, MATRIZ_NEGATIVA_ID)
+INDICE_SELECIONADO = (200, "indice", None, None)
+ONE_READING = (
+    pytest.param("turma_id=&turma_id=-431&matriz_id=910", TURMA_RELATADA, id="reported-blank-then-id"),
+    pytest.param("turma_id=-431&turma_id=bogus&matriz_id=910", (404, TURMA_NAO_ENCONTRADA),
+                 id="reported-rejected-repeat"),
+    pytest.param("turma_id=%20-431%20&matriz_id=910", TURMA_RELATADA, id="padded-id"),
+    pytest.param("turma_id=-431", TURMA_RELATADA, id="stored-negative"),
+    pytest.param("turma_codigo=PPA-T43", (200, "turma_codigo", TURMA_RELATADA_ID, MATRIZ_NEGATIVA_ID), id="code"),
+    pytest.param("matriz_id=910", (200, "matriz", None, MATRIZ_RELATADA_ID), id="matriz"),
+    pytest.param("matriz_id=&matriz_id=910", (200, "matriz", None, MATRIZ_RELATADA_ID), id="blank-then-matriz"),
+    pytest.param("turma_id=1&turma_id=2", (200, "turma", 1, 1), id="repeated-id"),
+    pytest.param("turma_codigo=&turma_codigo=PPA-T10&matriz_id=910", (200, "turma_codigo", 1, 1),
+                 id="blank-then-code"),
+    pytest.param("turma_id=&turma_id=50&matriz_id=910", (200, "turma", TURMA_SEM_MATRIZ_ID, None),
+                 id="turma-without-matrix"),
+    pytest.param("turma_id=0&matriz_id=910", (404, TURMA_NAO_ENCONTRADA), id="zero"),
+    pytest.param("turma_id=abc&matriz_id=910", (404, TURMA_NAO_ENCONTRADA), id="malformed"),
+    pytest.param("turma_id=%2B1", (404, TURMA_NAO_ENCONTRADA), id="plus-sign"),
+    # Without its line feed the value would name the reported Turma.
+    pytest.param("turma_id=-4%0A31", (404, TURMA_NAO_ENCONTRADA), id="inner-line-feed"),
+    pytest.param(f"turma_id={2**63}", (404, TURMA_NAO_ENCONTRADA), id="out-of-range"),
+    pytest.param("turma_id=1&matriz_id=abc", (404, MATRIZ_NAO_ENCONTRADA), id="malformed-lower-precedence"),
+    pytest.param("turma_id=99999&matriz_id=abc", (404, MATRIZ_NAO_ENCONTRADA), id="malformed-and-missing"),
+    pytest.param("turma_id=99999&matriz_id=910", (404, TURMA_NAO_ENCONTRADA), id="missing-turma"),
+    pytest.param("turma_codigo=NAO-EXISTE&matriz_id=910", (404, TURMA_NAO_ENCONTRADA), id="missing-code"),
+    pytest.param("turma_id=&turma_codigo=&matriz_id=", INDICE_SELECIONADO, id="blank-form"),
+    pytest.param("", INDICE_SELECIONADO, id="index"),
+)
+
+
+@pytest.mark.parametrize("query,expected", ONE_READING)
+def test_the_json_link_and_the_unmodified_form_keep_the_page_reading(lookup_client, query, expected):
+    page = lookup_client.get(f"{VIEW}?{query}")
+    html = page.get_data(as_text=True)
+    assert _selection(lookup_client, f"{JSON}?{query}") == expected
+
+    link = unescape(_JSON_LINK.search(html).group(1))
+    assert _selection(lookup_client, link) == expected
+
+    form = _form_submission(html)
+    assert _selection(lookup_client, f"{JSON}?{form}") == expected
+    resubmitted = lookup_client.get(f"{VIEW}?{form}")
+    assert resubmitted.status_code == page.status_code
+    assert _MESSAGE.findall(resubmitted.get_data(as_text=True)) == _MESSAGE.findall(html)
 
 
 # -- Authorization ------------------------------------------------------------
@@ -409,7 +501,7 @@ def lookup_calls(monkeypatch):
     """Records every diagnostic lookup; the lookup itself answers the index."""
     calls = []
 
-    def _recorded(conn):
+    def _recorded(conn, leitura):
         calls.append(conn)
         return {"modo": "indice"}, None
 
