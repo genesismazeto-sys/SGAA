@@ -10,6 +10,16 @@ _MATRIZ_STATUS_LABELS = {
     "encerrada": "Encerrada",
 }
 
+# SQLite binds integers up to signed 64 bits and refuses a larger one
+# (OverflowError). No row id of either engine lies outside that range
+# (PostgreSQL ids are 32-bit), so such an id is reported as naming no row
+# instead of being sent to the database.
+_MAX_ROW_ID = 2**63 - 1
+
+
+def _is_row_id(value: int) -> bool:
+    return 0 < value <= _MAX_ROW_ID
+
 
 def _versioning_matriz_option_label(row) -> str:
     parts = [str(row["nome"] or "Matriz sem nome").strip()]
@@ -46,9 +56,13 @@ def _serialize(row) -> dict[str, object]:
 
 
 def listar_atividades_versionadas_por_matriz(conn, matriz_id: int) -> dict[str, object]:
-    matriz = conn.execute("SELECT * FROM matrizes_atividades WHERE id=?", (matriz_id,)).fetchone()
+    matriz = (
+        conn.execute("SELECT * FROM matrizes_atividades WHERE id=?", (matriz_id,)).fetchone()
+        if _is_row_id(matriz_id)
+        else None
+    )
     if not matriz:
-        return {"status": "not_found", "matriz": None, "atividades": []}
+        return {"status": "not_found", "reason": "matrix not found", "matriz": None, "atividades": []}
     rows = conn.execute(
         """
         SELECT selected.atividade_base_id, selected.atividade_versao_id,
@@ -81,21 +95,29 @@ def listar_atividades_versionadas_por_matriz(conn, matriz_id: int) -> dict[str, 
 
 
 def listar_atividades_versionadas_por_turma(conn, turma_id: int) -> dict[str, object]:
-    turma = conn.execute(
-        """
-        SELECT t.*, m.nome AS matriz_nome,
-               m.status AS matriz_status
-          FROM turmas t LEFT JOIN matrizes_atividades m ON m.id=t.matriz_id
-         WHERE t.id=?
-        """,
-        (turma_id,),
-    ).fetchone()
-    if not turma or not turma["matriz_id"]:
-        return {"status": "not_found", "turma": None, "matriz": None, "atividades": []}
+    turma = (
+        conn.execute(
+            """
+            SELECT t.*, m.nome AS matriz_nome,
+                   m.status AS matriz_status
+              FROM turmas t LEFT JOIN matrizes_atividades m ON m.id=t.matriz_id
+             WHERE t.id=?
+            """,
+            (turma_id,),
+        ).fetchone()
+        if _is_row_id(turma_id)
+        else None
+    )
+    if not turma:
+        return {"status": "not_found", "reason": "turma not found", "turma": None, "matriz": None, "atividades": []}
+    turma_ref = {"id": int(turma["id"]), "nome": turma["nome"], "codigo": turma["codigo"]}
+    if not turma["matriz_id"]:
+        return {
+            "status": "not_found", "reason": "turma has no matrix",
+            "turma": turma_ref, "matriz": None, "atividades": [],
+        }
     result = listar_atividades_versionadas_por_matriz(conn, int(turma["matriz_id"]))
-    result["turma"] = {
-        "id": int(turma["id"]), "nome": turma["nome"], "codigo": turma["codigo"]
-    }
+    result["turma"] = turma_ref
     return result
 
 

@@ -189,7 +189,7 @@
     </section>
 
     {% if message %}
-      <p class="{{ 'diag-alert' if payload is none and consulta.modo != 'indice' else 'diag-note' }}">{{ message }}</p>
+      <p class="{{ 'diag-alert' if lookup_failed else 'diag-note' }}">{{ message }}</p>
     {% endif %}
 
     {% if payload %}

@@ -96,3 +96,37 @@ def test_missing_exact_identity_is_rejected(versioned_env):
             main.get_db_connection(), matriz_id=1, atividade_versao_id=None
         )
     assert result == {"status": "not_found", "reason": "exact version is required"}
+
+
+def test_listing_reports_each_unresolvable_identifier_by_its_reason(versioned_env):
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        conn.execute(
+            "INSERT INTO turmas (id, nome, turno, status, numero, curso_id, matriz_id,"
+            " ano_inicio, semestre_inicio, ano_fim, semestre_fim, codigo)"
+            " VALUES (50, 'PPA-T50', 'Manhã', 'Ativa', 50, 1, NULL, 2026, 1, 2029, 2, 'PPA-T50')"
+        )
+        sem_turma = resolver.listar_atividades_versionadas_por_turma(conn, 99999)
+        sem_matriz = resolver.listar_atividades_versionadas_por_turma(conn, 50)
+        matriz_inexistente = resolver.listar_atividades_versionadas_por_matriz(conn, 99999)
+    assert sem_turma == {
+        "status": "not_found", "reason": "turma not found", "turma": None, "matriz": None, "atividades": [],
+    }
+    assert sem_matriz == {
+        "status": "not_found", "reason": "turma has no matrix",
+        "turma": {"id": 50, "nome": "PPA-T50", "codigo": "PPA-T50"}, "matriz": None, "atividades": [],
+    }
+    assert matriz_inexistente == {
+        "status": "not_found", "reason": "matrix not found", "matriz": None, "atividades": [],
+    }
+
+
+@pytest.mark.parametrize("identifier", [2**63, -(2**63) - 1])
+def test_listing_reports_an_id_beyond_the_row_id_range_as_not_found(versioned_env, identifier):
+    # SQLite cannot bind such an integer (OverflowError); no row can carry it.
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        turma = resolver.listar_atividades_versionadas_por_turma(conn, identifier)
+        matriz = resolver.listar_atividades_versionadas_por_matriz(conn, identifier)
+    assert (turma["status"], turma["reason"]) == ("not_found", "turma not found")
+    assert (matriz["status"], matriz["reason"]) == ("not_found", "matrix not found")
