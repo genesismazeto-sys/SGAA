@@ -112,6 +112,8 @@
           <button class="menu-item" type="button" id="req-action-edit" disabled {% if not can_requisicoes_edit %}hidden{% endif %}><i class="lucide" data-lucide="edit"></i><span>{{ user_message("Editar") }}</span></button>
           <button class="menu-item" type="button" id="req-action-process" disabled {% if not can_requisicoes_edit %}hidden{% endif %}><i class="lucide" data-lucide="circle-check-big"></i><span>{{ user_message("Processar") }}</span></button>
           <button class="menu-item" type="button" id="req-action-email" disabled {% if not can_requisicoes_edit %}hidden{% endif %}><i class="lucide" data-lucide="mail"></i><span>{{ user_message("Enviar e-mail") }}</span></button>
+          {#- Offered only while every selected row is flagged (the script owns it). -#}
+          <button class="menu-item" type="button" id="req-action-email-dismiss" disabled hidden><i class="lucide" data-lucide="mail-x"></i><span>{{ user_message("Desmarcar sinalização de e-mail") }}</span></button>
           <button class="menu-item danger" type="button" id="req-action-delete" disabled {% if not can_requisicoes_full %}hidden{% endif %}><i class="lucide" data-lucide="trash-2"></i><span>{{ user_message("Excluir") }}</span></button>
         </div>
         <div class="menu-hint" id="req-actions-hint">{{ user_message("Selecione uma linha para habilitar as ações.") }}</div>
@@ -180,6 +182,24 @@
     <div class="modal-footer btn-row">
       <button class="btn" id="req-email-cancel" type="button">{{ user_message("Cancelar") }}</button>
       <button class="btn primary" id="req-email-confirm" type="button">{{ user_message("Enviar") }}</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Desmarcar sinalização de e-mail (nada é enviado) -->
+<div id="req-email-dismiss-modal" class="modal-overlay" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="req-email-dismiss-title" aria-describedby="req-email-dismiss-text">
+    <div class="modal-header">
+      <h3 id="req-email-dismiss-title"><i class="lucide" data-lucide="mail-x"></i> {{ user_message("Desmarcar sinalização de e-mail") }}</h3>
+      <button class="btn" id="req-email-dismiss-close" type="button" aria-label="{{ user_message('Fechar') }}"><i class="lucide" data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <p id="req-email-dismiss-text" class="req-email-dismiss-text"></p>
+      <div id="req-email-dismiss-error" class="req-email-warnings" role="alert" hidden></div>
+    </div>
+    <div class="modal-footer btn-row">
+      <button class="btn" id="req-email-dismiss-cancel" type="button">{{ user_message("Cancelar") }}</button>
+      <button class="btn primary" id="req-email-dismiss-confirm" type="button">{{ user_message("Desmarcar") }}</button>
     </div>
   </div>
 </div>
@@ -319,6 +339,26 @@
   border-radius:var(--radius); padding:10px; max-height:220px; overflow:auto; margin:0;
 }
 .req-email-result{ margin-top:10px; font-size:13px; font-weight:500; }
+
+/* O menu Ações, aberto por clique, fica acima da barra flutuante da linha
+   selecionada (z-index 1200, components/actions-float.css), que cobria os itens
+   de baixo do menu. */
+#req-actions-menu{ z-index:1201; }
+/* A regra .menu-item (display:flex) vence o [hidden] do navegador: sem esta
+   linha o item seria desenhado mesmo quando não se aplica. */
+#req-action-email-dismiss[hidden]{ display:none; }
+/* Com a confirmação aberta, a barra flutuante (acima da camada dos diálogos)
+   sai da tela e da ordem de tabulação. */
+body:has(#req-email-dismiss-modal:not([hidden])) #pedido-actions-float{ visibility:hidden; }
+
+/* Confirmação de "Desmarcar sinalização de e-mail": o texto quebra em linhas,
+   então é justificado (última linha alinhada ao início); a recusa usa a mesma
+   caixa vermelha do fluxo de e-mail. */
+#req-email-dismiss-modal .modal-card{ width:min(520px, calc(100vw - 32px)); }
+.req-email-dismiss-text,
+#req-email-dismiss-error{ text-align:justify; text-align-last:start; }
+.req-email-dismiss-text{ margin:0; }
+#req-email-dismiss-error{ margin:10px 0 0; }
 
 .modal-filter{ margin-bottom: 10px; display:grid; grid-template-columns: 1fr auto; align-items:center; column-gap:2px; }
 .card-box{ border:1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); padding:10px; display:flex; flex-direction:column; gap:10px; }
@@ -772,7 +812,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
   'emailTemplateLabel': user_message('Modelo'),
   'emailSending': user_message('Enviando…'),
   'emailGenericError': user_message('Não foi possível concluir o envio.'),
-  'emailResendUnconfirmed': user_message('a tentativa anterior não foi confirmada pelo provedor.')
+  'emailResendUnconfirmed': user_message('a tentativa anterior não foi confirmada pelo provedor.'),
+  'dismissEmailFlag': user_message('Desmarcar sinalização de e-mail'),
+  'dismissEmailFlagCount': user_message('Desmarcar sinalização de e-mail ({value_1})'),
+  'dismissEmailFlagSingle': user_message('A sinalização de e-mail pendente da requisição {value_1} será removida. Nenhum e-mail será enviado e a decisão da requisição não muda.'),
+  'dismissEmailFlagMultiple': user_message('A sinalização de e-mail pendente de {value_1} requisições será removida. Nenhum e-mail será enviado e as decisões das requisições não mudam.'),
+  'dismissEmailFlagStale': user_message('A sinalização de e-mail mudou desde que a página foi aberta e nada foi alterado. Atualize a página e confira.'),
+  'dismissEmailFlagError': user_message('Não foi possível desmarcar a sinalização de e-mail.')
 }|tojson }}</script>
 
 <!-- Lista no formato de cards (com header sticky) -->
@@ -903,6 +949,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
           'data-observacao': (r.observacao or '')|e,
           'data-snapshot-versioned': '1' if r.snapshot_versionado_presente else '0',
           'data-email-pending': '1' if is_email_pendente else '0',
+          'data-email-event-id': (email_eventos_pendentes or {}).get(r.id, ''),
           'data-delete-url': (url_for('admin_excluir_requisicao', req_id=r.id) if can_requisicoes_full else '')
         }) }}
       {% endfor %}
@@ -1101,6 +1148,67 @@ document.addEventListener('DOMContentLoaded', ()=>{
       document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && !modal.hidden) close(); });
     });
 
+    // Desmarcar sinalização de e-mail: confirma e retira a sinalização exatamente
+    // das decisões que a página mostrou. Nada é enviado.
+    document.addEventListener('DOMContentLoaded', ()=>{
+      const modal      = document.getElementById('req-email-dismiss-modal');
+      if (!modal) return;
+      const elText     = document.getElementById('req-email-dismiss-text');
+      const elError    = document.getElementById('req-email-dismiss-error');
+      const btnConfirm = document.getElementById('req-email-dismiss-confirm');
+      const btnCancel  = document.getElementById('req-email-dismiss-cancel');
+      const btnClose   = document.getElementById('req-email-dismiss-close');
+      let current = [];
+      let inFlight = false;
+
+      function close(){ if (!inFlight) modal.hidden = true; }
+      function showError(message){ elError.textContent = message; elError.hidden = false; }
+
+      window.openRequisicoesEmailDismissConfirm = function(sinalizacoes){
+        if (!canRequisicoesEdit || !Array.isArray(sinalizacoes) || !sinalizacoes.length) return;
+        current = sinalizacoes;
+        inFlight = false;
+        elText.textContent = sinalizacoes.length === 1
+          ? window.appFormatMessage(reqMessageTemplates.dismissEmailFlagSingle, { value_1: sinalizacoes[0].requisicao_id })
+          : window.appFormatMessage(reqMessageTemplates.dismissEmailFlagMultiple, { value_1: sinalizacoes.length });
+        elError.hidden = true; elError.textContent = '';
+        btnConfirm.disabled = false;
+        modal.hidden = false;
+        window.lucide?.createIcons?.();
+        setTimeout(()=>{ btnConfirm.focus(); }, 30);
+      };
+
+      btnConfirm.addEventListener('click', async ()=>{
+        if (inFlight || btnConfirm.disabled) return;
+        inFlight = true;               // guards double click
+        btnConfirm.disabled = true;
+        elError.hidden = true;
+        let res = null, data = {};
+        try{
+          res = await fetch('{{ url_for("admin_requisicoes_email_desmarcar") }}', {
+            method:'POST',
+            headers: buildPostHeaders({ 'Content-Type':'application/json' }),
+            body: JSON.stringify({ sinalizacoes: current })
+          });
+          data = await res.json().catch(()=>({}));
+        }catch(_e){ res = null; }
+        // The reloaded list is the persisted state; its flash confirms the change.
+        if (res && res.ok && data.ok){ window.location.reload(); return; }
+        inFlight = false;
+        if (res && res.status === 409 && data.motivo === 'desatualizada'){
+          // Nothing changed and this page is out of date: confirming again cannot succeed.
+          showError(reqMessageTemplates.dismissEmailFlagStale);
+          return;
+        }
+        showError(reqMessageTemplates.dismissEmailFlagError);
+        btnConfirm.disabled = false;
+      });
+      btnCancel.addEventListener('click', close);
+      btnClose.addEventListener('click', close);
+      modal.addEventListener('click', (e)=>{ if (e.target === modal) close(); });
+      document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && !modal.hidden) close(); });
+    });
+
     // Seleção de linha + menu de Ações
     document.addEventListener('DOMContentLoaded', ()=>{
       const rowSelectionApi = window.initToolbarRowSelection?.({
@@ -1119,6 +1227,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       const itmEdit  = document.getElementById('req-action-edit');
       const itmProc  = document.getElementById('req-action-process');
       const itmEmail = document.getElementById('req-action-email');
+      const itmEmailDismiss = document.getElementById('req-action-email-dismiss');
       const itmDel   = document.getElementById('req-action-delete');
       if (!actBtn || !actMenu) return;
 
@@ -1127,8 +1236,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
       // menu measures 0.
       function closeMenu(){ actMenu.hidden = true; actBtn.setAttribute('aria-expanded','false'); }
       function openMenu(){
-        toolbarQuery.openFixedMenu(actBtn, actMenu);
+        // Items first: the menu is measured and clamped with the labels it will show.
         syncItems();
+        toolbarQuery.openFixedMenu(actBtn, actMenu);
         window.lucide?.createIcons?.();
       }
       toolbarQuery.bindDismissOnViewportChange(actMenu, closeMenu);
@@ -1158,6 +1268,18 @@ document.addEventListener('DOMContentLoaded', ()=>{
             emailLabel.textContent = rows.length > 1
               ? window.appFormatMessage(reqMessageTemplates.sendEmailCount, { value_1: rows.length })
               : reqMessageTemplates.sendEmail;
+          }
+        }
+        if (itmEmailDismiss){
+          // Enviar e-mail's selection contract, but offered only when it applies.
+          const canDismiss = canRequisicoesEdit && selectionAllEmailPending(rows);
+          itmEmailDismiss.disabled = !canDismiss;
+          itmEmailDismiss.hidden = !canDismiss;
+          const dismissLabel = itmEmailDismiss.querySelector('span');
+          if (dismissLabel){
+            dismissLabel.textContent = rows.length > 1
+              ? window.appFormatMessage(reqMessageTemplates.dismissEmailFlagCount, { value_1: rows.length })
+              : reqMessageTemplates.dismissEmailFlag;
           }
         }
         if (itmView)  { itmView.disabled  = !hasRow; }
@@ -1202,6 +1324,19 @@ document.addEventListener('DOMContentLoaded', ()=>{
           .map(r => parseInt(r.getAttribute('data-req-id'), 10))
           .filter(Number.isFinite);
         window.openRequisicoesEmailConfirm?.(ids);
+      });
+
+      itmEmailDismiss?.addEventListener('click', ()=>{
+        if (!canRequisicoesEdit || itmEmailDismiss.disabled) return;
+        closeMenu();
+        // Each row names the generation it shows, so a decision taken after the
+        // page loaded is refused as stale instead of losing its own flag.
+        const sinalizacoes = rowSelectionApi.getSelectedRows().map(r => ({
+          requisicao_id: parseInt(r.getAttribute('data-req-id'), 10),
+          evento_id: parseInt(r.getAttribute('data-email-event-id'), 10)
+        }));
+        if (!sinalizacoes.length || sinalizacoes.some(s => !Number.isFinite(s.requisicao_id) || !Number.isFinite(s.evento_id))) return;
+        window.openRequisicoesEmailDismissConfirm?.(sinalizacoes);
       });
 
       actBtn.addEventListener('click', ()=>{ if (actMenu.hidden) openMenu(); else closeMenu(); });

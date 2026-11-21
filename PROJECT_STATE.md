@@ -243,6 +243,12 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   concurrent control-schema DDL (`app/backup/pg_posture.py::run_ddl`) runs under one advisory lock,
   so overlapping scheduler or backup invocations no longer fail with `tuple concurrently updated`;
   the known test debt below was repaired at its causes. What it deferred is in its §15.
+- UI-B47 (`docs/specs/UI-B47.md`, R2, CLOSED 2026-11-21), on the development branch, not deployed:
+  Admin → Requisições → Ações → "Desmarcar sinalização de e-mail" withdraws the pending-email flag of
+  the selected decisions -- exactly the generations the page showed, all or none, closed as
+  `superseded` (schema v19 unchanged); nothing is sent and the request does not change; a page left
+  open across a new decision is refused as stale. Route `admin_requisicoes_email_desmarcar`
+  (requisicoes/edit). Owner visual acceptance pending (backlog UI-B47); residuals in its §15.
 
 ## Environment facts
 

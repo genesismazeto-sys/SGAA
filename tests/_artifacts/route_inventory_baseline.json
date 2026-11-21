@@ -763,6 +763,13 @@
       "rule": "/admin/requisicoes/<int:req_id>/excluir"
     },
     {
+      "endpoint": "admin_requisicoes_email_desmarcar",
+      "methods": [
+        "POST"
+      ],
+      "rule": "/admin/requisicoes/email/desmarcar"
+    },
+    {
       "endpoint": "admin_requisicoes_email_enviar",
       "methods": [
         "POST"

@@ -18,4 +18,4 @@ indexes SPECs only.
 | DIAG-500 | Versioned-activity diagnostic lookups | R3 | CLOSED 2026-11-21: retrospective record and A1 accepted by the owner (targeted-recheck exception approved); integrated into the development branch; not deployed | [`DIAG-500.md`](DIAG-500.md) |
 | DS-CONSISTENCY-01 | One section card and one button contract | R1 | CLOSED 2026-11-21: accepted by the owner and integrated into the development branch; not deployed | [`DS-CONSISTENCY-01.md`](DS-CONSISTENCY-01.md) |
 | TECH-CLEANUP-01 | Bounded technical defects after GF1-CONSOLIDATED | R2 | CLOSED 2026-11-21: on the development branch; not deployed | [`TECH-CLEANUP-01.md`](TECH-CLEANUP-01.md) |
-| UI-B47 | Manual dismissal of the pending-email flag | R2 | FROZEN 2026-11-21 | [`UI-B47.md`](UI-B47.md) |
+| UI-B47 | Manual dismissal of the pending-email flag | R2 | CLOSED 2026-11-21: on the development branch; not deployed; owner visual acceptance pending | [`UI-B47.md`](UI-B47.md) |

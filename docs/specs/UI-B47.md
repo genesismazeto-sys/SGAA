@@ -1,6 +1,6 @@
 # SPEC UI-B47 — Manual dismissal of the pending-email flag
 
-Status: FROZEN 2026-11-21
+Status: CLOSED 2026-11-21 (frozen the same day)
 Charter: "Allow an administrator to manually clear the pending-email indicator on a request through
 the existing Ações menu in Admin → Requisições." Starting HEAD `701e308`; synthetic data only; commit
 and push to the development branch; PRODUCTION HOLD (no deployment). Source: backlog row UI-B47.
@@ -143,7 +143,7 @@ PROD user gates: none.
 
 | # | Goal | Paths | Exit evidence | Status |
 |---|---|---|---|---|
-| 1 | Dismissal owner, route, Ações item and modal, guards, closure | §6 | §11 | PENDING |
+| 1 | Dismissal owner, route, Ações item and modal, guards, closure | §6 | §11 | DONE |
 
 ## 13. Acceptance criteria
 
@@ -163,6 +163,63 @@ PROD user gates: none.
 
 ## 15. Deferred / known non-blockers
 
+- PRE_EXISTING — the floating row bar (`#pedido-actions-float`, z-index 1200,
+  `components/actions-float.css`) stacks above every `.popover` (1000) and `.modal-overlay` (40):
+  it covers the lower items of an open menu and stays bright over a dialog's scrim (on Requisições
+  over Enviar e-mail, the presets and the request dialog too). A1 handles only what this item needs.
+  One shared stacking rule in the component, for every list page that uses the bar, with their
+  recapture, is a separate change.
+- PRE_EXISTING — in `.toolbar-actions-menu` the item rule (`display:flex`) outranks `[hidden]`, so
+  items a script hides are drawn disabled (Editar on a decided request; for a profile that may not
+  edit, the menu's other items). A1 scopes the fix to the new item; whether the others should
+  disappear is a product decision.
+- PRE_EXISTING (D6) — the dispatch reads its plan without locks and ignores the link update's
+  count: a dismissal (or reopen) committed after the plan does not stop that e-mail, and one that
+  lands between the link and the confirmation leaves a delivered generation `superseded`;
+  `email_envios` stays the delivery record and the generation keeps its attempt link.
+- Provenance of a dismissal is the application log only; a durable record (a state or columns)
+  would be a schema v20 change.
+
 ## 16. Amendments
 
+- A1 2026-11-21 — Page-local corrections in `templates/admin_requisicoes.html`, after the evidence
+  renders and the R2 review: the open Ações menu sits above the selected row's floating bar, which
+  covered its lower items, the new one included; `#req-action-email-dismiss[hidden]` is not drawn
+  (the menu's item rule outranks `[hidden]`, so D4's "hidden" needed it, also for a view-only
+  profile); while the new confirmation is open the bar is hidden and out of the tab order; the menu
+  syncs its items before it is measured and clamped, since an item revealed after the measure
+  wrapped its label on a phone. The other dialogs and items keep their behaviour (§5, §15).
+  Material: no.
+- A2 2026-11-21 — D3's lock-order statement corrected (R2 review): the lock order of an `IN` list
+  follows the plan, so a dismissal and a dispatch locking several of the same student's generations
+  in opposite orders can deadlock; PostgreSQL aborts one side and neither is half-applied. The
+  processing handler (request row, then one generation) cannot deadlock with a dismissal. Ids above
+  the signed 64-bit range are refused as invalid input (400) instead of failing to bind.
+  Material: no.
+
 ## 17. Closure
+
+Closed 2026-11-21; this closure lands with slice 1. Evidence outside the repository:
+`D:\SGAA_tmp\ui_b47` (EVIDENCE.md, contact sheets, screenshots, logs, mutation probes).
+
+- AC1 met — E-UI: an unflagged selection does not draw the item, a flagged one offers it
+  uncovered, a view-only profile never sees it; T1.
+- AC2 met — E-UI: the flag is gone after the confirmation and after a reload, desktop and phone; T1.
+- AC3 met — T1: request row, `email_envios` and the attempt link unchanged; nothing sent.
+- AC4 met — T1 (403 to the page's fetch for a view-only profile, redirect otherwise; CSRF refusal
+  with a positive control; 400 for every ambiguous or out-of-range selection), T4 guards.
+- AC5 met — T1 (moved, sent, reopened, mismatched and partly stale selections change nothing),
+  E-PG2 on PostgreSQL 15 and 17 in both orders, E-UI (a stale page is refused, the newer flag kept).
+- AC6 met — T1 (the new flag is sendable), the e-mail suites, E-UI (the re-raised flag is offered;
+  Enviar e-mail sends through the fake transport and clears its flag).
+- AC7 met — E-UI at 1440 × 900 and 390 × 844 with Inter loaded.
+- AC8 met — self-audit in the phase report, no exception.
+
+Runs: T1 29; impact set 1056 passed, 38 opt-in skips, one class-B ledger pin updated (its file
+rerun); template and DS guards 403, then 261 and 207 on the final bytes; popover contract 5;
+E-PG 3 + 3; E-UI 1; ten mutants killed. Full suite not triggered (no TEP §5.1 trigger). R2: a
+fresh-context review (same model family) found two MATERIAL template defects (the item drawn when
+it must be hidden; the bar rule reaching every dialog), fixed by A1; its non-material findings are
+A2 and §15. The targeted recheck passed all five items with no new MATERIAL finding; its remaining
+notes (a non-vacuous view-only check, the menu measuring order) are applied. Owner visual
+acceptance pending (backlog UI-B47).

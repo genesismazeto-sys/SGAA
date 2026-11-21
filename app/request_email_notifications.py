@@ -17,6 +17,7 @@ Lifecycle of one request::
 
     decide        -> pending  (previous pending, if any, becomes superseded)
     reopen        -> superseded
+    dismiss       -> superseded  (the administrator withdrew the flag)
     decide again  -> a NEW pending generation
     sent          -> sent, and frozen forever
 
@@ -30,6 +31,9 @@ from __future__ import annotations
 import datetime
 import sqlite3
 from collections import OrderedDict
+from collections.abc import Mapping
+
+from app.db import write_transaction
 
 #: Explicit administrative decisions, including the non-final return for correction.
 #: The historical constant name is retained for its existing callers.
@@ -127,19 +131,90 @@ def record_final_decision_event(
     return int(cursor.fetchone()[0])
 
 
-def pending_request_ids(
+def pending_event_ids(
     conn: sqlite3.Connection, requisicao_ids=None
-) -> set[int]:
-    """Request ids whose *current* decision still awaits communication."""
-    sql = "SELECT requisicao_id FROM requisicao_email_eventos WHERE estado='pending'"
+) -> dict[int, int]:
+    """Request id -> the id of its *current* pending generation."""
+    sql = "SELECT requisicao_id, id FROM requisicao_email_eventos WHERE estado='pending'"
     params: list = []
     if requisicao_ids is not None:
         ids = [int(value) for value in requisicao_ids]
         if not ids:
-            return set()
+            return {}
         sql += f" AND requisicao_id IN ({','.join('?' for _ in ids)})"
         params = ids
-    return {int(row[0]) for row in conn.execute(sql, params)}
+    return {int(row[0]): int(row[1]) for row in conn.execute(sql, params)}
+
+
+def pending_request_ids(
+    conn: sqlite3.Connection, requisicao_ids=None
+) -> set[int]:
+    """Request ids whose *current* decision still awaits communication."""
+    return set(pending_event_ids(conn, requisicao_ids))
+
+
+class EmailFlagDismissalStale(Exception):
+    """The named generations are no longer all their requests' pending ones.
+
+    ``requisicao_ids`` are the requests whose flag changed (sent, superseded
+    by a newer decision, or never that generation) since the page was shown.
+    """
+
+    def __init__(self, requisicao_ids) -> None:
+        self.requisicao_ids = sorted(int(value) for value in requisicao_ids)
+        super().__init__(f"stale e-mail flag selection: {self.requisicao_ids}")
+
+
+def dismiss_pending_events(
+    conn: sqlite3.Connection, generations: Mapping[int, int]
+) -> int:
+    """Withdraw the pending flag of exactly these generations, all or none.
+
+    ``generations`` maps a request id to the pending generation id the
+    administrator saw.  Matching on the generation, never on the request,
+    is what keeps a page opened before a newer decision from clearing that
+    decision's flag.  Each generation closes as ``superseded`` -- closed
+    without delivery, the state a reopen already gives -- so the next
+    decision raises its own flag through :func:`record_final_decision_event`.
+
+    Nothing else is written: no ``email_envios`` row, no attempt link
+    (``email_envio_id`` keeps naming a failed or unconfirmed attempt), no
+    request column.  When any pair is not a current pending generation the
+    transaction rolls back and :class:`EmailFlagDismissalStale` names the
+    requests that moved.
+
+    One ``UPDATE ... WHERE estado='pending' AND id IN (...)``: a concurrent
+    decision or dispatch that commits first is seen by the re-checked
+    ``estado='pending'``; one that comes later waits.  The processing handler
+    locks the request row and then one generation, so it cannot deadlock with
+    this.  A dispatch locking several of the same student's generations in
+    another order can (the lock order of an ``IN`` list follows the plan);
+    PostgreSQL then aborts one side and, both being single transactions,
+    nothing is half-applied.
+    """
+    expected = {int(req_id): int(event_id) for req_id, event_id in generations.items()}
+    if not expected:
+        return 0
+    event_ids = sorted(expected.values())
+    placeholders = ",".join("?" for _ in event_ids)
+    with write_transaction(conn):
+        rows = conn.execute(
+            f"""
+            UPDATE requisicao_email_eventos
+               SET estado='superseded', superseded_em=?
+             WHERE estado='pending' AND id IN ({placeholders})
+            RETURNING requisicao_id, id
+            """,
+            [_now(), *event_ids],
+        ).fetchall()
+        dismissed = {int(row[0]): int(row[1]) for row in rows}
+        stale = [
+            req_id for req_id, event_id in expected.items()
+            if dismissed.get(req_id) != event_id
+        ]
+        if stale:
+            raise EmailFlagDismissalStale(stale)
+    return len(rows)
 
 
 def failed_request_ids(conn: sqlite3.Connection, requisicao_ids=None) -> set[int]:
@@ -253,13 +328,16 @@ def mark_events_sent(conn: sqlite3.Connection, *, event_ids, email_envio_id: int
 
 
 __all__ = [
+    "EmailFlagDismissalStale",
     "FINAL_DECISION_STATUSES",
     "NON_NOTIFYING_STATUSES",
     "attach_events_to_send",
+    "dismiss_pending_events",
     "failed_request_ids",
     "group_events_by_student",
     "load_pending_events",
     "mark_events_sent",
+    "pending_event_ids",
     "pending_request_ids",
     "record_final_decision_event",
     "supersede_pending_event",

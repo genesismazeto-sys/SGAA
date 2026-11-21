@@ -766,8 +766,10 @@ def profile_digest(level: str, profiles=None) -> str:
 # Document templates add admin_catalogo_{adicionar,atualizar,retirar}_modelo
 # (POST, atividades, edit) and admin_catalogo_baixar_modelo (GET, atividades,
 # view); no existing requirement changes.
+# UI-B47 adds (admin_requisicoes_email_desmarcar, POST, requisicoes, edit), the
+# requirement of the e-mail send it sits beside.
 CANONICAL_REQUIREMENT_MATRIX_DIGEST = (
-    "a222478c485e9c60c2de30a66a7385dba22bd80f30e2c3c25ecb1efd8d3564e2"
+    "469f3198f9157f33af2108bc17aadacf8226c8ef522a4ed808032c58f121e6e1"
 )
 
 # The profile anchor: which access level holds which scope per resource.
@@ -798,8 +800,10 @@ CANONICAL_DYNAMIC_REQUIREMENT_IDENTITIES_SHA256 = (
 # profiles on the single-account password e-mail endpoint. The default-password
 # activation has no endpoint of its own; it is denied through the pre-existing
 # senhas-default requirement.
+# UI-B47 adds the consultivo denial of the e-mail-flag dismissal POST, as on the
+# e-mail send.
 CANONICAL_DENIAL_MATRIX_IDENTITIES_SHA256 = (
-    "d42f9ca71ddd40cff07b48973a4621fb81cd28b57c07db75b9953fef41ef1ecf"
+    "a8460acdd4c1e5629adec2bef034ce2d384d6306a43c8f587cf35ca2fd981ee0"
 )
 
 

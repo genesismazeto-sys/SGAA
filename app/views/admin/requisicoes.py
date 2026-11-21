@@ -39,7 +39,10 @@ from app.request_email_dispatch import (
 from app.request_email_render import PLACEHOLDER_HELP, pluralize
 from app.request_email_notifications import (
     FINAL_DECISION_STATUSES,
+    EmailFlagDismissalStale,
+    dismiss_pending_events,
     failed_request_ids,
+    pending_event_ids,
     pending_request_ids,
     record_final_decision_event,
     supersede_pending_event,
@@ -692,7 +695,8 @@ def admin_requisicoes():
     ]
     total_pages = (total + per_page - 1) // per_page if apply_limit and per_page else 1
     visible_ids = [row["id"] for row in requisicoes]
-    email_pendentes = pending_request_ids(conn, visible_ids)
+    email_eventos_pendentes = pending_event_ids(conn, visible_ids)
+    email_pendentes = set(email_eventos_pendentes)
     email_falhas = failed_request_ids(conn, visible_ids) & email_pendentes
     return render_template(
         "admin_requisicoes.html",
@@ -709,6 +713,7 @@ def admin_requisicoes():
         comprovantes_operation_id=new_comprovante_operation_id(),
         comprovantes_submission_id=documents.issue_submission(session, int(session["user_id"])),
         email_pendentes=email_pendentes,
+        email_eventos_pendentes=email_eventos_pendentes,
         email_falhas=email_falhas,
         email_placeholder_help=PLACEHOLDER_HELP,
         return_response_days=get_return_response_days(conn),
@@ -1565,6 +1570,57 @@ def admin_requisicoes_email_enviar():
     })
 
 
+#: The largest id both engines bind (signed 64-bit).
+_MAX_DATABASE_ID = 2**63 - 1
+
+
+def _dismissal_generations(payload) -> dict[int, int] | None:
+    """Request id -> the pending generation the page showed, or ``None``.
+
+    Unlike the send selection, nothing is silently dropped: a dismissal is all
+    or nothing, so an ambiguous selection is refused whole.
+    """
+    raw = payload.get("sinalizacoes") if isinstance(payload, dict) else None
+    if not isinstance(raw, list) or not 0 < len(raw) <= 500:
+        return None
+    generations: dict[int, int] = {}
+    for item in raw:
+        if not isinstance(item, dict):
+            return None
+        req_id, event_id = item.get("requisicao_id"), item.get("evento_id")
+        # ``type(...) is int`` also refuses booleans and numeric strings; the
+        # bound keeps a value the database cannot bind from becoming a 500.
+        if not all(type(value) is int and 0 < value <= _MAX_DATABASE_ID for value in (req_id, event_id)):
+            return None
+        if req_id in generations or event_id in generations.values():
+            return None
+        generations[req_id] = event_id
+    return generations
+
+
+@admin_required
+def admin_requisicoes_email_desmarcar():
+    """Withdraw the pending-email flag of the selected decisions. Sends nothing."""
+    generations = _dismissal_generations(request.get_json(silent=True))
+    if generations is None:
+        return jsonify({"ok": False, "motivo": "selecao_invalida"}), 400
+    conn = get_db_connection()
+    try:
+        dismissed = dismiss_pending_events(conn, generations)
+    except EmailFlagDismissalStale as exc:
+        return jsonify({
+            "ok": False,
+            "motivo": "desatualizada",
+            "desatualizadas": exc.requisicao_ids,
+        }), 409
+    logger.info(
+        "event=request_email_flag_dismissed admin_id=%s request_ids=%s generation_ids=%s",
+        session.get("user_id"), sorted(generations), sorted(generations.values()),
+    )
+    flash("Sinalização de e-mail removida. Nenhum e-mail foi enviado.", "success")
+    return jsonify({"ok": True, "desmarcadas": dismissed})
+
+
 bp_admin_requisicoes = Blueprint("admin_requisicoes_blueprint", __name__)
 
 LEGACY_ROUTE_SPECS = configure_legacy_routes(
@@ -1636,6 +1692,12 @@ LEGACY_ROUTE_SPECS = configure_legacy_routes(
             admin_requisicoes_email_enviar,
             ("POST",),
         ),
+        LegacyRouteSpec(
+            "/admin/requisicoes/email/desmarcar",
+            "admin_requisicoes_email_desmarcar",
+            admin_requisicoes_email_desmarcar,
+            ("POST",),
+        ),
     ),
 )
 
@@ -1652,6 +1714,7 @@ __all__ = [
     "admin_nova_requisicao",
     "admin_processar_requisicao",
     "admin_requisicoes",
+    "admin_requisicoes_email_desmarcar",
     "admin_requisicoes_email_enviar",
     "admin_requisicoes_email_preview",
     "bp_admin_requisicoes",

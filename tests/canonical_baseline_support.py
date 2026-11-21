@@ -297,6 +297,18 @@ CATALOG_LEDGER: tuple[tuple[str, int], ...] = (
         "1 retirement",
         -1,
     ),
+    (
+        "UI-B47 manual dismissal of the pending-email flag: the Ações item "
+        "'Desmarcar sinalização de e-mail' (msg_14dd43baf8aa7fbf) and its "
+        "multi-selection label (msg_4f0edf523589d4c9), the confirmation texts "
+        "for one request (msg_c0fef631e6dde4aa) and several "
+        "(msg_a851454ce8cea458), the confirming button 'Desmarcar' "
+        "(msg_c626d8f818f27432), the stale-selection refusal "
+        "(msg_033d0939ad582475), the generic failure (msg_a66a4da6d50a0951) "
+        "and the success flash 'Sinalização de e-mail removida. Nenhum e-mail "
+        "foi enviado.' (msg_da329cd94a3e1e87). 8 additions, 0 retirements",
+        8,
+    ),
 )
 
 # Everything before the UT-MX3 term is MX3's exact parent state. Anchored on
@@ -346,9 +358,10 @@ PARENT_CATALOG_KEYS_SHA256 = (
 # with its one success message, and the R3 review's CSV warning and policy refusal, to 588; the rereview's
 # uncertain-restore warning, to 589; RECT1 (three additions, one retirement),
 # to 591; RECL1 (two additions, one retirement), to 592; UXA1 (two additions),
-# to 594; TPL1 (four additions), to 598; UI-B40 (one retirement), to 597.
+# to 594; TPL1 (four additions), to 598; UI-B40 (one retirement), to 597;
+# UI-B47 (eight additions), to 605.
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "8f9b272c5de08bb4beeea8471a6d86c242a4a86930654e7d06cc04fdb5339ab6"
+    "73d5055133c72c8076309076fae833e410febf2b1e2bc0558043f326e7a5f651"
 )
 
 # Named post-MX3 key sets.  Suites that reconstruct UT-MX3's parent state have
@@ -636,8 +649,10 @@ TMA1_MATRIX_AUTHORITY_KEYS = frozenset({"msg_35110e5b7a30e863"})
 # GET download, requiring (atividades, view); the student's GET download
 # /aluno/modelos/<int:modelo_id>/baixar (aluno.aluno_baixar_modelo) is
 # authorized in its view.
+# UI-B47 adds one CSRF-protected POST, /admin/requisicoes/email/desmarcar
+# (admin_requisicoes_email_desmarcar), requiring (requisicoes, edit).
 CANONICAL_ROUTE_IDENTITIES_SHA256 = (
-    "36c50d19442c8d42d6862508523a3e52f4a21da197082cbb4d30c7bdb52eba01"
+    "2d3d5766b1ce8d2e1d29254a957a31749e39658384a9d5c0ef6fbbd1ddf1fa77"
 )
 
 
@@ -1014,10 +1029,36 @@ UIB40_STATUS_DISPLAY_RETIRED_KEYS = frozenset(
 def catalog_keys_before_status_display(keys) -> set[str]:
     """Undo the UI-B40 term: put the retired 'Encerrada' label back.
 
-    UI-B40 is the newest term, so a reconstruction walks back through this
-    first, then TPL1, UXA1 and every older term.
+    A reconstruction walks back through UI-B47 first, then this, then TPL1,
+    UXA1 and every older term.
     """
     return set(keys) | set(UIB40_STATUS_DISPLAY_RETIRED_KEYS)
+
+
+# UI-B47 manual dismissal of the pending-email flag (net +8).  Removing exactly
+# these keys from the live catalog reproduces the UI-B40 digest 8f9b272c...,
+# which is the proof that the term is purely additive.
+UIB47_EMAIL_FLAG_DISMISSAL_KEYS = frozenset(
+    {
+        "msg_14dd43baf8aa7fbf",  # Desmarcar sinalizacao de e-mail
+        "msg_4f0edf523589d4c9",  # Desmarcar sinalizacao de e-mail ({value_1})
+        "msg_c0fef631e6dde4aa",  # A sinalizacao ... da requisicao {value_1} sera removida...
+        "msg_a851454ce8cea458",  # A sinalizacao ... de {value_1} requisicoes sera removida...
+        "msg_c626d8f818f27432",  # Desmarcar
+        "msg_033d0939ad582475",  # A sinalizacao de e-mail mudou desde que a pagina foi aberta...
+        "msg_a66a4da6d50a0951",  # Nao foi possivel desmarcar a sinalizacao de e-mail.
+        "msg_da329cd94a3e1e87",  # Sinalizacao de e-mail removida. Nenhum e-mail foi enviado.
+    }
+)
+
+
+def catalog_keys_before_email_flag_dismissal(keys) -> set[str]:
+    """Undo the UI-B47 term: drop its eight keys (it retired none).
+
+    UI-B47 is the newest term, so a reconstruction walks back through this
+    first, then UI-B40, TPL1 and every older term.
+    """
+    return set(keys) - set(UIB47_EMAIL_FLAG_DISMISSAL_KEYS)
 
 
 def catalog_keys_before_s3a_direct_documents(keys) -> set[str]:

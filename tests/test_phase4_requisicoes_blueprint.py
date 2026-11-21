@@ -54,12 +54,19 @@ ROUTE_MATRIX = (
     # REN1 request e-mail notifications: explicit preview + send surface.
     ("/admin/requisicoes/email/preview", "admin_requisicoes_email_preview", ("POST",)),
     ("/admin/requisicoes/email/enviar", "admin_requisicoes_email_enviar", ("POST",)),
+    # UI-B47: withdrawing the pending-email flag, beside the send.
+    ("/admin/requisicoes/email/desmarcar", "admin_requisicoes_email_desmarcar", ("POST",)),
 )
 ROUTE_NAMES = tuple(endpoint for _, endpoint, _ in ROUTE_MATRIX)
+# main.py is a frozen compatibility facade (ENGINEERING_STANDARDS §3): routes
+# born after its freeze are never re-exported there.
+POST_FACADE_ROUTE_NAMES = ("admin_requisicoes_email_desmarcar",)
+FACADE_ROUTE_NAMES = tuple(name for name in ROUTE_NAMES if name not in POST_FACADE_ROUTE_NAMES)
 # B4.2 froze this cohort at 9 specs / 12 rule-method pairs. REN1 adds the two
 # POST-only e-mail endpoints, so the contract is now 11 specs / 14 pairs.
-COHORT_SPEC_COUNT = 11
-COHORT_RULE_METHOD_PAIRS = 14
+# UI-B47 adds the POST-only e-mail-flag dismissal: 12 specs / 15 pairs.
+COHORT_SPEC_COUNT = 12
+COHORT_RULE_METHOD_PAIRS = 15
 
 HELPER_NAMES = (
     "_normalize_requisicao_data_evento",
@@ -81,11 +88,13 @@ RBAC_MATRIX = {
     "admin_processar_requisicao": ("requisicoes", "edit"),
     "admin_requisicoes_email_preview": ("requisicoes", "edit"),
     "admin_requisicoes_email_enviar": ("requisicoes", "edit"),
+    "admin_requisicoes_email_desmarcar": ("requisicoes", "edit"),
 }
 
 RBAC_SCOPE_COUNTS = {"view": 4, "edit": 5, "full": 3}
-# REN1 adds two Requisições-edit endpoints on top of the frozen B4.2 counts.
-RBAC_SCOPE_COUNTS_CURRENT = {"view": 4, "edit": 7, "full": 3}
+# REN1 adds two Requisições-edit endpoints on top of the frozen B4.2 counts,
+# UI-B47 a third.
+RBAC_SCOPE_COUNTS_CURRENT = {"view": 4, "edit": 8, "full": 3}
 
 CSRF_MUTATING_PAIRS = {
     "/admin/importar_requisicoes": "admin_importar_requisicoes",
@@ -785,8 +794,10 @@ def test_main_compatibility_exports_are_identity_imports_and_app_uses_canonical_
     import main
 
     module = _canonical_module()
-    for name in ROUTE_NAMES + HELPER_NAMES:
+    for name in FACADE_ROUTE_NAMES + HELPER_NAMES:
         assert getattr(main, name) is getattr(module, name)
+    for name in POST_FACADE_ROUTE_NAMES:
+        assert not hasattr(main, name)
     assert main.ALLOWED_EXCEL is module.ALLOWED_EXCEL
     for name in ROUTE_NAMES:
         assert main.app.view_functions[name] is getattr(module, name)
@@ -797,9 +808,9 @@ def test_main_no_longer_defines_moved_bodies_or_route_decorators():
     moved = set(ROUTE_NAMES) | set(HELPER_NAMES)
     assert not (moved & _top_level_functions(MAIN_PATH))
     assert not set(CONSTANT_NAMES) & _top_level_assignments(MAIN_PATH)
-    assert set(ROUTE_NAMES) | set(HELPER_NAMES) <= _imports_from(
-        MAIN_PATH, "app.views.admin.requisicoes"
-    )
+    imported = _imports_from(MAIN_PATH, "app.views.admin.requisicoes")
+    assert set(FACADE_ROUTE_NAMES) | set(HELPER_NAMES) <= imported
+    assert not set(POST_FACADE_ROUTE_NAMES) & imported
     assert set(CONSTANT_NAMES) <= _imports_from(MAIN_PATH, "app.views.admin.requisicoes")
     source = MAIN_PATH.read_text(encoding="utf-8")
     for rule, _, _ in ROUTE_MATRIX:

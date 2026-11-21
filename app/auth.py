@@ -437,6 +437,7 @@ def get_admin_permission_requirement(endpoint: str | None, method: str = "GET") 
         "admin_processar_requisicao",
         "admin_requisicoes_email_preview",
         "admin_requisicoes_email_enviar",
+        "admin_requisicoes_email_desmarcar",
     }:
         return _permission("requisicoes", "edit")
     if endpoint == "admin_excluir_requisicao":
