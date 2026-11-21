@@ -121,6 +121,56 @@ def test_listing_reports_each_unresolvable_identifier_by_its_reason(versioned_en
     }
 
 
+def _insert_matriz(conn, matriz_id, nome):
+    conn.execute(
+        "INSERT INTO matrizes_atividades (id, curso_id, nome, status,"
+        " horas_aac_obrigatorias, horas_extensao_obrigatorias)"
+        " VALUES (?, 1, ?, 'rascunho', 200, 100)",
+        (matriz_id, nome),
+    )
+
+
+def test_listing_resolves_stored_negative_ids(versioned_env):
+    # Both schemas accept an explicit negative id; such a row is read like any other.
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        _insert_matriz(conn, -5, "Matriz PPA legada")
+        conn.execute(
+            "INSERT INTO matriz_atividade_versao_item (matriz_id, atividade_base_id, atividade_versao_id)"
+            " SELECT -5, atividade_base_id, atividade_versao_id FROM matriz_atividade_versao_item"
+            " WHERE matriz_id = 1 ORDER BY atividade_versao_id LIMIT 3"
+        )
+        conn.execute(
+            "INSERT INTO turmas (id, nome, turno, status, numero, curso_id, matriz_id,"
+            " ano_inicio, semestre_inicio, ano_fim, semestre_fim, codigo)"
+            " VALUES (-70, 'PPA-T70', 'Manhã', 'Ativa', 70, 1, -5, 2026, 1, 2029, 2, 'PPA-T70')"
+        )
+        por_matriz = resolver.listar_atividades_versionadas_por_matriz(conn, -5)
+        por_turma = resolver.listar_atividades_versionadas_por_turma(conn, -70)
+        turma_ausente = resolver.listar_atividades_versionadas_por_turma(conn, -99999)
+        matriz_ausente = resolver.listar_atividades_versionadas_por_matriz(conn, -99999)
+    assert por_matriz["status"] == "resolved"
+    assert por_matriz["matriz"] == {"id": -5, "label": "Matriz PPA legada | Rascunho"}
+    assert {row["atividade_versao_id"] for row in por_matriz["atividades"]} == {1, 2, 3}
+    assert por_turma["status"] == "resolved"
+    assert por_turma["turma"] == {"id": -70, "nome": "PPA-T70", "codigo": "PPA-T70"}
+    assert por_turma["matriz"]["id"] == -5
+    assert por_turma["atividades"] == por_matriz["atividades"]
+    assert (turma_ausente["status"], turma_ausente["reason"]) == ("not_found", "turma not found")
+    assert (matriz_ausente["status"], matriz_ausente["reason"]) == ("not_found", "matrix not found")
+
+
+@pytest.mark.parametrize("identifier", [0, -(2**63), 2**63 - 1])
+def test_listing_looks_up_every_integer_a_row_id_can_hold(versioned_env, identifier):
+    # Zero and both signed 64-bit extremes are valid SQLite row ids. Refusing an
+    # explicit 0 is the diagnostic routes' rule, not the resolver's.
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        _insert_matriz(conn, identifier, "Matriz PPA importada")
+        listing = resolver.listar_atividades_versionadas_por_matriz(conn, identifier)
+    assert (listing["status"], listing["matriz"]["id"]) == ("resolved", identifier)
+
+
 @pytest.mark.parametrize("identifier", [2**63, -(2**63) - 1])
 def test_listing_reports_an_id_beyond_the_row_id_range_as_not_found(versioned_env, identifier):
     # SQLite cannot bind such an integer (OverflowError); no row can carry it.

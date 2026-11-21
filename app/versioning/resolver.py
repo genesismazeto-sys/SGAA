@@ -10,15 +10,17 @@ _MATRIZ_STATUS_LABELS = {
     "encerrada": "Encerrada",
 }
 
-# SQLite binds integers up to signed 64 bits and refuses a larger one
-# (OverflowError). No row id of either engine lies outside that range
-# (PostgreSQL ids are 32-bit), so such an id is reported as naming no row
-# instead of being sent to the database.
+# SQLite binds integers as signed 64 bits and refuses any other (OverflowError).
+# No row id of either engine lies outside that range (PostgreSQL ids are
+# 32-bit), so such an id is reported as naming no row instead of being sent to
+# the database. Inside it every integer is looked up: both schemas store an
+# explicit zero or negative id as readily as a generated one.
+_MIN_ROW_ID = -(2**63)
 _MAX_ROW_ID = 2**63 - 1
 
 
 def _is_row_id(value: int) -> bool:
-    return 0 < value <= _MAX_ROW_ID
+    return _MIN_ROW_ID <= value <= _MAX_ROW_ID
 
 
 def _versioning_matriz_option_label(row) -> str:
