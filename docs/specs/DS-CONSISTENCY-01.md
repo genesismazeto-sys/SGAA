@@ -168,5 +168,9 @@ None beyond `docs/OPERATING_MODEL.md` §7.
   stacks below 768px; the "Alunos da turma" list keeps a 600px row and scrolls sideways on a phone. The
   calendar icon takes `--text-tertiary` instead of a literal grey. The template ratchets are reset to the
   measured counts (duplicated declarations 308 -> 198, static inline styles 198 -> 131). Presentation only.
+- A9 2026-11-21 — Evidence plan corrected by the owner's workflow decision (TEP v1.2): §11's "one T5 at
+  close" under C is withdrawn -- a presentation-only delta is not C and a phase close is not a trigger. The
+  sweep already running on `e8c5107` is kept as the release-candidate evidence for G (integration into a
+  release / GF1), carried to later trees through TEP §6. The phase closes on T1–T4 and the browser contract.
 
 ## 17. Closure

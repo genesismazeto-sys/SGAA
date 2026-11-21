@@ -1,6 +1,10 @@
 # SGAA-EJ — Test Execution Policy (TEP)
 
-**Version:** 1.1 — 2026-10-09 (MP-0: role wording for the spec-driven operating
+**Version:** 1.2 — 2026-11-21 (owner workflow correction: a SPEC full-suite
+milestone must name its §5.1 trigger; G and C clarified; the default flow for
+ordinary changes, §3.8; budget fields `trigger` and `reuse`; triggers,
+invalidators and failure classes otherwise unchanged).
+v1.1 — 2026-10-09 (MP-0: role wording for the spec-driven operating
 model and the E-LIVE lane; tiers, triggers, invalidators and failure classes
 unchanged). v1.0 — 2026-10-06 (Phase G1, docs only; entry HEAD
 `22f0274718d1c9741b8988a34ccc425ccfbb9ffc`).
@@ -10,8 +14,9 @@ generic per-unit full-suite rule of `docs/refactor/EXECUTION_PROTOCOL.md` §7
 step 7 for new work. The executor applies this policy autonomously under
 `docs/OPERATING_MODEL.md`; its decisions are recorded, never submitted for
 authorization. Where a frozen phase SPEC is silent, this policy decides; a SPEC
-may demand stronger evidence or declare milestone triggers for its scope, but
-it cannot weaken a MUST of this policy.
+may demand stronger evidence, and may declare a full-suite milestone for its
+scope only by naming the §5.1 trigger it rests on (§12); it cannot weaken a
+MUST of this policy.
 
 Keywords MUST, MUST NOT, SHOULD and MAY are normative.
 
@@ -45,11 +50,15 @@ delta:    <files/surface; production bytes identical yes/no>
 risk:     <specific plausible defect class>
 run:      <exact tier/lane/command; estimated runtime>
 new info: <what this run can detect that existing evidence cannot>
+reuse:    <why the evidence already collected (§6) is insufficient>
 if fails: <decision that changes>
+trigger:  <the §5.1 letter for a full suite; the §3 tier rule otherwise>
 ```
 
-If `new info` has no concrete answer, the run MUST NOT take place. Shorter
-runs need no written budget, but the two questions of §1 still apply.
+If `new info`, `reuse` or (for a full suite) `trigger` has no concrete answer,
+the run MUST NOT take place. Shorter runs need no written budget, but the two
+questions of §1 still apply. Routine test selection is the executor's decision
+under this policy; it is never put to the owner.
 
 ## 3. Scope tiers
 
@@ -118,6 +127,28 @@ dependency analysis shows broader exposure, or a §5 trigger applies. After a
 broad run exposes failures, fix and verify at T1–T4 and delta-qualify (§6); do
 not climb back to T5 by default.
 
+### 3.8 Default flow for ordinary changes
+
+A bounded visual or functional change (a correction, a screen, a component):
+
+- **A. Implement** the bounded change. The local browser harness keeps running,
+  with template auto-reload where that is safe.
+- **B. Verify** with the direct and affected-owner tests (T1/T2), T3/T4 only
+  where §3 justifies them, and the actual behaviour in a browser.
+- **C. Deliver** the screenshots and functional evidence as soon as B is done.
+  A full suite running for another candidate or milestone never holds delivery;
+  whatever release qualification remains is recorded separately.
+- **D. Integrate** after deciding whether §5.1 applies to the integrated tree;
+  reuse prior evidence through §6; run T5 only on a trigger, with a §2 budget.
+- **E. Publish** under the unchanged gates of `docs/OPERATING_MODEL.md` §7/§9
+  and the cutover runbook (GF1, backup, rollback, production).
+
+Browser evidence for such a change recaptures only the affected states and
+breakpoints, unless a shared component changed; it reuses the existing fixtures
+and capture scripts, keeps approved visual baselines, does not restart the
+application for template edits when auto-reload works, and fixes a capture-
+harness defect at its source instead of compensating with repeated runs.
+
 ## 4. Orthogonal evidence lanes
 
 Scope tiers do not substitute for environment or risk-class evidence. No amount
@@ -176,6 +207,17 @@ Rules:
 - **G.** An explicit integration, release or deployment milestone (§12)
   requires an orthogonal repository-wide sweep.
 
+**C** concerns production behaviour in unrelated domains. A presentation-only
+delta (templates, CSS, client script) is one domain however many screens it
+touches: it is bounded by the rendering and UI guard tests of the touched
+surfaces (T3/T4) and E-UI, not by C. It reaches C only together with a
+behavioural change elsewhere.
+
+**G** is a release or deployment candidate, or an integration into a protected
+branch (`clean-baseline`). A fast-forward integration of a phase branch into
+the development branch is not by itself G. The candidate's sweep carries
+earlier full-suite evidence through §6 when its conditions hold.
+
 Touching a file that hosts a wide primitive is NOT by itself a trigger: the
 changed semantics and their execution path decide. Example: a PostgreSQL-only
 additive branch in `app/db.py` that SQLite never executes does not justify a
@@ -183,9 +225,11 @@ SQLite full suite; it requires T1–T4 and the applicable E-PG lane.
 
 ### 5.2 T5 MUST NOT be justified solely by
 
-"closing the unit"; "more confidence"; "canonical record"; "fresh final full"; a
-narrow bug fix; a docs-only change; a narrow governance-only or test-only delta;
-or a prior full suite followed by a delta that touches no invalidator (§7).
+"closing the unit" — a slice, a phase or a SPEC close; "more confidence";
+"canonical record"; "fresh final full"; a narrow bug fix; a small UI
+correction; a fast-forward integration by itself; a docs-only change; a narrow
+governance-only or test-only delta; a SPEC line that names no §5.1 trigger; or a
+prior full suite followed by a delta that touches no invalidator (§7).
 
 ## 6. Delta qualification
 
@@ -275,7 +319,7 @@ mechanism.
 | Narrow allowlist entry | Focused owner/governance test; negative controls proving neighbours remain rejected. |
 | Negative-control-only | Direct file/owner test is ordinarily sufficient. |
 | Shared fixture / `conftest.py` / harness | Potentially broad: apply §5 and §10. |
-| Docs only | T0 only, unless a tool or test explicitly consumes the document. As of 2026-10-06, re-verified 2026-10-09 (MP-0), no test reads the governance documents (references are docstring mentions only). |
+| Docs only | T0 only, unless a tool or test explicitly consumes the document. A docs-only delta does not invalidate functional evidence. As of 2026-10-06, re-verified 2026-10-09 (MP-0) and 2026-11-21 (v1.2), no test reads the governance documents (references are docstring mentions only). |
 
 ## 10. Shared test infrastructure
 
@@ -323,7 +367,9 @@ Requirements for the future lane:
 
 Full suites are milestone- or risk-triggered, not periodic. Examples: before a
 release or deployment; at a `clean-baseline` integration milestone; at a
-milestone declared in the frozen phase SPEC; whenever a §5.1 trigger applies. A fixed cadence MAY be introduced later, only after timing and
+milestone a frozen phase SPEC declares by naming the §5.1 trigger it rests on
+(the close of a slice or phase is not such a milestone, §5.2); whenever a §5.1
+trigger applies. A fixed cadence MAY be introduced later, only after timing and
 failure-attribution data exist.
 
 The next legitimately triggered full suite SHOULD record slow tests and skip
@@ -352,14 +398,21 @@ Illustrations of the rules, not permanent special cases.
   materially missing evidence was E-PG2 (multi-connection create×create and
   create×delete on one base), not another SQLite sweep. Not rerunning the full
   suite after the bounded FC13 delta was correct.
+- **DS-CONSISTENCY-01** (`e8c5107`, presentation only, 2026-11-21): the SPEC
+  declared "one T5 at close" under C for templates and CSS across many screens.
+  Under v1.2 that is neither C nor a milestone: the change was bounded by the UI
+  guard owners (about 690 tests) and a browser contract. The sweep was useful
+  only as the release-candidate evidence of G, carried through §6; meanwhile a
+  narrow Turma correction waited on it for no reason (§3.8 C).
 
 ## 14. Relationship to other governance
 
 - `docs/OPERATING_MODEL.md` — the process in which the executor applies this
   policy; the hard stops and BLOCKER referenced here are defined there (§7).
-- Frozen phase SPECs (`docs/specs/`) — may demand stronger evidence or declare
-  milestone triggers for their own scope; where a SPEC is silent this policy
-  decides; a SPEC cannot weaken a MUST here.
+- Frozen phase SPECs (`docs/specs/`) — may demand stronger evidence, and may
+  declare a full-suite milestone for their own scope only by naming its §5.1
+  trigger; where a SPEC is silent this policy decides; a SPEC cannot weaken a
+  MUST here.
 - `docs/ENGINEERING_STANDARDS.md` — owns the permanent guards (§11) from which
   T4 selects, and the structural rules that carry forward from
   `EXECUTION_PROTOCOL.md`.
