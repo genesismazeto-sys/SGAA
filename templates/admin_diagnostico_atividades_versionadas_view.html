@@ -28,21 +28,6 @@
       flex-wrap:wrap;
       gap:6px;
     }
-    .diag-badge{
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      padding:4px 8px;
-      border-radius:var(--pill-radius);
-      font-size:12px;
-      font-weight:600;
-      background:var(--info-bg);
-      color:#1e40af;
-    }
-    .diag-badge.warn{
-      background:#ecfeff;
-      color:#155e75;
-    }
     .diag-controls{
       display:grid;
       grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
@@ -54,8 +39,8 @@
       gap:4px;
     }
     .diag-field label{
-      font-size:12px;
-      color:#334155;
+      font-size:var(--font-size-small);
+      color:var(--text-secondary);
       font-weight:600;
     }
     .diag-field input,
@@ -65,7 +50,9 @@
       border:1px solid var(--border);
       border-radius:var(--radius);
       padding:6px calc(10px + var(--select-arrow-room, 0px)) 6px 10px;
+      font-family:inherit;
       font-size:13px;
+      color:var(--text-primary);
     }
     .diag-actions{
       display:flex;
@@ -76,7 +63,7 @@
     }
     .diag-note{
       margin:0;
-      color:#475569;
+      color:var(--text-secondary);
       font-size:12.5px;
       line-height:1.45;
     }
@@ -85,27 +72,10 @@
       grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
       gap:8px;
       font-size:13px;
-      color:#334155;
+      color:var(--text-secondary);
       margin-top:8px;
     }
-    .diag-meta strong{ color:#0f172a; }
-    .diag-versions{
-      display:flex;
-      flex-wrap:wrap;
-      gap:6px;
-      margin-top:8px;
-    }
-    .diag-chip{
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      padding:4px 8px;
-      border-radius:var(--pill-radius);
-      font-size:12px;
-      border:1px solid #dbeafe;
-      background:var(--surface-subtle);
-      color:#1e3a8a;
-    }
+    .diag-meta strong{ color:var(--text-primary); }
     .diag-section{
       margin-top:10px;
       display:grid;
@@ -124,7 +94,7 @@
       width:100%;
       border-collapse:collapse;
       min-width:1180px;
-      font-size:12.5px;
+      font-size:var(--font-size-small);
     }
     .diag-table th,
     .diag-table td{
@@ -135,30 +105,14 @@
       line-height:1.35;
     }
     .diag-table th{
-      font-size:11px;
-      text-transform:uppercase;
-      letter-spacing:.04em;
-      color:#475569;
+      font-weight:600;
+      color:var(--text-secondary);
       white-space:nowrap;
       background:var(--surface-subtle);
     }
-    .diag-pill{
-      display:inline-flex;
-      align-items:center;
-      border-radius:var(--pill-radius);
-      padding:3px 8px;
-      font-size:11px;
-      font-weight:600;
-      background:#ecfeff;
-      color:#155e75;
-    }
-    .diag-pill.no{
-      background:#f1f5f9;
-      color:#475569;
-    }
     .diag-empty{
       margin:0;
-      color:#64748b;
+      color:var(--text-secondary);
       font-size:13px;
     }
     /* A lookup error: the DS alert palette, red (tokens.css --alert-*). */
@@ -193,8 +147,8 @@
       <div class="diag-head">
         <h1>Diagnóstico Administrativo - Atividades Versionadas</h1>
         <div class="diag-badges">
-          <span class="diag-badge">Admin-only</span>
-          <span class="diag-badge warn">Leitura paralela (não operacional)</span>
+          <span class="badge status-pill status-info">Admin-only</span>
+          <span class="badge status-pill status-caution">Leitura paralela (não operacional)</span>
         </div>
       </div>
 

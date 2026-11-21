@@ -9,8 +9,9 @@ token, deliberately separate from the field/card ``--radius``. Consumers:
 * page-local status-label families that restate the pill: Banco de dados
   ``.db-badge`` / ``.db-origin-pill`` / provider-head ``.db-badge``, Atividades
   filter-count badge and local ``.badge``, Requisições local ``.badge``,
-  Importar atividades ``.status-chip``, Diagnóstico ``.diag-badge`` /
-  ``.diag-chip`` / ``.diag-pill``, Mensagens ``.message-badge``.
+  Importar atividades ``.status-chip``, Mensagens ``.message-badge``. (The
+  Diagnóstico page's own ``.diag-badge`` / ``.diag-chip`` / ``.diag-pill`` are
+  gone: its badges are the DS ``.badge.status-pill``, UI-B46.)
 
 Out of scope and guarded as unchanged: circles (status-pill dots, avatars, the
 floating-bar selection counter ``.act-count``), switches, buttons, icon
@@ -49,7 +50,6 @@ PILL_CONSUMERS = {
     "static/css/components/list-cards.css": {".imp-cursos .badge.status-badge"},
     "templates/admin_atividades.html": {".filter-count-badge", ".badge"},
     "templates/admin_banco_dados.html": {".db-badge", ".db-origin-pill", ".db-provider-head .db-badge"},
-    "templates/admin_diagnostico_atividades_versionadas_view.html": {".diag-badge", ".diag-chip", ".diag-pill"},
     "templates/admin_importar_atividades.html": {".status-chip"},
     "templates/admin_mensagens.html": {".message-badge"},
     "templates/admin_requisicoes.html": {".badge"},

@@ -69,19 +69,26 @@ def test_the_flash_toasts_use_the_alert_palette():
 
 
 def test_every_message_box_takes_the_alert_palette():
-    """The two red boxes that still used --danger (UI-B46, owner decision): red tone, dark text."""
+    """Message boxes outside the auth pages (UI-B46, owner decisions): palette tone, dark text, DS corners."""
     boxes = (
-        ("templates/admin_diagnostico_atividades_versionadas_view.html", ".diag-alert"),
-        ("templates/admin_requisicoes.html", ".req-email-warnings"),
+        ("templates/admin_diagnostico_atividades_versionadas_view.html", ".diag-alert", "red"),
+        ("templates/admin_requisicoes.html", ".req-email-warnings", "red"),
+        ("templates/admin_requisicoes.html", ".req-email-resend", "yellow"),
     )
-    for page, selector in boxes:
+    for page, selector, colour in boxes:
         body = _rule(_source(page), selector)
-        assert "border:1pxsolidvar(--alert-red-border)" in body, (page, selector)
-        assert "background:var(--alert-red-bg)" in body, (page, selector)
+        assert f"border:1pxsolidvar(--alert-{colour}-border)" in body, (page, selector)
+        assert f"background:var(--alert-{colour}-bg)" in body, (page, selector)
         assert "color:var(--alert-text)" in body, (page, selector)
-        assert "--danger" not in body and not re.search(r"#[0-9a-fA-F]{3,8}\b", body.replace("border-radius", "")), selector
+        assert "border-radius:var(--radius)" in body, (page, selector)
+        assert "--danger" not in body and not re.search(r"#[0-9a-fA-F]{3,8}\b", body), selector
     # The link inside the e-mail warnings reads as the box's text.
-    assert "color:inherit" in _rule(_source("templates/admin_requisicoes.html"), ".req-email-cta")
+    requisicoes = _source("templates/admin_requisicoes.html")
+    assert "color:inherit" in _rule(requisicoes, ".req-email-cta")
+    # A highlighted recipient row takes the tone of the warning that lists it.
+    for selector, colour in ((".req-email-recipient.is-blocked", "red"), (".req-email-recipient.is-unresolved", "yellow")):
+        body = _rule(requisicoes, selector)
+        assert f"background:var(--alert-{colour}-bg)" in body, selector
 
 
 def test_destructive_actions_invalid_fields_and_status_badges_are_not_alerts():
@@ -93,9 +100,35 @@ def test_destructive_actions_invalid_fields_and_status_badges_are_not_alerts():
         (modern, ".badge.status-pill.status-negative", "--status-negative-"),
         (modern, ".badge.status-pill.status-positive", "--status-positive-"),
         (form, ".field-error", "--field-invalid-"),
-        (_source("templates/admin_requisicoes.html"), ".req-email-recipient.is-blocked", "--danger-"),
     )
     for source, selector, family in keep:
         match = re.search(re.escape(selector) + r"\s*\{([^}]*)\}", source)
         assert match, selector
         assert family in match.group(1) and "--alert-" not in match.group(1), selector
+
+
+def _style_block(page):
+    return "\n".join(re.findall(r"<style[^>]*>(.*?)</style>", _source(page), re.S))
+
+
+def test_the_email_modal_and_the_diagnostic_page_take_every_colour_from_tokens():
+    """Owner decision (UI-B46): both screens fully on the DS -- tokens and DS components, no literal colour."""
+    raw = re.compile(r"#[0-9a-fA-F]{3,8}\b|rgba?\(")
+    diag_page = "templates/admin_diagnostico_atividades_versionadas_view.html"
+    assert not raw.search(_style_block(diag_page)), "the diagnostic page keeps a literal colour"
+    modal_rules = [
+        (sel, body) for sel, body in re.findall(r"(?m)^(\.req-email-[^{]*)\{([^}]*)\}", _style_block("templates/admin_requisicoes.html"))
+        if not sel.startswith(".req-email-cell")  # the list column's icon, not the confirmation modal
+    ]
+    assert len(modal_rules) >= 15, "lost sight of the e-mail modal rules"
+    offenders = [sel.strip() for sel, body in modal_rules if raw.search(body)]
+    assert not offenders, f"e-mail modal rules with a literal colour: {offenders}"
+    # Corners are the DS radius, not a page-local 8px.
+    assert not [sel for sel, body in modal_rules if "border-radius:8px" in body.replace(" ", "")]
+    # Roles take DS components: the status pill for the page badges, the DS disclosure toggle colour.
+    page = _source(diag_page)
+    assert 'class="badge status-pill status-info">Admin-only' in page
+    assert 'class="badge status-pill status-caution">Leitura paralela (não operacional)' in page
+    assert not re.search(r"diag-(?:badge|pill|chip)\b(?!s)", page), "page-local badges are gone"
+    toggle = _rule(_style_block("templates/admin_requisicoes.html"), ".req-email-preview-wrap > summary")
+    assert "color:var(--text-secondary)" in toggle and "font-size:var(--font-size-small)" in toggle
