@@ -8,7 +8,9 @@ not record a pre-implementation SPEC freeze or acknowledgement under the
 acceptance of R3. The governance authority must also acknowledge this
 retrospective record or record a formal exception to the original freeze gate.
 Amendment A1 records the correction made after the R3 cross-family finding on
-`b722d9a` and its risk classification.
+`b722d9a` and its risk classification. **CLOSED 2026-11-21** (see Closure):
+the owner accepted this record and A1, which resolves the acknowledgement owed
+above.
 
 ## Candidate and scope
 
@@ -205,3 +207,22 @@ acknowledgement or exception owed above.
   baseline regeneration are outside the approved scope.
 - R3 authorizes review of the frozen code. Publication, production access or
   writes, migration, deployment and integration remain outside this admission.
+
+## Closure
+
+**Owner decision, 2026-11-21: ACCEPTED.**
+- The owner acknowledges this retrospective specification and Amendment A1.
+  That resolves the freeze-gate acknowledgement this record owed.
+- The owner approves A1's narrowly scoped governance exception: the targeted
+  recheck already run replaces a repeated cross-family R3 review.
+- The four recheck divergences, which need planted invalid Turma codes, are
+  accepted as documented out-of-scope limitations. This holds only while the
+  valid-code invariant holds: Turma codes are `<curso>-T<nn>`, with an optional
+  `-<id>`, over course codes matching `^[A-Z-]+$`.
+
+No further technical review is required for the accepted candidate `2e387b9`.
+It was integrated into the development branch by an ordinary fast-forward on
+2026-11-21, with the UI-B46 commits it builds on.
+
+It is not deployed. GF1 publication qualification of the integrated candidate
+is the next, separate milestone.

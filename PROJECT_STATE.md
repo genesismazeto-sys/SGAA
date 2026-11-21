@@ -177,9 +177,9 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
 - Agreed outside MP-1…MP-4, no recorded execution: reconcile/import the official
   deferred-hours spreadsheet.
 - Next GF1 release candidate (owner hold: not deployed, no migration): the development-branch
-  head, carrying the COMPROVANTES-01 correction (required proofs are short names; the older
-  regulation sentence is never listed; model titles and file names wrap instead of being cut at
-  any width), UI-B40 (a closed request reads Indeferida), OPS-LOG-01 (not installed) and BL-02
+  head, carrying UI-B46 and DIAG-500 (below), the COMPROVANTES-01 correction (required proofs are
+  short names; the older regulation sentence is never listed; model titles and file names wrap
+  instead of being cut at any width), UI-B40 (a closed request reads Indeferida), OPS-LOG-01 (not installed) and BL-02
   (UI-B41 the processing page reads the request's frozen record; UI-B42 the request lists keep
   Status in view through the shared DS status column, DS README section 2.6b; UI-B43 the KPI
   cards stack on a phone; UI-B44 a long proof name opens whole while edited; UI-B45 the student
@@ -192,29 +192,29 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   whose one material finding, a lost touch tap, is fixed; the mechanically selected impact set
   and permanent guards rerun on the final code, failing only the known guards below). Results and
   the GF1 plan are outside the repository (`D:\SGAA_tmp\rc_8c8d8e0`, `D:\SGAA_tmp\bl02\dq` and
-  the consolidated report beside them); the served code identity changes from `902a0be4…` to
-  `a7cdcfef…` (16 files). Publication waits for the owner's push and GF1 authorizations.
+  the consolidated report beside them); for that content the served code identity changes from
+  `902a0be4…` to `a7cdcfef…` (16 files). That qualification and identity predate UI-B46 and
+  DIAG-500: GF1 publication qualification of the integrated head is the next, separate
+  milestone, and publication waits for it and the owner's GF1 authorization.
 - Still awaiting the owner, separate from the release: the 28 historical UI rows awaiting visual
   confirmation (none has an acceptance on record) and UI-B15 (clean in Chromium; the owner's own
   Chrome decides).
-- UI-B46 (AUTH-RECOVERY-01 / UI-LOGIN-ERROR-01), accepted by the owner 2026-11-20, not part of the
-  release candidate: a dead password link renders the DS recovery card (`docs/design-system/README.md`
+- UI-B46 (AUTH-RECOVERY-01 / UI-LOGIN-ERROR-01), accepted by the owner 2026-11-20 and integrated
+  into the development branch with DIAG-500 on 2026-11-21 (not deployed): a dead password link
+  renders the DS recovery card (`docs/design-system/README.md`
   §2.6f) and resends through the existing self-service recovery, pre-filling the address only when
   safe; every feedback message of the public auth pages is the shared DS auth alert (§2.6g); the
   owner's Alertas colours are the DS's one alert palette (`--alert-*`, §2.1); Inter has one owner
   for every document; the Requisições e-mail confirmation and the versioned-activities diagnostic
-  page are fully on DS tokens and components. Local branch `backlog/auth-recovery-01`, a
-  fast-forward of the candidate, not pushed or deployed (publication HOLD; integrating it into the
-  release needs the owner's push and GF1 decisions). Package and evidence outside the repository
+  page are fully on DS tokens and components. Package and evidence outside the repository
   (`D:\SGAA_tmp\auth_recovery01`).
-- DIAG-500 (`docs/specs/DIAG-500.md`), on the local branch `fix/diagnostic-lookup-500` on top of
-  the UI-B46 tip, not pushed (integration HOLD): the versioned-activities diagnostic routes answer
+- DIAG-500 (`docs/specs/DIAG-500.md`, CLOSED), accepted by the owner and integrated into the
+  development branch on 2026-11-21 (not deployed): the versioned-activities diagnostic routes answer
   an unknown, zero, negative-but-absent, out-of-range or malformed id, or an unknown Turma code,
   with 404 and the UI-B46 red alert instead of HTTP 500; a Turma without a Matriz is a neutral
   note; stored negative ids resolve. Amendment A1 (after the R3 cross-family finding) makes the
-  page, its JSON link and its unmodified form read one query. Integrating it needs the owner's push
-  and GF1 decisions; the SPEC's retrospective-freeze acknowledgement or exception is still owed. A
-  NUL byte in `turma_codigo` still answers 500 on PostgreSQL (backlog).
+  page, its JSON link and its unmodified form read one query. A NUL byte in `turma_codigo` still
+  answers 500 on PostgreSQL (backlog).
 - Executor observation from UI-B46, not scheduled: 226 raw colours remain in product UI code
   (`MAX_RAW_COLOURS`).
 
