@@ -53,8 +53,9 @@ TOKENS = (ROOT / "static/css/foundation/tokens.css").read_text(encoding="utf-8")
 # RECT1: the student dashboard's days-bar ramp and inline colours became the
 # shared .progress.is-deadline meter and token classes, 291 -> 273.
 # UI-B46: the .flash toasts, the Alertas cards' text and the retired login
-# feedback lines take the DS alert palette tokens (tokens.css --alert-*), 273 -> 256.
-MAX_RAW_COLOURS = 256
+# feedback lines take the DS alert palette tokens (tokens.css --alert-*), 273 -> 256;
+# the diagnostic page's alert text, 256 -> 255.
+MAX_RAW_COLOURS = 255
 
 _HEX = r"#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b"
 _COLOUR = re.compile(rf"({_HEX}|(?:rgba?|hsla?)\([^)]*\))")
@@ -219,8 +220,10 @@ def test_info_and_danger_families_are_used_at_their_current_values():
     assert "color:var(--info-text)" in _rule(_read("templates/admin_importar_atividades.html"), ".status-chip.update")
     assert "color:var(--danger-text)" in _rule(modern, "\n.btn.danger")
     assert "background:var(--danger-bg)" in _rule(modern, ".table-progresso td.progresso-limitado")
-    assert "background:var(--danger-bg)" in _rule(_read("templates/admin_diagnostico_atividades_versionadas_view.html"), ".diag-alert")
-    assert "border:1px solid var(--danger-border)" in _rule(_read("templates/admin_requisicoes.html"), ".req-email-warnings")
+    # The two message boxes (.diag-alert, .req-email-warnings) moved to the DS alert palette
+    # (tests/test_ds_alert_palette.py); --danger keeps its row and error-state uses.
+    assert "background:var(--danger-bg)" in _rule(_read("templates/admin_requisicoes.html"), ".req-email-recipient.is-blocked")
+    assert "border-color:var(--danger-border)" in _rule(_read("static/css/components/form.css"), '.file-list-item[data-state="error"]')
     grupos = _read("templates/admin_atividades.html")
     assert "background:var(--info-bg); border-color:var(--info-border);" in _rule(grupos, "#grupos-modal .menu-item.is-selected")
     presets = _read("templates/admin_requisicoes.html")

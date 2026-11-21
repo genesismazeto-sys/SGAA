@@ -84,14 +84,17 @@ owner's Alertas colours — seven background/border pairs (blue, yellow, green,
 orange, red, purple, cyan) and one text colour, `--alert-text` — and is the only
 palette of messages: the Alertas presets (`app/views/admin/alertas.py`
 `ALERTA_COLOR_OPTIONS`, and the automatic yellow alert in `app/requisitions.py`)
-equal these values, the `.flash` toasts and the auth alert (§2.6g) use them,
-and the Alertas cards' text is `--alert-text`. Text on an alert is always
-`--alert-text`, whatever the tone. Guard:
-`tests/test_auth_feedback_alerts.py` (one owner, every copy equal, toasts and
-banner on the tokens). The other colour families keep their own roles and are
-not alerts: `--status-*` the status pills, decision buttons and deadline meter;
-`--field-invalid-*` field validation; `--danger-*` destructive actions and
-error text; `--info-*` the selected/active highlight.
+equal these values, the `.flash` toasts, the auth alert (§2.6g), the
+diagnostic page's error box (`.diag-alert`) and the e-mail warnings in
+Requisições (`.req-email-warnings`, its link included) use them, and the
+Alertas cards' text is `--alert-text`. Text on an alert is always
+`--alert-text`, whatever the tone. Guard: `tests/test_ds_alert_palette.py` (one
+owner, every copy equal, every message box on the tokens, and the boundary
+below). The other colour families keep their own roles and are
+not alerts and never take the alert palette: `--status-*` the status pills,
+decision buttons and deadline meter; `--field-invalid-*` field validation;
+`--danger-*` destructive actions, error text and row states (a blocked e-mail
+recipient, a file in error); `--info-*` the selected/active highlight.
 
 Enforced by `test_global_tokens_have_exactly_one_owner`,
 `test_no_token_resolves_to_two_values_on_one_page`,
