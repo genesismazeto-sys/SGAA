@@ -130,6 +130,12 @@ INVALID_IN_A_MIXED_QUERY = (
     ("turma_id=&turma_id=abc", TURMA_NAO_ENCONTRADA),
     ("turma_id=1&turma_id=abc", TURMA_NAO_ENCONTRADA),
     ("matriz_id=2&matriz_id=0", MATRIZ_NAO_ENCONTRADA),
+    # An integer no row id can hold is invalid wherever it appears.
+    (f"turma_id=1&matriz_id={2**63}", MATRIZ_NAO_ENCONTRADA),
+    (f"turma_id=1&matriz_id={-(2**63) - 1}", MATRIZ_NAO_ENCONTRADA),
+    (f"turma_codigo=PPA-T10&matriz_id={2**63}", MATRIZ_NAO_ENCONTRADA),
+    (f"turma_id=1&turma_id={2**63}", TURMA_NAO_ENCONTRADA),
+    (f"matriz_id=1&matriz_id={2**63}", MATRIZ_NAO_ENCONTRADA),
 )
 # Valid queries keep the precedence turma_id, turma_codigo, matriz_id; a
 # lower-precedence identifier is checked but not looked up, and a repeated one
@@ -139,6 +145,8 @@ RESOLVED_BY_PRECEDENCE = (
     ("turma_id=1&matriz_id=2", TURMA_1),
     ("turma_id=1&turma_codigo=NAO-EXISTE", TURMA_1),
     ("turma_id=1&matriz_id=99999", TURMA_1),
+    (f"turma_id=1&matriz_id={2**63 - 1}", TURMA_1),
+    (f"turma_id=1&matriz_id={-(2**63)}", TURMA_1),
     ("turma_id=%201%20", TURMA_1),
     ("turma_id=1&turma_id=2", TURMA_1),
     ("turma_id=&turma_id=1", TURMA_1),
