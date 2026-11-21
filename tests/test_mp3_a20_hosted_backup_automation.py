@@ -1124,9 +1124,11 @@ def test_the_lock_is_committed_and_visible_to_other_backends_immediately(product
 
 
 def test_run_ddl_retries_once_when_a_concurrent_first_use_races_the_catalog():
-    """F3: two processes creating the control schema at once: one loses the catalog race even with
-    IF NOT EXISTS; the helper retries once and the second attempt finds the objects committed."""
-    attempts = []
+    """F3: every attempt is one transaction that first takes the control-schema advisory lock, so
+    concurrent callers queue (TECH-CLEANUP-01). A racer that takes no lock can still make the first
+    attempt lose the catalog race even with IF NOT EXISTS; the helper retries once, under a new
+    lock, and the second attempt finds the objects committed."""
+    statements = []
 
     class Racey:
         def transaction(self):
@@ -1134,13 +1136,60 @@ def test_run_ddl_retries_once_when_a_concurrent_first_use_races_the_catalog():
 
             return contextlib.nullcontext()
 
-        def execute(self, sql):
-            attempts.append(sql)
-            if len(attempts) == 1:
+        def execute(self, sql, params=None):
+            statements.append((sql, params))
+            if len(statements) == 2:
                 raise RuntimeError("tuple concurrently updated")
 
     pg_posture.run_ddl(Racey(), ("CREATE SCHEMA IF NOT EXISTS sgaa_ops",))
-    assert len(attempts) == 2
+    lock = (pg_posture.DDL_LOCK_SQL, (pg_posture.DDL_LOCK_KEY,))
+    ddl = ("CREATE SCHEMA IF NOT EXISTS sgaa_ops", None)
+    assert statements == [lock, ddl, lock, ddl]
+
+
+@needs_pg
+@pytest.mark.parametrize("objects_present", [False, True], ids=["first-use", "objects-present"])
+def test_concurrent_control_schema_ddl_never_collides(pg_registry, objects_present):
+    """E-PG2: overlapping scheduler invocations run the control-schema DDL at the same moment --
+    the copy registry's on its first use, the backup lock's on every call. REVOKE rewrites its
+    catalog row even when it changes nothing, so concurrent attempts collided (``tuple
+    concurrently updated``) and, with three or more callers, one still failed after its retry.
+    Under the advisory lock they run one after another and every caller succeeds."""
+    import threading
+
+    from app.storage import copy_registry
+
+    width, rounds = 4, 3
+    for _ in range(rounds):
+        name, url = pg_registry.create(template=pg_registry.template)
+        conns = []
+        try:
+            conns.extend(raw_connection(url) for _ in range(width))
+            if objects_present:
+                for ddl in (copy_registry.DDL, hosted_backup.LOCK_DDL):
+                    pg_posture.run_ddl(conns[0], ddl)
+            barrier = threading.Barrier(width)
+            errors = []
+
+            def caller(conn):
+                try:
+                    barrier.wait(timeout=30)
+                    pg_posture.run_ddl(conn, copy_registry.DDL)
+                    pg_posture.run_ddl(conn, hosted_backup.LOCK_DDL)
+                except Exception as exc:  # recorded and asserted below
+                    errors.append(f"{type(exc).__name__}: {exc}")
+
+            threads = [threading.Thread(target=caller, args=(conn,)) for conn in conns]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(60)
+            assert not any(thread.is_alive() for thread in threads), "a DDL caller is stuck"
+            assert errors == []
+        finally:
+            for conn in conns:
+                conn.close()
+            pg_registry.drop(name)
 
 
 def test_the_lock_lease_outlives_the_platform_function_limit():

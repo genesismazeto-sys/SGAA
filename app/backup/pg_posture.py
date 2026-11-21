@@ -37,10 +37,13 @@ VALUES
 from __future__ import annotations
 
 import json
+import logging
 import re
 from datetime import datetime, timedelta, timezone
 
 from app import hosting
+
+logger = logging.getLogger("main")
 
 #: UD10 / runbook section E: nightly Layer-2, weekly object set, two generations, off-platform copy.
 DEFAULT_CADENCE_HOURS = 24
@@ -73,6 +76,9 @@ DDL = (
     " annotation text, published_at timestamptz NOT NULL DEFAULT now())",
     "REVOKE ALL ON sgaa_ops.backup_records FROM PUBLIC",
 )
+#: Serializes every control-schema DDL attempt (:func:`run_ddl`); the key spells "SGAADDL".
+DDL_LOCK_KEY = 0x5347414144444C00
+DDL_LOCK_SQL = "SELECT pg_advisory_xact_lock(%s)"
 EXISTS_SQL = "SELECT to_regclass('sgaa_ops.backup_records') IS NOT NULL"
 INSERT_SQL = (
     "INSERT INTO sgaa_ops.backup_records (entry_hash, entry_type, entry, annotation) VALUES (%s, %s, %s, %s)"
@@ -312,19 +318,31 @@ def _intact(entry) -> bool:
 
 
 def run_ddl(conn, statements) -> None:
-    """Run control-schema DDL idempotently, retrying once when a concurrent first use races the
-    catalog (two processes may run ``CREATE SCHEMA/TABLE IF NOT EXISTS`` at the same moment, and one
-    can lose the catalog race even with ``IF NOT EXISTS``).  Each attempt is its own transaction, so
-    the winner's objects are committed before the retry."""
+    """Run control-schema DDL idempotently; concurrent callers run it one after another.
+
+    Callers run their DDL on every use, and overlapping invocations reach it at the same moment.
+    ``REVOKE`` rewrites its catalog row even when it changes nothing, and ``CREATE … IF NOT EXISTS``
+    can lose a catalog race, so concurrent attempts fail with ``tuple concurrently updated`` or a
+    duplicate catalog key.  Each attempt first takes the control-schema advisory lock
+    (:data:`DDL_LOCK_KEY`), transaction-scoped: a waiter's statements then see the winner's
+    committed objects.  Every caller passes an idle or autocommit connection, so each attempt is
+    its own transaction and the lock ends at its commit; on a connection already inside a
+    transaction the attempt would be a savepoint and the lock would last until that transaction
+    ends.  Every DDL set revokes on the schema (:data:`SCHEMA_DDL`), so callers already waited on
+    its catalog row for as long; the lock orders them without widening that wait.  One retry
+    remains for a racer that runs such DDL without the lock."""
     for attempt in (1, 2):
         try:
             with conn.transaction():
+                conn.execute(DDL_LOCK_SQL, (DDL_LOCK_KEY,))
                 for statement in statements:
                     conn.execute(statement)
             return
-        except Exception:
+        except Exception as exc:
             if attempt == 2:
                 raise
+            # Retried once (a racer without the lock); only the class is logged, never the text.
+            logger.warning("event=control_schema_ddl_retry error=%s", type(exc).__name__)
 
 
 def publish(conn, entries, *, annotations: dict | None = None) -> dict:
@@ -341,7 +359,7 @@ def publish(conn, entries, *, annotations: dict | None = None) -> dict:
             raise PostureError("RECORD_NOT_INTACT")
         rows.append(entry)
     annotations = annotations or {}
-    run_ddl(conn, DDL)  # idempotent, committed on its own (a concurrent first use may race the catalog)
+    run_ddl(conn, DDL)  # idempotent, committed on its own (concurrent callers queue under its lock)
     with conn.transaction():
         present = {row[0] for row in conn.execute(PUBLISHED_HASHES_SQL).fetchall()}
         published = 0
