@@ -207,11 +207,16 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   fast-forward of the candidate, not pushed or deployed (publication HOLD; integrating it into the
   release needs the owner's push and GF1 decisions). Package and evidence outside the repository
   (`D:\SGAA_tmp\auth_recovery01`).
-- Executor observations from UI-B46, not scheduled: the diagnostic page
-  (`/admin/diagnostico/atividades-versionadas/view`) answers HTTP 500 for an unknown `turma_id` or
-  `matriz_id` (also on `0247c1d`; a separate fix was proposed, not started); its red `.diag-alert`
-  can never render (lookup errors show as the grey `.diag-note`; whether they should be red is
-  the owner's call); 226 raw colours remain in product UI code (`MAX_RAW_COLOURS`).
+- DIAG-500 (`docs/specs/DIAG-500.md`), on the local branch `fix/diagnostic-lookup-500` on top of
+  the UI-B46 tip, not pushed (integration HOLD): the versioned-activities diagnostic routes answer
+  an unknown, zero, negative-but-absent, out-of-range or malformed id, or an unknown Turma code,
+  with 404 and the UI-B46 red alert instead of HTTP 500; a Turma without a Matriz is a neutral
+  note; stored negative ids resolve. Amendment A1 (after the R3 cross-family finding) makes the
+  page, its JSON link and its unmodified form read one query. Integrating it needs the owner's push
+  and GF1 decisions; the SPEC's retrospective-freeze acknowledgement or exception is still owed. A
+  NUL byte in `turma_codigo` still answers 500 on PostgreSQL (backlog).
+- Executor observation from UI-B46, not scheduled: 226 raw colours remain in product UI code
+  (`MAX_RAW_COLOURS`).
 
 ## Environment facts
 
