@@ -24,9 +24,10 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   PROD PostgreSQL 17 is v19 (41 tables): the GF1-V19 of `4087eaf` (2026-11-19, ledger seq
   239-250) upgraded it from v18 with `python -m app.pg_schema upgrade` in one transaction, after
   a preserved, restore-drilled pre-migration generation; earlier, the GF1 of `5b989cd` (seq
-  190-199) took it from v17 to v18. The daily governed generations, which validate the exact
-  version, run from the v19 worktree of `4087eaf` (`docs/activity-document-guidance.md`,
-  Publication).
+  190-199) took it from v17 to v18. The GF1 of `107f63e` (2026-11-21) published code only and left
+  the schema at v19. The daily governed generations, which validate the exact version, still run
+  from the v19 worktree of `4087eaf` (`docs/activity-document-guidance.md`, Publication); its v19
+  tools fit the unchanged schema.
 - PostgreSQL schema authority, runtime dialect and transaction semantics are in
   place. The production database is hosted in Supabase PostgreSQL 17; Path-B
   migration, governed Layer-2 backup/restore and the production cutover are recorded.
@@ -96,8 +97,8 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   The first subsequently scheduled DUE pass is still awaiting observation;
   a no-op scheduled wake returned HTTP 200/NOT_DUE. The configured policy is the
   default 24 h database / 7 d objects / 2 retained / 30 d restoration drill.
-- OPS-LOG-01, governed daily backup logging reliability (R2): CLOSED locally under a publication
-  HOLD (local commits, not pushed, not installed).
+- OPS-LOG-01, governed daily backup logging reliability (R2): CLOSED; its wrapper is in the
+  development branch (outside the deployment) and remains UNINSTALLED (separate owner authorization).
 - MP-3 A22 (`docs/specs/MP-3-A22-request-reclassification.md`): a student or administrator
   corrects the activity of an editable request in place (schema v17). In PROD since gate G1
   on 2026-10-19 (upgrade to v17, then the GF1 deploy of `f559e3d`, ledger seq 173-181).
@@ -108,8 +109,10 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   generation, 243 daily v19 generation, 244-249 deployment, authorize-code and promotion (both
   COMMITTED), 250 restore drill of the v19 generation 242 (41 tables). Every generation and both
   drills VERIFIED; the strict v19 proof matched the rehearsed catalog. Anonymous production smoke
-  (`tools/hosted_smoke.py`) PASS 10/10. The authenticated manual smoke (`SMOKE_V19.md` in the GF1
-  folder) is PENDING with the owner. C14 and the historical visual-gate exception (baselines
+  (`tools/hosted_smoke.py`) PASS 10/10. Its authenticated manual smoke (`SMOKE_V19.md` in the GF1
+  folder) was never executed; it is folded into the pending smoke of GF1-CONSOLIDATED (below).
+  `4087eaf` (deployment `dpl_2PX2spzLjgTeNgrN9taFFSM9tsJo`) is the previous deployment, superseded
+  by `107f63e` on 2026-11-21. C14 and the historical visual-gate exception (baselines
   stale since 2026-08-14, none re-approved; `docs/design-system/README.md` §8, Harness) are
   unchanged by this operation. Three operational failures, none of them in PROD, are recorded with their
   resolutions in the GF1 folder's README (outside the repository):
@@ -132,18 +135,37 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
      itself, since PowerShell 5.1 returns a single row as a bare object whose `.Count` is `$null`,
      while the queued task had already produced generation 243. Resolution: the calls wrapped in
      `@(...)`, validated against the real ledger; resume 2 completed.
+- GF1-CONSOLIDATED (2026-11-21, owner-authorized, COMMITTED): published `107f63e` -- the RC-01
+  correction (COMPROVANTES-01, UI-B40), BL-02 (UI-B41…B45), UI-B46, DIAG-500 and DS-CONSISTENCY-01 --
+  as a code-only release: schema v19 unchanged, no migration. Qualified READY the same day (outside
+  the repository: `D:\SGAA_tmp\gf1q_107f63e`; the full suite on `e8c5107` carried through TEP §6 with
+  a targeted rerun on the exact bytes). Ledger evidence, recorded 2026-11-21 20:43:50Z-20:45:27Z:
+  seq 253 the GF1 grant, 254-255 the deployment, 256-257 authorize-code COMMITTED, 258-259 the
+  promotion COMMITTED; the reopening backup was governed generation seq 252 (2026-11-20, VERIFIED,
+  off-platform copy VERIFIED, re-verified after the promotion). Anonymous production smoke
+  (`tools/hosted_smoke.py`) PASS 10/10; the public proof matched the export (served code, nine
+  release assets byte for byte, four anonymous auth pages). The authenticated manual smoke
+  (`SMOKE_107F63E.md` in `D:\SGAA_CUTOVER\gf1_107f63e`, which includes the outstanding SMOKE_V19
+  checks) is PENDING / NOT EXECUTED: no test identities were provided and the executor does not sign
+  in to production. C14, MP-4 and OPS-LOG-01 (still uninstalled) are unchanged by this GF1.
+  Record: `D:\SGAA_CUTOVER\gf1_107f63e\README.txt`.
 
 ## Production
 
 - Web runtime: Vercel Hobby project `sgaa` (`https://sgaa.vercel.app`), Supabase Free PROD
   `sgaa-prod` (`uckadhcwfknklmdktuyi`) holding the migrated data, canonical storage bucket and the
   Google Drive mirror (proven at C11). Every PROD action follows the runbook and the ledger.
-- Code in production: `4087eaf7353f3d3effff40255c73f8221ce20f74`, deployment
-  `dpl_2PX2spzLjgTeNgrN9taFFSM9tsJo` (served code digest `902a0be4…`, verified at the public
-  address), schema v19. The Vercel project has no Git connection: pushes deploy nothing; every
-  deployment is `tools/deploy_audit.py deploy` under a GF1.
-- Cutover ledger (outside the repository): C13, 250 entries, chain OK, head `149e52dc…`, no
-  unresolved operation and no write barrier (2026-11-19).
+- Code in production: `107f63e2332d93ef9000b019156b278e02707bf4`, deployment
+  `dpl_4oVhKLCJacUj2Z3PWkesXxQoLgMh` (served code identity
+  `e81d980238ae350676b62c7c4f8efec13f1747083f7d12aa99bf85e08245bb35`, verified at the public
+  address), schema v19, published by GF1-CONSOLIDATED on 2026-11-21. Previous deployment:
+  `4087eaf` / `dpl_2PX2spzLjgTeNgrN9taFFSM9tsJo` (code `902a0be4…`), superseded; after C13 it is
+  never re-promoted (forward fix only). The Vercel project has no Git connection: pushes deploy
+  nothing; every deployment is `tools/deploy_audit.py deploy` under a GF1.
+- Cutover ledger (outside the repository): at the close of GF1-CONSOLIDATED (2026-11-21T20:45:27Z) it
+  was verified at C13, 259 entries, chain OK, head `d7c5774c6c3fea861a27fe0cdad126ca2acf28535306fffd48416070e4716822`,
+  no unresolved operation and no write barrier. Each later daily generation appends an entry, so the
+  current head is `cutover_ledger status`, not this line.
 - Backups: the production A20 scheduler runs on the hosted platform; it records
   complete deliveries to every connected drive. The separate operator-run governed
   Layer-2 generations (`tools/ops_backup.py --ledger-dir`) and off-platform copies
@@ -157,9 +179,10 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   receipt is in the cutover ledger; its publication to the PROD Banco de dados
   posture remains pending via the governed `ops_backup publish` procedure.
 - The daily governed backup task (Windows Task Scheduler, 20:00) runs
-  `D:\SGAA_CUTOVER\daily_governed_backup.ps1` from the v19 worktree of `4087eaf` since GF1-V19; its
-  last run (2026-11-19, generation seq 243, schema 19) succeeded. It does not start on battery
-  (`DisallowStartIfOnBatteries`): it waits, queued, for AC power.
+  `D:\SGAA_CUTOVER\daily_governed_backup.ps1` from the v19 worktree of `4087eaf` since GF1-V19
+  (unchanged by GF1-CONSOLIDATED); the run of 2026-11-20 produced generation seq 252 (schema 19,
+  VERIFIED again on 2026-11-21). Its 20:00 run remains an operational obligation: it does not start
+  on battery (`DisallowStartIfOnBatteries`) and waits, queued, for AC power.
 - The installed copy still logs with Windows PowerShell 5.1 `Add-Content`, which refuses to append
   while any process holds the log open and, under the script's `Continue`, drops the line silently:
   the run completes, but its log lines -- the failure reason included -- are lost. Until the
@@ -176,31 +199,22 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   directory; a report `descricao` is bounded only by the request size.
 - Agreed outside MP-1…MP-4, no recorded execution: reconcile/import the official
   deferred-hours spreadsheet.
-- Next GF1 release candidate (owner hold: not deployed, no migration): the development-branch
-  head, carrying UI-B46 and DIAG-500 (below), the COMPROVANTES-01 correction (required proofs are
-  short names; the older regulation sentence is never listed; model titles and file names wrap
-  instead of being cut at any width), UI-B40 (a closed request reads Indeferida), OPS-LOG-01 (not installed) and BL-02
-  (UI-B41 the processing page reads the request's frozen record; UI-B42 the request lists keep
-  Status in view through the shared DS status column, DS README section 2.6b; UI-B43 the KPI
-  cards stack on a phone; UI-B44 a long proof name opens whole while edited; UI-B45 the student
-  guidance says what every proof must hold; `docs/backlog/UI_ACCEPTANCE_BACKLOG.md`). The owner
-  accepted COMPROVANTES-01 and UI-B40 in VA-01 and the five BL-02 items on 2026-11-20 (isolated
-  local runtimes, synthetic data; packages outside the repository, `D:\SGAA_tmp\va01\package` and
-  `D:\SGAA_tmp\bl02\package`). Schema stays v19, so its GF1 has no upgrade step; PROD keeps the
-  v19 artifact of `4087eaf` until then. Qualification: the full suite at `8c8d8e0` found no
-  product regression; BL-02 is delta-qualified against it (TEP section 6: an independent review,
-  whose one material finding, a lost touch tap, is fixed; the mechanically selected impact set
-  and permanent guards rerun on the final code, failing only the known guards below). Results and
-  the GF1 plan are outside the repository (`D:\SGAA_tmp\rc_8c8d8e0`, `D:\SGAA_tmp\bl02\dq` and
-  the consolidated report beside them); for that content the served code identity changes from
-  `902a0be4…` to `a7cdcfef…` (16 files). That qualification and identity predate UI-B46 and
-  DIAG-500: GF1 publication qualification of the integrated head is the next, separate
-  milestone, and publication waits for it and the owner's GF1 authorization.
+- Published by GF1-CONSOLIDATED (in PROD since 2026-11-21): the COMPROVANTES-01 correction
+  (required proofs are short names; the older regulation sentence is never listed; model titles and
+  file names wrap instead of being cut at any width), UI-B40 (a closed request reads Indeferida) and
+  BL-02 (UI-B41 the processing page reads the request's frozen record; UI-B42 the request lists keep
+  Status in view through the shared DS status column, DS README section 2.6b; UI-B43 the KPI cards
+  stack on a phone; UI-B44 a long proof name opens whole while edited; UI-B45 the student guidance
+  says what every proof must hold; `docs/backlog/UI_ACCEPTANCE_BACKLOG.md`), together with UI-B46,
+  DIAG-500 and DS-CONSISTENCY-01 (below). The owner accepted COMPROVANTES-01 and UI-B40 in VA-01 and
+  the five BL-02 items on 2026-11-20 (packages outside the repository, `D:\SGAA_tmp\va01\package`
+  and `D:\SGAA_tmp\bl02\package`). OPS-LOG-01 is in the repository but outside the deployment and
+  stays uninstalled.
 - Still awaiting the owner, separate from the release: the 28 historical UI rows awaiting visual
   confirmation (none has an acceptance on record) and UI-B15 (clean in Chromium; the owner's own
   Chrome decides).
 - UI-B46 (AUTH-RECOVERY-01 / UI-LOGIN-ERROR-01), accepted by the owner 2026-11-20 and integrated
-  into the development branch with DIAG-500 on 2026-11-21 (not deployed): a dead password link
+  into the development branch with DIAG-500 on 2026-11-21, in PROD since GF1-CONSOLIDATED: a dead password link
   renders the DS recovery card (`docs/design-system/README.md`
   §2.6f) and resends through the existing self-service recovery, pre-filling the address only when
   safe; every feedback message of the public auth pages is the shared DS auth alert (§2.6g); the
@@ -209,19 +223,17 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   page are fully on DS tokens and components. Package and evidence outside the repository
   (`D:\SGAA_tmp\auth_recovery01`).
 - DIAG-500 (`docs/specs/DIAG-500.md`, CLOSED), accepted by the owner and integrated into the
-  development branch on 2026-11-21 (not deployed): the versioned-activities diagnostic routes answer
+  development branch on 2026-11-21, in PROD since GF1-CONSOLIDATED: the versioned-activities diagnostic routes answer
   an unknown, zero, negative-but-absent, out-of-range or malformed id, or an unknown Turma code,
   with 404 and the UI-B46 red alert instead of HTTP 500; a Turma without a Matriz is a neutral
   note; stored negative ids resolve. Amendment A1 (after the R3 cross-family finding) makes the
   page, its JSON link and its unmodified form read one query. A NUL byte in `turma_codigo` still
   answers 500 on PostgreSQL (backlog).
 - DS-CONSISTENCY-01 (`docs/specs/DS-CONSISTENCY-01.md`, CLOSED 2026-11-21), accepted by the owner
-  and integrated into the development branch on 2026-11-21 (not deployed): one section card
-  (`components/section-card.css`) and one button contract (`components/actions.css`, DS README §3.1)
-  on every screen and modal, chips instead of status pills for labels, the Turma form on a phone;
-  guard `tests/test_ds_button_contract.py`. Production deployment is on HOLD; the GF1 qualification
-  of 2026-11-21 covers `83c378b`, not this content: publishing it needs its own GF1, with the
-  full suite on `e8c5107` and the targeted reruns reusable under TEP §6.
+  and integrated into the development branch on 2026-11-21, in PROD since GF1-CONSOLIDATED: one
+  section card (`components/section-card.css`) and one button contract (`components/actions.css`,
+  DS README §3.1) on every screen and modal, chips instead of status pills for labels, the Turma
+  form on a phone; guard `tests/test_ds_button_contract.py`.
 - TEP v1.2 (2026-11-21, owner workflow correction): a full suite only on a named §5.1 trigger;
   ordinary changes follow §3.8 and are delivered without waiting on unrelated suites.
 - Executor observation from UI-B46, not scheduled: 226 raw colours remain in product UI code
@@ -289,5 +301,5 @@ gets one HTTP 500 (`InternalError`) among overlapping mirror invocations.
 | MP-0 | Spec-driven governance transition | CLOSED |
 | MP-1 | Storage convergence — Drive mirror worker (S4); legacy-migration tooling, census, DEV rehearsal (S5); storage reconciliation | CLOSED |
 | MP-2 | Hosting readiness — read-only filesystem, environment-only secrets, scheduler trigger (mirror worker included), object-byte backup (S7, part of S6) | CLOSED |
-| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | C13 PONR_RECORDED; admission OPEN, A19 deployed, A20 S5 operational with first hosted backup verified; GF1-V19 (`4087eaf`, schema v19) in PROD since 2026-11-19, authenticated manual smoke pending; autonomous due wake and C14 pending |
+| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | C13 PONR_RECORDED; admission OPEN, A19 deployed, A20 S5 operational with first hosted backup verified; `107f63e` (GF1-CONSOLIDATED, code only, schema v19) in PROD since 2026-11-21, authenticated manual smoke pending; autonomous due wake and C14 pending |
 | MP-4 | Legacy contraction after the rollback window — legacy document paths and bytes, SQLite file backup, Windows scheduler, purge policy (rest of S6) | NOT STARTED |
