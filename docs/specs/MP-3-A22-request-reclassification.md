@@ -1,6 +1,7 @@
 # SPEC MP-3 A22 — Correcting the activity of an editable request (schema v17)
 
-Status: FROZEN 2026-10-19 (slice 1 implemented; PROD gate G1 pending).
+Status: FROZEN 2026-10-19 (slice 1 implemented; PROD gate G1 executed 2026-10-19, ledger seq 173-181,
+per `PROJECT_STATE.md`; closure not recorded).
 Charter (owner, 2026-10-19, production defect on a real request): "A student can actually correct an
 incorrectly selected activity while the request is editable, without corrupting versioned academic
 records or requiring a duplicate request." Owner's decision on the schema (same day): narrow the

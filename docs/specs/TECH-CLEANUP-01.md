@@ -1,6 +1,6 @@
 # SPEC TECH-CLEANUP-01 — Bounded technical defects after GF1-CONSOLIDATED
 
-Status: FROZEN 2026-11-21
+Status: CLOSED 2026-11-21 (frozen the same day)
 Charter: "Eliminate bounded, reproducible technical defects remaining after GF1-CONSOLIDATED,
 without changing accepted product behavior." Starting HEAD `bd631f9`; Local/DEV and disposable
 test data only; commit and push to the development branch; no production deployment.
@@ -156,10 +156,10 @@ run-owned databases only. No DEV provider, no PROD access. PROD user gates: none
 
 | # | Goal | Paths | Exit evidence | Status |
 |---|---|---|---|---|
-| 1 | NUL Turma code is a 404 on PostgreSQL | `app/views/admin/versioning.py`, two test files | §11 slice 1 | planned |
-| 2 | Control-schema DDL serialized | `app/backup/pg_posture.py`, `tests/test_mp3_a20_hosted_backup_automation.py` | §11 slice 2, R2 review | planned |
-| 3 | Known test debt repaired | the F3 test files | §11 slice 3 | planned |
-| 4 | Documents and closure | §6 documents | T0 | planned |
+| 1 | NUL Turma code is a 404 on PostgreSQL | `app/views/admin/versioning.py`, two test files | §11 slice 1 | done |
+| 2 | Control-schema DDL serialized | `app/backup/pg_posture.py`, `tests/test_mp3_a20_hosted_backup_automation.py` | §11 slice 2, R2 review | done |
+| 3 | Known test debt repaired | the F3 test files | §11 slice 3 | done (landed before slice 2) |
+| 4 | Documents and closure | §6 documents | T0 | done |
 
 ## 13. Acceptance criteria
 
@@ -187,6 +187,11 @@ run-owned databases only. No DEV provider, no PROD access. PROD user gates: none
 - Free-text query parameters on other PostgreSQL routes are not audited for NUL (D1).
 - `DIAG-500-A1-CODE-CONTROL-CHARACTERS` stays as DIAG-500 recorded it.
 - `MAX_RAW_COLOURS` and other DS debt (charter exclusion).
+- From the slice 2 review (NON_MATERIAL, outside the slice's paths or accepted):
+  - the comment at `app/backup/pg_restore.py` that calls `run_ddl` still names the catalog race
+    as the reason; it remains true but incomplete;
+  - the E-PG2 test drives the copy-registry and backup-lock DDL sets; the wake-schedule, restore
+    marker and posture sets go through the same helper and are covered by their own lanes.
 
 ## 16. Amendments
 
@@ -194,4 +199,26 @@ None.
 
 ## 17. Closure
 
-Filled in slice 4.
+- AC1 met. Both routes answer 404 for a selected NUL code on PostgreSQL 15 and 17 (route-smoke
+  R9; `psycopg.DataError` before the fix) and on SQLite. A planted NUL code on SQLite is not
+  resolved. An unused NUL code beside `turma_id` still resolves. The page, its link and its form
+  agree. The DIAG-500 impact set passed (193), with route inventory, RBAC coverage and CSRF inventory.
+- AC2 met. The E-PG2 test (four concurrent callers, first use and objects present) fails on the
+  prior helper and passes on PostgreSQL 15 and 17. The scratch race harness went from one failure
+  per round to none (60 of 60 and 80 of 80 calls). The importers' real-PG lanes on PostgreSQL 17
+  passed: 369, with the opt-in real-data rehearsal skipped as not requested. They passed again on
+  the final bytes: 172. R2: one independent fresh-context review, PASS, no MATERIAL. Four
+  NON_MATERIAL findings were fixed and the targeted recheck passed. The reviewer is the same
+  model family as the executor (Claude Opus 5.5), which satisfies R2.
+- AC3 met. Every F3 test passes on SQLite, PostgreSQL 15 and PostgreSQL 17. The backup CLI test
+  fails on the prior test in a clean checkout and passes after the fix. Six mutation probes of the
+  re-pathed CSS assertions were all killed. The new tracked controls cover the U5-A CHECK
+  declaration, the scanner verdicts (checked against real PostgreSQL) and the status-tone
+  category.
+- AC4 met (T0). AC5: the self-audit passes; see the phase report.
+- Full suite: not run. No TEP §5.1 trigger applied (§11).
+- Landing: the freeze commit, then slices 1, 3, 2 and this record, each fast-forward pushed to the
+  development branch. Nothing was deployed. Evidence is outside the repository, in
+  `D:\SGAA_tmp\tc01` (synthetic data only).
+- Residuals carried to `PROJECT_STATE.md`: §15. Production receives slices 1 and 2 only through a
+  later GF1.

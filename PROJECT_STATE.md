@@ -227,8 +227,8 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   an unknown, zero, negative-but-absent, out-of-range or malformed id, or an unknown Turma code,
   with 404 and the UI-B46 red alert instead of HTTP 500; a Turma without a Matriz is a neutral
   note; stored negative ids resolve. Amendment A1 (after the R3 cross-family finding) makes the
-  page, its JSON link and its unmodified form read one query. A NUL byte in `turma_codigo` still
-  answers 500 on PostgreSQL (backlog).
+  page, its JSON link and its unmodified form read one query. A NUL byte in `turma_codigo` answers
+  the same 404 on PostgreSQL since TECH-CLEANUP-01 (development branch, not deployed).
 - DS-CONSISTENCY-01 (`docs/specs/DS-CONSISTENCY-01.md`, CLOSED 2026-11-21), accepted by the owner
   and integrated into the development branch on 2026-11-21, in PROD since GF1-CONSOLIDATED: one
   section card (`components/section-card.css`) and one button contract (`components/actions.css`,
@@ -238,6 +238,11 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   ordinary changes follow §3.8 and are delivered without waiting on unrelated suites.
 - Executor observation from UI-B46, not scheduled: 226 raw colours remain in product UI code
   (`MAX_RAW_COLOURS`).
+- TECH-CLEANUP-01 (`docs/specs/TECH-CLEANUP-01.md`, R2, CLOSED 2026-11-21), on the development
+  branch, not deployed: a NUL Turma code on the diagnostic routes is the DIAG-500 404 on PostgreSQL;
+  concurrent control-schema DDL (`app/backup/pg_posture.py::run_ddl`) runs under one advisory lock,
+  so overlapping scheduler or backup invocations no longer fail with `tuple concurrently updated`;
+  the known test debt below was repaired at its causes. What it deferred is in its §15.
 
 ## Environment facts
 
@@ -260,39 +265,12 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
 
 ## Known test debt (not blockers)
 
-Baseline full suite is not green (release qualification of 2026-11-20, 6,908 collected):
-`tests/test_ut5_backup_package.py::test_cli_backup_sync_runs_isolated_with_app_context_only`
-needs the gitignored `database.db`, so it fails in a clean worktree;
-`tests/test_phase4_atividades_blueprint.py::test_activity_blueprint_owns_exact_canonical_surface`
-pins 20 activity routes, 24 since the template routes of `118796c` (identical in PROD; not fixed).
-With `xlwt` in the test environment the former `xlwt` collection errors and
-`TestSentinelSurvival` no longer occur; the version-display test no longer reads the CSRF token or
-asset URLs.
-
-Eight guards fail on the development branch since before the Acesso
-corrections of 2026-11-18 (identical on `a5b912a`, the code in production before GF1-V19; not fixed):
-
-- `tests/test_b11_category_a_tokenization.py`:
-  `test_field_fills_accent_primary_hover_and_focus_use_their_tokens`,
-  `test_surface_layer_fills_use_the_surface_token`,
-  `test_info_and_danger_families_are_used_at_their_current_values` -- the
-  selectors they read (`#req-presets-modal …`, `.presets-ph:hover`) no longer exist;
-- `tests/test_ds_pill_radius.py::test_no_stylesheet_restores_a_fully_rounded_pill`
-  -- `.presets-ph` in `static/css/components/request-presets.css` uses `999px`;
-- `tests/test_pg_readiness_unit5d_ptbr_portability.py`:
-  `test_control_u5a_current_state_authority_untouched` and
-  `test_control_u5a_guard_still_detects_an_undeclared_change` -- the baseline
-  version list now ends at v19, the guard expects it to end at v17;
-- `tests/test_pg_readiness_unit5f_untyped_null_query.py::test_production_sql_has_no_placeholder_is_null_predicate`
-  -- `app/storage/copy_registry.py:108` `SELECT to_regclass(?) IS NOT NULL`;
-- `tests/test_status_badge_semantics_ui_b02_b03.py::test_b4_shared_tones_are_only_within_one_semantic_category`
-  -- it expects the caution tone to hold only Pendente and Encerrada; Devolvida
-  now shares it.
-Three real-PostgreSQL tests fail too, identically on `a5b912a`:
-`tests/test_storage_s2_real_pg.py::test_fresh_v14_authority_validates_and_is_empty`
-and `tests/test_storage_s3a_real_pg.py::test_pg_authority_is_v15` still pin head
-v16; `tests/test_mp2_scheduler_real_pg.py::test_overlapping_invocations_mirror_each_object_exactly_once`
-gets one HTTP 500 (`InternalError`) among overlapping mirror invocations.
+The failures recorded by the release qualification of 2026-11-20 (6,908 collected) are repaired on
+the development branch (TECH-CLEANUP-01 §2 F3): stale file paths, version pins and schema
+declarations now follow their owners, with negative controls; the backup CLI isolation test also
+runs in a clean checkout; the scheduler overlap test's intermittent HTTP 500 was the concurrent DDL
+defect above. No full suite has run since (none triggered); the next triggered one re-measures the
+baseline. Collection needs `xlwt` in the test environment (`requirements-dev.txt`).
 
 ## Roadmap
 
