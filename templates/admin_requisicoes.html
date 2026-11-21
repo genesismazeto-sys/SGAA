@@ -204,6 +204,25 @@
   </div>
 </div>
 
+<!-- Modal: ações rápidas do ícone de e-mail pendente (uma requisição, a do ícone) -->
+<div id="req-email-quick-modal" class="modal-overlay" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="req-email-quick-title" aria-describedby="req-email-quick-text">
+    <div class="modal-header">
+      <h3 id="req-email-quick-title"><span class="req-email-quick-icon" id="req-email-quick-icon"><i class="lucide" data-lucide="mail"></i></span> <span id="req-email-quick-label">{{ user_message("E-mail pendente de envio") }}</span></h3>
+      <button class="btn" id="req-email-quick-close" type="button" aria-label="{{ user_message('Fechar') }}"><i class="lucide" data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <p id="req-email-quick-text" class="req-email-quick-text"></p>
+      <div id="req-email-quick-error" class="req-email-warnings" role="alert" hidden></div>
+    </div>
+    <div class="modal-footer btn-row btn-row--center">
+      <button class="btn" id="req-email-quick-cancel" type="button">{{ user_message("Cancelar") }}</button>
+      <button class="btn" id="req-email-quick-dismiss" type="button">{{ user_message("Desmarcar") }}</button>
+      <button class="btn primary" id="req-email-quick-send" type="button">{{ user_message("Enviar") }}</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Pré-ajustes (Requisições) -->
 <div id="req-presets-modal" class="modal-overlay" hidden>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="req-presets-title">
@@ -278,6 +297,15 @@
 /* Indicador de e-mail pendente — coluna dedicada entre Atividade e Status */
 .req-email-cell .req-email-pending{ width:14px; height:14px; color:#2563eb; flex:0 0 auto; }
 .req-email-cell .req-email-pending.is-error{ color:#dc2626; }
+/* Para quem pode editar, o ícone é um botão (ações rápidas). O botão não tem
+   caixa própria, então o ícone fica onde estava; o ::before só amplia o toque. */
+.req-email-cell .req-email-flag{
+  position:relative; display:inline-flex; align-items:center; justify-content:center;
+  padding:0; margin:0; border:0; background:none; color:inherit; line-height:0;
+  border-radius:4px; cursor:pointer;
+}
+.req-email-cell .req-email-flag::before{ content:""; position:absolute; inset:-8px; }
+.req-email-cell .req-email-flag:focus-visible{ outline:2px solid var(--focus-ring-color); outline-offset:2px; }
 
 /* Contador da barra flutuante em modo lote.
    [hidden] vem depois e com a mesma especificidade da regra base, senão o
@@ -349,16 +377,24 @@
 #req-action-email-dismiss[hidden]{ display:none; }
 /* Com a confirmação aberta, a barra flutuante (acima da camada dos diálogos)
    sai da tela e da ordem de tabulação. */
-body:has(#req-email-dismiss-modal:not([hidden])) #pedido-actions-float{ visibility:hidden; }
+body:has(#req-email-dismiss-modal:not([hidden])) #pedido-actions-float,
+body:has(#req-email-quick-modal:not([hidden])) #pedido-actions-float{ visibility:hidden; }
 
 /* Confirmação de "Desmarcar sinalização de e-mail": o texto quebra em linhas,
    então é justificado (última linha alinhada ao início); a recusa usa a mesma
    caixa vermelha do fluxo de e-mail. */
 #req-email-dismiss-modal .modal-card{ width:min(520px, calc(100vw - 32px)); }
 .req-email-dismiss-text,
-#req-email-dismiss-error{ text-align:justify; text-align-last:start; }
-.req-email-dismiss-text{ margin:0; }
-#req-email-dismiss-error{ margin:10px 0 0; }
+#req-email-dismiss-error,
+.req-email-quick-text,
+#req-email-quick-error{ text-align:justify; text-align-last:start; }
+.req-email-dismiss-text,
+.req-email-quick-text{ margin:0; }
+#req-email-dismiss-error,
+#req-email-quick-error{ margin:10px 0 0; }
+/* Ações rápidas do ícone: diálogo compacto, botões centralizados (.btn-row--center). */
+#req-email-quick-modal .modal-card{ width:min(440px, calc(100vw - 32px)); }
+.req-email-quick-icon{ display:inline-flex; vertical-align:middle; }
 
 .modal-filter{ margin-bottom: 10px; display:grid; grid-template-columns: 1fr auto; align-items:center; column-gap:2px; }
 .card-box{ border:1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); padding:10px; display:flex; flex-direction:column; gap:10px; }
@@ -818,7 +854,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
   'dismissEmailFlagSingle': user_message('A sinalização de e-mail pendente da requisição {value_1} será removida. Nenhum e-mail será enviado e a decisão da requisição não muda.'),
   'dismissEmailFlagMultiple': user_message('A sinalização de e-mail pendente de {value_1} requisições será removida. Nenhum e-mail será enviado e as decisões das requisições não mudam.'),
   'dismissEmailFlagStale': user_message('A sinalização de e-mail mudou desde que a página foi aberta e nada foi alterado. Atualize a página e confira.'),
-  'dismissEmailFlagError': user_message('Não foi possível desmarcar a sinalização de e-mail.')
+  'dismissEmailFlagError': user_message('Não foi possível desmarcar a sinalização de e-mail.'),
+  'emailFlagPending': user_message('E-mail pendente de envio'),
+  'emailFlagFailed': user_message('E-mail pendente — última tentativa falhou.'),
+  'emailFlagRequest': user_message('Requisição {value_1} · {value_2}')
 }|tojson }}</script>
 
 <!-- Lista no formato de cards (com header sticky) -->
@@ -916,11 +955,19 @@ document.addEventListener('DOMContentLoaded', ()=>{
         {% set is_email_falha = r.id in (email_falhas or []) %}
         {% set email_cell %}
           {% if is_email_pendente %}
-            <i class="lucide req-email-pending{{ ' is-error' if is_email_falha else '' }}"
-               data-lucide="{{ 'mail-warning' if is_email_falha else 'mail' }}"
-               role="img"
-               aria-label="{{ user_message('E-mail pendente — última tentativa falhou.') if is_email_falha else user_message('E-mail pendente de envio') }}"
-               title="{{ user_message('E-mail pendente — última tentativa falhou.') if is_email_falha else user_message('E-mail pendente de envio') }}"></i>
+            {% set email_label = user_message('E-mail pendente — última tentativa falhou.') if is_email_falha else user_message('E-mail pendente de envio') %}
+            {% if can_requisicoes_edit %}
+              {#- Who may edit gets the quick actions (Cancelar / Desmarcar / Enviar). -#}
+              <button type="button" class="req-email-flag" data-email-quick aria-haspopup="dialog"
+                      aria-label="{{ email_label }}" title="{{ email_label }}">
+                <i class="lucide req-email-pending{{ ' is-error' if is_email_falha else '' }}"
+                   data-lucide="{{ 'mail-warning' if is_email_falha else 'mail' }}" aria-hidden="true"></i>
+              </button>
+            {% else %}
+              <i class="lucide req-email-pending{{ ' is-error' if is_email_falha else '' }}"
+                 data-lucide="{{ 'mail-warning' if is_email_falha else 'mail' }}"
+                 role="img" aria-label="{{ email_label }}" title="{{ email_label }}"></i>
+            {% endif %}
           {% endif %}
         {% endset %}
         {{ cl.row([
@@ -1148,6 +1195,32 @@ document.addEventListener('DOMContentLoaded', ()=>{
       document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && !modal.hidden) close(); });
     });
 
+    // The pending generation a row shows: what a dismissal names, so a decision
+    // taken after the page loaded is refused as stale instead of losing its flag.
+    function emailFlagOfRow(row){
+      return {
+        requisicao_id: parseInt(row?.getAttribute('data-req-id'), 10),
+        evento_id: parseInt(row?.getAttribute('data-email-event-id'), 10)
+      };
+    }
+    function isEmailFlag(flag){ return Number.isFinite(flag.requisicao_id) && Number.isFinite(flag.evento_id); }
+
+    // The one client call of the dismissal route (Ações item and icon dialog):
+    // 'ok' (the reload shows the persisted list and its flash), 'stale' or 'error'.
+    async function postEmailFlagDismissal(sinalizacoes){
+      try{
+        const res = await fetch('{{ url_for("admin_requisicoes_email_desmarcar") }}', {
+          method:'POST',
+          headers: buildPostHeaders({ 'Content-Type':'application/json' }),
+          body: JSON.stringify({ sinalizacoes })
+        });
+        const data = await res.json().catch(()=>({}));
+        if (res.ok && data.ok) return 'ok';
+        if (res.status === 409 && data.motivo === 'desatualizada') return 'stale';
+      }catch(_e){ /* a network failure is reported as 'error' below */ }
+      return 'error';
+    }
+
     // Desmarcar sinalização de e-mail: confirma e retira a sinalização exatamente
     // das decisões que a página mostrou. Nada é enviado.
     document.addEventListener('DOMContentLoaded', ()=>{
@@ -1183,19 +1256,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
         inFlight = true;               // guards double click
         btnConfirm.disabled = true;
         elError.hidden = true;
-        let res = null, data = {};
-        try{
-          res = await fetch('{{ url_for("admin_requisicoes_email_desmarcar") }}', {
-            method:'POST',
-            headers: buildPostHeaders({ 'Content-Type':'application/json' }),
-            body: JSON.stringify({ sinalizacoes: current })
-          });
-          data = await res.json().catch(()=>({}));
-        }catch(_e){ res = null; }
-        // The reloaded list is the persisted state; its flash confirms the change.
-        if (res && res.ok && data.ok){ window.location.reload(); return; }
+        const outcome = await postEmailFlagDismissal(current);
+        if (outcome === 'ok'){ window.location.reload(); return; }
         inFlight = false;
-        if (res && res.status === 409 && data.motivo === 'desatualizada'){
+        if (outcome === 'stale'){
           // Nothing changed and this page is out of date: confirming again cannot succeed.
           showError(reqMessageTemplates.dismissEmailFlagStale);
           return;
@@ -1206,6 +1270,95 @@ document.addEventListener('DOMContentLoaded', ()=>{
       btnCancel.addEventListener('click', close);
       btnClose.addEventListener('click', close);
       modal.addEventListener('click', (e)=>{ if (e.target === modal) close(); });
+      document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && !modal.hidden) close(); });
+    });
+
+    // Ações rápidas do ícone de e-mail pendente: Cancelar, Desmarcar (o próprio
+    // diálogo confirma) e Enviar (a prévia existente). Sempre a requisição do
+    // ícone clicado, sem tocar na seleção de linhas.
+    document.addEventListener('DOMContentLoaded', ()=>{
+      const modal      = document.getElementById('req-email-quick-modal');
+      if (!modal || !canRequisicoesEdit) return;
+      const elIcon     = document.getElementById('req-email-quick-icon');
+      const elLabel    = document.getElementById('req-email-quick-label');
+      const elText     = document.getElementById('req-email-quick-text');
+      const elError    = document.getElementById('req-email-quick-error');
+      const btnDismiss = document.getElementById('req-email-quick-dismiss');
+      const btnSend    = document.getElementById('req-email-quick-send');
+      const btnCancel  = document.getElementById('req-email-quick-cancel');
+      const btnClose   = document.getElementById('req-email-quick-close');
+      let flag = null;
+      let opener = null;
+      let inFlight = false;
+
+      function close(){
+        if (inFlight) return;
+        modal.hidden = true;
+        opener?.focus?.();             // back to the icon that opened it
+        opener = null;
+      }
+      function showError(message){ elError.textContent = message; elError.hidden = false; }
+      function open(button){
+        const row = button.closest('.impresso-card');
+        const current = emailFlagOfRow(row);
+        if (!isEmailFlag(current)) return;
+        flag = current;
+        opener = button;
+        inFlight = false;
+        const failed = !!button.querySelector('.req-email-pending.is-error');
+        elIcon.innerHTML = `<i class="lucide" data-lucide="${failed ? 'mail-warning' : 'mail'}"></i>`;
+        elLabel.textContent = failed ? reqMessageTemplates.emailFlagFailed : reqMessageTemplates.emailFlagPending;
+        elText.textContent = window.appFormatMessage(reqMessageTemplates.emailFlagRequest, {
+          value_1: flag.requisicao_id, value_2: row.getAttribute('data-req-aluno') || ''
+        });
+        elError.hidden = true; elError.textContent = '';
+        btnDismiss.disabled = false;
+        btnSend.disabled = false;
+        modal.hidden = false;
+        window.lucide?.createIcons?.();
+        setTimeout(()=>{ btnSend.focus(); }, 30);
+      }
+
+      document.querySelectorAll('#requisicoes-list [data-email-quick]').forEach(button => {
+        button.addEventListener('click', (e)=>{
+          e.stopPropagation();         // the row's selection and floating bar stay as they are
+          open(button);
+        });
+      });
+
+      btnDismiss.addEventListener('click', async ()=>{
+        if (inFlight || btnDismiss.disabled || !flag) return;
+        inFlight = true;               // guards double click
+        btnDismiss.disabled = true;
+        btnSend.disabled = true;
+        elError.hidden = true;
+        const outcome = await postEmailFlagDismissal([flag]);
+        if (outcome === 'ok'){ window.location.reload(); return; }
+        inFlight = false;
+        btnSend.disabled = false;
+        if (outcome === 'stale'){
+          // Nothing changed and this row is out of date: dismissing again cannot succeed.
+          showError(reqMessageTemplates.dismissEmailFlagStale);
+          return;
+        }
+        showError(reqMessageTemplates.dismissEmailFlagError);
+        btnDismiss.disabled = false;
+      });
+      btnSend.addEventListener('click', ()=>{
+        if (inFlight || !flag) return;
+        const id = flag.requisicao_id;
+        modal.hidden = true;           // the preview dialog takes over; it never sends by itself
+        opener = null;
+        window.openRequisicoesEmailConfirm?.([id]);
+      });
+      btnCancel.addEventListener('click', close);
+      btnClose.addEventListener('click', close);
+      modal.addEventListener('click', (e)=>{
+        if (e.target === modal) close();
+        // A click in this dialog is not a click "outside the list": the rows
+        // selected before the icon was clicked stay selected.
+        e.stopPropagation();
+      });
       document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && !modal.hidden) close(); });
     });
 
@@ -1329,13 +1482,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
       itmEmailDismiss?.addEventListener('click', ()=>{
         if (!canRequisicoesEdit || itmEmailDismiss.disabled) return;
         closeMenu();
-        // Each row names the generation it shows, so a decision taken after the
-        // page loaded is refused as stale instead of losing its own flag.
-        const sinalizacoes = rowSelectionApi.getSelectedRows().map(r => ({
-          requisicao_id: parseInt(r.getAttribute('data-req-id'), 10),
-          evento_id: parseInt(r.getAttribute('data-email-event-id'), 10)
-        }));
-        if (!sinalizacoes.length || sinalizacoes.some(s => !Number.isFinite(s.requisicao_id) || !Number.isFinite(s.evento_id))) return;
+        const sinalizacoes = rowSelectionApi.getSelectedRows().map(emailFlagOfRow);
+        if (!sinalizacoes.length || !sinalizacoes.every(isEmailFlag)) return;
         window.openRequisicoesEmailDismissConfirm?.(sinalizacoes);
       });
 

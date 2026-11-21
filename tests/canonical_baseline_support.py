@@ -309,6 +309,13 @@ CATALOG_LEDGER: tuple[tuple[str, int], ...] = (
         "foi enviado.' (msg_da329cd94a3e1e87). 8 additions, 0 retirements",
         8,
     ),
+    (
+        "UI-B49 quick actions on the pending-email icon: the dialog's line "
+        "naming the request and the student, 'Requisição {value_1} · "
+        "{value_2}' (msg_60b134e8725c77c2); its title and buttons reuse "
+        "existing texts. 1 addition, 0 retirements",
+        1,
+    ),
 )
 
 # Everything before the UT-MX3 term is MX3's exact parent state. Anchored on
@@ -359,9 +366,9 @@ PARENT_CATALOG_KEYS_SHA256 = (
 # uncertain-restore warning, to 589; RECT1 (three additions, one retirement),
 # to 591; RECL1 (two additions, one retirement), to 592; UXA1 (two additions),
 # to 594; TPL1 (four additions), to 598; UI-B40 (one retirement), to 597;
-# UI-B47 (eight additions), to 605.
+# UI-B47 (eight additions), to 605; UI-B49 (one addition), to 606.
 CANONICAL_CATALOG_KEYS_SHA256 = (
-    "73d5055133c72c8076309076fae833e410febf2b1e2bc0558043f326e7a5f651"
+    "710bc8b2fe9ec874d7f4b3fa4b50902452eb890af5914ce14029e6d797c6bdce"
 )
 
 # Named post-MX3 key sets.  Suites that reconstruct UT-MX3's parent state have
@@ -1055,10 +1062,29 @@ UIB47_EMAIL_FLAG_DISMISSAL_KEYS = frozenset(
 def catalog_keys_before_email_flag_dismissal(keys) -> set[str]:
     """Undo the UI-B47 term: drop its eight keys (it retired none).
 
-    UI-B47 is the newest term, so a reconstruction walks back through this
-    first, then UI-B40, TPL1 and every older term.
+    A reconstruction walks back through UI-B49 first, then this, then UI-B40,
+    TPL1 and every older term.
     """
     return set(keys) - set(UIB47_EMAIL_FLAG_DISMISSAL_KEYS)
+
+
+# UI-B49 quick actions on the pending-email icon (net +1).  Removing this key
+# from the live catalog reproduces the UI-B47 digest 73d50551..., the proof
+# that the term is purely additive.
+UIB49_EMAIL_QUICK_ACTION_KEYS = frozenset(
+    {
+        "msg_60b134e8725c77c2",  # Requisicao {value_1} - {value_2}
+    }
+)
+
+
+def catalog_keys_before_email_quick_actions(keys) -> set[str]:
+    """Undo the UI-B49 term: drop its one key (it retired none).
+
+    UI-B49 is the newest term, so a reconstruction walks back through this
+    first, then UI-B47, UI-B40 and every older term.
+    """
+    return set(keys) - set(UIB49_EMAIL_QUICK_ACTION_KEYS)
 
 
 def catalog_keys_before_s3a_direct_documents(keys) -> set[str]:

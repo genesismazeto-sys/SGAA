@@ -960,7 +960,8 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
     # twenty-eighth: a closed request reads as Indeferida, so the student
     # list's 'Encerrada' label retires, for -1. UI-B47 is the twenty-ninth: the
     # manual dismissal of the pending-email flag (Ações item, confirmation,
-    # refusals and success flash), for +8.
+    # refusals and success flash), for +8. UI-B49 is the thirtieth: the
+    # pending-email quick-action dialog's request line, for +1.
     assert [delta for _term, delta in governance.CATALOG_LEDGER] == [
         526,
         19,
@@ -991,7 +992,8 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
         4,
         -1,
         8,
-    ], "the named catalog delta ledger must stay exactly these twenty-nine terms"
+        1,
+    ], "the named catalog delta ledger must stay exactly these thirty terms"
     assert governance.PARENT_CATALOG_COUNT == 548
     # UT-MX3 scans the existing StudentMatrixError owner. Seven distinct
     # defaults become owned; "Aluno não encontrado." already had a catalog
@@ -1000,7 +1002,7 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
     governance.assert_catalog_matches_canonical_baseline(
         catalog, context="FC-07 ARQUIVOS ledger"
     )
-    assert governance.CANONICAL_CATALOG_COUNT == 605
+    assert governance.CANONICAL_CATALOG_COUNT == 606
     # The residual is anchored on the ledger through UT-MX3, so every term
     # appended after it comes back off the live key set before comparing.
     assert (
@@ -1026,7 +1028,8 @@ def test_message_catalog_product_delta_is_exact_while_baseline_debt_remains_visi
     governance.catalog_keys_before_revoked_credential_refusal(
     governance.catalog_keys_before_document_templates(
     governance.catalog_keys_before_status_display(
-    governance.catalog_keys_before_email_flag_dismissal(catalog))))))))
+    governance.catalog_keys_before_email_flag_dismissal(
+    governance.catalog_keys_before_email_quick_actions(catalog)))))))))
                                         )
                                     )
                                 )

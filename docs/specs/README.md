@@ -19,4 +19,4 @@ indexes SPECs only.
 | DS-CONSISTENCY-01 | One section card and one button contract | R1 | CLOSED 2026-11-21: accepted by the owner and integrated into the development branch; not deployed | [`DS-CONSISTENCY-01.md`](DS-CONSISTENCY-01.md) |
 | TECH-CLEANUP-01 | Bounded technical defects after GF1-CONSOLIDATED | R2 | CLOSED 2026-11-21: on the development branch; not deployed | [`TECH-CLEANUP-01.md`](TECH-CLEANUP-01.md) |
 | UI-B47 | Manual dismissal of the pending-email flag | R2 | CLOSED 2026-11-21: on the development branch; not deployed; owner visual acceptance pending | [`UI-B47.md`](UI-B47.md) |
-| UI-B49 | Quick actions on the pending-email icon | R1 | FROZEN 2026-11-21 | [`UI-B49.md`](UI-B49.md) |
+| UI-B49 | Quick actions on the pending-email icon | R1 | CLOSED 2026-11-21: on the development branch; not deployed; owner visual acceptance pending | [`UI-B49.md`](UI-B49.md) |

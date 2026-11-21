@@ -248,7 +248,13 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   the selected decisions -- exactly the generations the page showed, all or none, closed as
   `superseded` (schema v19 unchanged); nothing is sent and the request does not change; a page left
   open across a new decision is refused as stale. Route `admin_requisicoes_email_desmarcar`
-  (requisicoes/edit). Owner visual acceptance pending (backlog UI-B47); residuals in its §15.
+  (requisicoes/edit). Accepted by the owner on 2026-11-21 (backlog UI-B47 DONE); residuals in its §15,
+  the shared overlay one tracked as UI-B48.
+- UI-B49 (`docs/specs/UI-B49.md`, R1, CLOSED 2026-11-21), on the development branch, not deployed: the
+  pending-email icon (blue or red) of a request opens Cancelar / Desmarcar / Enviar for that request
+  (UI-B47's dismissal, no second confirmation; Enviar opens the existing preview); read-only profiles
+  keep a plain status icon. A compact choice dialog centres its buttons
+  (`.modal-footer.btn-row--center`, DS README §3.1). Owner visual acceptance pending.
 
 ## Environment facts
 

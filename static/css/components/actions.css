@@ -8,7 +8,8 @@
 
    Desktop
      .btn-row            buttons together on the right
-     .btn-row--center    data-entry forms (Salvar + Voltar / Cancelar)
+     .btn-row--center    data-entry forms (Salvar + Voltar / Cancelar) and compact
+                         choice dialogs (.modal-footer.btn-row--center)
 
    Phone (below 768px): no empty space beside the buttons
      every visible button grows from a zero basis and keeps its label as
@@ -30,6 +31,9 @@
   gap:var(--btn-gap, 8px);
 }
 .btn-row--center{ justify-content:center; }
+/* A compact choice dialog centres its row (owner, UI-B49). modal.css loads later
+   and right-aligns every .modal-footer, so the opt-in needs both classes. */
+.modal-footer.btn-row--center{ justify-content:center; }
 /* A row or a button carrying [hidden] stays hidden: the row's display would beat the UA rule. */
 .btn-row[hidden],
 .btn-row > [hidden]{ display:none !important; }

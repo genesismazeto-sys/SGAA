@@ -803,7 +803,10 @@ exist in the DS and renders white).
 
 **Desktop.** Card footers, modals and page actions: the buttons together on the
 right (`.btn-row`). Data-entry forms (Salvar + Voltar / Cancelar): centered
-(`.form-actions.center`, or `.btn-row--center`).
+(`.form-actions.center`, or `.btn-row--center`). A compact choice dialog -- a short question
+answered by its buttons, such as the Requisições pending-email quick actions
+(UI-B49) -- centres its row too (owner, 2026-11-21):
+`.modal-footer.btn-row.btn-row--center`; every other modal stays on the right.
 
 **Phone (below 768px).** No empty space beside the buttons. Every visible
 button grows from a zero basis and keeps its label as its minimum width, so:

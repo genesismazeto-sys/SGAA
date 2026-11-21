@@ -1,6 +1,6 @@
 # SPEC UI-B49 — Quick actions on the pending-email icon
 
-Status: FROZEN 2026-11-21
+Status: CLOSED 2026-11-21 (frozen the same day)
 Charter: "In Admin → Requisições, make the pending-email icon directly actionable" — a compact DS
 dialog with exactly Cancelar, Desmarcar and Enviar. Starting HEAD `8e5a29c`; synthetic data only;
 commit and push to the development branch; PRODUCTION HOLD. Owner note: a dialog box centres its
@@ -124,7 +124,7 @@ Local SQLite and Chromium only. PROD user gates: none.
 
 | # | Goal | Paths | Exit evidence | Status |
 |---|---|---|---|---|
-| 1 | Icon button, quick dialog, shared dismissal call, centred footer, guards, closure | §6 | §11 | PENDING |
+| 1 | Icon button, quick dialog, shared dismissal call, centred footer, guards, closure | §6 | §11 | DONE |
 
 ## 13. Acceptance criteria
 
@@ -143,6 +143,41 @@ Local SQLite and Chromium only. PROD user gates: none.
 
 ## 15. Deferred / known non-blockers
 
+- The preview that Enviar opens does not move the focus into itself (pre-existing behaviour of the
+  e-mail confirmation dialog); its buttons are reachable by Tab as before.
+- Whether the UI-B47 confirmation dialog should also centre its buttons is the owner's call (D3).
+
 ## 16. Amendments
 
+- A1 2026-11-21 — A click inside the new dialog stops at the dialog: the page clears the row
+  selection on any click outside the list (`static/js/toolbar-filters.js`), so Cancelar was clearing a
+  selection the icon had left intact. Only this dialog's clicks are kept; every other dialog of the
+  page behaves as before. Material: no.
+- A2 2026-11-21 — Owner question ("after Desmarcar the icon has to disappear, not turn red"): the
+  browser test now dismisses a red icon too and asserts that no icon of any colour, nor its button or
+  data, remains in that row, immediately and after a reload. Behaviour was already correct; the red
+  icon in the first renders was another seeded request (the red-variant case). Material: no.
+
 ## 17. Closure
+
+Closed 2026-11-21; this closure lands with slice 1. Evidence outside the repository: `D:\SGAA_tmp\ui_b49`
+(screenshots, before/after of a red dismissal, logs, scratch probes).
+
+- AC1 met — E-UI: blue and red icons open the same three-action dialog at 1440 and 390; centred row
+  on desktop, one filled row on the phone; the icon keeps its measured position (7 / 7 / 9 / 9 px).
+- AC2 met — E-UI: Cancelar, ×, Escape and the scrim change nothing; focus returns to the icon; a
+  multi-selection elsewhere stays selected.
+- AC3 met — E-UI: Desmarcar (also by keyboard) clears only the clicked request's flag; the row then
+  shows no icon, blue or red, before and after a reload; T2 for the shared route.
+- AC4 met — E-UI: Enviar opens the existing preview; nothing is sent until its own Enviar.
+- AC5 met — E-UI: a stale row is refused, its newer flag kept, Desmarcar disabled.
+- AC6 met — T1 (no button, `role="img"` kept), E-UI (clicking a read-only icon opens nothing).
+- AC7 met — the UI-B47 browser and contract tests pass unchanged.
+- AC8 met — self-audit: one client owner for the dismissal call, user text through `user_message`,
+  no server change, no dead code; no exception.
+
+Runs: T1 4; E-UI 1 (both widths, read-only profile included); regression set 502 (UI-B47 browser,
+DS button contract, status-in-view geometry, e-mail suites, catalogue and route guards); popover
+contract 5. Mutation probes: a client call that reports success without dismissing, and a server
+that keeps the flag pending, both fail the browser test. Full suite not triggered (no TEP §5.1
+trigger). Review: R1 self-review. Owner visual acceptance pending (backlog UI-B49).
