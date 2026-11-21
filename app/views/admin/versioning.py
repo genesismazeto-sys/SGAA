@@ -164,7 +164,11 @@ def _consulta_diagnostica(conn, leitura: _Leitura) -> tuple[dict[str, object], d
     if leitura.turma_id is not None:
         consulta = {"modo": "turma", "turma_id": leitura.turma_id}
     elif leitura.turma_codigo is not None:
-        turma = conn.execute("SELECT id FROM turmas WHERE codigo = ?", (leitura.turma_codigo,)).fetchone()
+        # A code holding NUL names no Turma on either engine: PostgreSQL text cannot store NUL
+        # (its driver refuses to bind one) and no write path produces such a code.
+        turma = None
+        if "\x00" not in leitura.turma_codigo:
+            turma = conn.execute("SELECT id FROM turmas WHERE codigo = ?", (leitura.turma_codigo,)).fetchone()
         if not turma:
             raise LookupError(_TURMA_NAO_ENCONTRADA)
         consulta = {"modo": "turma_codigo", "turma_codigo": leitura.turma_codigo, "turma_id": turma["id"]}

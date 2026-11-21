@@ -149,6 +149,7 @@ TURMA_1 = {"modo": "turma", "turma_id": 1, "matriz_id": 1}
 RESOLVED_BY_PRECEDENCE = (
     ("turma_id=1&matriz_id=2", TURMA_1),
     ("turma_id=1&turma_codigo=NAO-EXISTE", TURMA_1),
+    ("turma_id=1&turma_codigo=PPA-T10%00", TURMA_1),
     ("turma_id=1&matriz_id=99999", TURMA_1),
     (f"turma_id=1&matriz_id={2**63 - 1}", TURMA_1),
     (f"turma_id=1&matriz_id={-(2**63)}", TURMA_1),
@@ -291,6 +292,21 @@ def test_stored_negative_ids_resolve(lookup_client, query, consulta):
     assert body["totais"]["geral"] == 3
     if consulta["modo"] != "matriz":
         assert body["turma"] == {"id": TURMA_NEGATIVA_ID, "nome": "PPA-T70", "codigo": "PPA-T70"}
+
+
+@pytest.mark.parametrize(
+    "query",
+    ["turma_codigo=PPA-T10%00", "turma_codigo=%00", "turma_codigo=%00PPA-T60", "turma_codigo=%00&matriz_id=1"],
+    ids=["trailing-nul", "nul-only", "planted-code", "selected-over-matriz"],
+)
+def test_a_turma_code_holding_nul_names_no_turma(lookup_client, query):
+    # PostgreSQL text cannot store NUL and refuses to bind it; no write path stores such a code.
+    # The lookup answers before binding it, on both engines -- even a code planted on SQLite.
+    with main.app.app_context():
+        conn = main.get_db_connection()
+        _insert_turma(conn, 60, "\x00PPA-T60", 60, 1)
+        conn.commit()
+    _assert_failed_lookup(lookup_client, query, TURMA_NAO_ENCONTRADA)
 
 
 def test_zero_is_not_an_identifier_even_where_a_row_holds_it(lookup_client):
@@ -444,6 +460,8 @@ ONE_READING = (
     pytest.param("turma_id=99999&matriz_id=abc", (404, MATRIZ_NAO_ENCONTRADA), id="malformed-and-missing"),
     pytest.param("turma_id=99999&matriz_id=910", (404, TURMA_NAO_ENCONTRADA), id="missing-turma"),
     pytest.param("turma_codigo=NAO-EXISTE&matriz_id=910", (404, TURMA_NAO_ENCONTRADA), id="missing-code"),
+    # Shown and sent back as U+FFFD: still a code that names no Turma.
+    pytest.param("turma_codigo=PPA-T10%00&matriz_id=910", (404, TURMA_NAO_ENCONTRADA), id="nul-in-code"),
     pytest.param("turma_id=&turma_codigo=&matriz_id=", INDICE_SELECIONADO, id="blank-form"),
     pytest.param("", INDICE_SELECIONADO, id="index"),
 )

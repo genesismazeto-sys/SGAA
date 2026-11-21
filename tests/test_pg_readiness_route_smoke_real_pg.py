@@ -21,7 +21,9 @@ integration boundary through the real ``main.app`` request path:
 * R5 ``/admin/atividades`` list, ``nome`` filter and ``s``/``dir`` ordering;
 * R6 ``POST /admin/catalogo-versoes/<base>/nova-versao``;
 * R7 ``POST /admin/catalogo-versoes/<base>/versoes/<v>/excluir``;
-* R8 ``GET /admin/banco-dados`` and ``POST /admin/banco-dados/backup`` refusal.
+* R8 ``GET /admin/banco-dados`` and ``POST /admin/banco-dados/backup`` refusal;
+* R9 the diagnostic routes' Turma-code lookup, a NUL byte included (the driver
+  refuses NUL in a text parameter).
 
 No production owner is monkeypatched.  Two passive probes are installed:
 ``sqlite3.connect`` is a tripwire that records (and refuses) any SQLite
@@ -1049,3 +1051,25 @@ def test_r8_gerar_backup_agora_never_prunes_by_a_policy_it_could_not_read(env, a
         assert len(uploads) == 1 and deleted == []  # sent, and nothing deleted
     finally:
         env.observer.execute("DROP SCHEMA IF EXISTS sgaa_ops CASCADE")
+
+
+DIAG_JSON = "/admin/diagnostico/atividades-versionadas"
+DIAG_VIEW = "/admin/diagnostico/atividades-versionadas/view"
+DIAG_TURMA_NOT_FOUND = "Turma não encontrada para leitura diagnóstica."
+
+
+@pytest.mark.parametrize(
+    "query",
+    ["turma_codigo=PPA-T99", "turma_codigo=PPA%00T99", "turma_codigo=%00", "turma_codigo=%20%00%20&matriz_id=5"],
+    ids=["absent-code", "nul-inside", "nul-only", "nul-selected-over-matriz"],
+)
+def test_r9_diagnostic_turma_code_names_no_turma_is_a_404_on_postgresql(env, admin_client, query):
+    """A selected Turma code that names no Turma is the DIAG-500 404 on both routes. The driver
+    refuses NUL in a text parameter, so a NUL code must be answered before it is bound."""
+    payload = admin_client.get(f"{DIAG_JSON}?{query}")
+    assert payload.status_code == 404
+    assert payload.get_json() == {"ok": False, "message": DIAG_TURMA_NOT_FOUND}
+
+    view = admin_client.get(f"{DIAG_VIEW}?{query}")
+    assert view.status_code == 404
+    assert f'<p class="diag-alert">{DIAG_TURMA_NOT_FOUND}</p>' in view.get_data(as_text=True)
