@@ -94,8 +94,8 @@
     .reporte-modal-status-form select{ height:var(--btn-h); padding:0 calc(10px + var(--select-arrow-room, 0px)) 0 10px; border:1px solid var(--border-strong); border-radius:var(--radius); background:var(--surface); font:inherit; min-width:200px; }
     /* Footer: divisor vertical sutil entre Fechar e Salvar */
     .modal-footer-actions .footer-sep{ width:1px; height:20px; background:var(--border-strong); margin:0 2px; }
-    /* Phone: the detail footer stacks -- Excluir on its own line, then Fechar / Salvar status filling
-       theirs (button contract, components/actions.css). */
+    /* Phone: the detail footer stacks -- the delete action on its own line, then the close and save
+       buttons filling theirs (button contract, components/actions.css). */
     @media (max-width:767.98px){
       #reporte-modal .modal-footer{ flex-direction:column; align-items:stretch; }
       #reporte-modal .modal-footer > form .btn{ width:100%; justify-content:center; }

@@ -950,7 +950,7 @@ def test_each_provider_card_owns_its_whole_configuration_form():
 
     cards = template.split('<section class="db-provider-card">')[1:]
     assert len(cards) == 2
-    assert template.count('<div class="db-provider-secondary">') == 2
+    assert template.count('<div class="db-provider-secondary btn-row btn-row--pairs">') == 2
 
     for card, prefix in zip(cards, ("gdrive", "onedrive")):
         actions, marker, tail = card.partition(
@@ -960,7 +960,7 @@ def test_each_provider_card_owns_its_whole_configuration_form():
         assert marker, f"{prefix} card must own a configuration form"
 
         # The pinned provider actions still come first and stay credential-free.
-        assert '<div class="db-provider-secondary">' in actions
+        assert '<div class="db-provider-secondary btn-row btn-row--pairs">' in actions
         assert "save_credentials" not in actions
         assert 'name="client_id"' not in actions
         assert 'name="app_public_base_url"' not in actions

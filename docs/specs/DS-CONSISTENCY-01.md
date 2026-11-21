@@ -1,6 +1,6 @@
 # SPEC DS-CONSISTENCY-01 — One section card and one button contract
 
-Status: FROZEN 2026-11-21
+Status: CLOSED 2026-11-21 (pushed on `backlog/ds-consistency-01`; integration awaits owner acceptance)
 Charter: the owner approved the DS consolidation proposal on 2026-11-21 ("Aprovar e aplicar tudo"),
 including the defaults it put to him (four buttons in two rows of two; one order for the request decision
 buttons; header and in-row buttons unchanged). Publication: push to `backlog/ds-consistency-01`;
@@ -127,7 +127,7 @@ Local only: the synthetic-data harness and the test suite. PROD: none. DEV provi
 | 1 | Components (section card, button row, modal footer) + white primaries + README contract | css components, 3 card templates, modal templates | static guards, T3 | landed with 2–3 (A7) |
 | 2 | Action groups on every screen (forms, cards, modals, order, decisions, toolbar) | templates, list toolbar CSS | browser contract, T3 | landed (A7) |
 | 3 | Diagnostic view, Banco de dados cards and provider buttons, Acesso chips, Alunos header, Importar requisições file field | those templates | browser contract, T3 | landed (A7) |
-| 4 | Close: audit 0, prints, T5, SPEC closure | docs, PROJECT_STATE | T5 | |
+| 4 | Close: audit, prints, SPEC closure | docs, PROJECT_STATE | T1–T4, browser contract (A9) | closed |
 
 ## 13. Acceptance criteria
 
@@ -174,3 +174,31 @@ None beyond `docs/OPERATING_MODEL.md` §7.
   release / GF1), carried to later trees through TEP §6. The phase closes on T1–T4 and the browser contract.
 
 ## 17. Closure
+
+- AC1 — met: the audit over every page and modal at 1440 / 390 went from 99 action groups outside the contract to
+  0; the 7 it still reports are measurement artifacts, each checked in a print (multi-line decision groups; form
+  columns inside page margins). Evidence: `D:\SGAA_tmp\ds_audit` (buttons.json → buttons_after.json).
+- AC2 — met: no `btn-primary`; the browser contract checks primary rightmost and the static guard bans the class.
+- AC3 — met: `test_the_section_card_is_defined_once`; card footers keep their buttons on the right (desktop) and
+  fill the line (phone).
+- AC4 — met: diagnostic labels, Acesso levels and e-mail counts are chips.
+- AC5 — met: `test_the_contract_check_catches_a_row_with_empty_space_and_a_left_primary` (negative controls).
+- AC6 — self-audit: one owner per rule (section-card.css, actions.css, turma-form.css; the toolbar in
+  modern-style.css, A6); no view, route, RBAC or schema change; guards changed only per the declared contract
+  change, with negative controls; template ratchets lowered (A8).
+- Evidence (A9): T1–T4 — DS and UI guard owners and the impacted UI tests (about 690), Turma owners (245),
+  the browser contract at 1440 / 390. The sweep on `e8c5107` (2026-11-21, 7114 collected, 1:30) is kept as
+  release-candidate evidence: 12 failures identical to the known debt, 7 caused by this phase (one template
+  comment naming a button label a permission test excludes — class A; six pins of the old markup — class B),
+  all fixed and rerun at file scope (138 passed).
+
+```
+DELTA-QUALIFIED
+against:      T5 e8c5107 (D:\SGAA_tmp\ds_t5\t5.xml)
+delta:        7296295 (Turma phone, A8), 7f5d2e7 (TEP v1.2, docs only), the seven fixes above
+reran:        Turma owners (245), DS guards, the seven failing files (138)
+invalidators: none
+```
+
+- Commits: `50acf85` (freeze), `e8c5107` (slices 1–3), `7296295` (A8), `7f5d2e7` (TEP v1.2), this close.
+- Residuals: the report detail modal keeps Excluir apart (A2); "4 buttons" has only the two cases of D3.

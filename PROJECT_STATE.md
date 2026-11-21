@@ -215,6 +215,14 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   note; stored negative ids resolve. Amendment A1 (after the R3 cross-family finding) makes the
   page, its JSON link and its unmodified form read one query. A NUL byte in `turma_codigo` still
   answers 500 on PostgreSQL (backlog).
+- DS-CONSISTENCY-01 (`docs/specs/DS-CONSISTENCY-01.md`, CLOSED 2026-11-21), on
+  `backlog/ds-consistency-01`, not integrated, not deployed: one section card
+  (`components/section-card.css`) and one button contract (`components/actions.css`, DS README §3.1)
+  on every screen and modal, chips instead of status pills for labels, the Turma form on a phone;
+  guard `tests/test_ds_button_contract.py`. Integration into the development branch waits for the
+  owner's acceptance; the qualified GF1 candidate stays `83c378b`.
+- TEP v1.2 (2026-11-21, owner workflow correction): a full suite only on a named §5.1 trigger;
+  ordinary changes follow §3.8 and are delivered without waiting on unrelated suites.
 - Executor observation from UI-B46, not scheduled: 226 raw colours remain in product UI code
   (`MAX_RAW_COLOURS`).
 

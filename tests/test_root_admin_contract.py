@@ -519,7 +519,7 @@ def test_panel_announces_nothing_about_the_recovery_path(tmp_path):
         # The footer follows the cards directly -- no leftover row, no empty
         # strip where the rejected note used to sit.
         assert re.search(
-            r"</div>\s*</div>\s*<div class=\"access-defaults-footer\">", panel
+            r"</div>\s*</div>\s*<div class=\"access-defaults-footer btn-row\">", panel
         ), "something is rendered between the default-password cards and the footer"
 
 

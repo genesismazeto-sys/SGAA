@@ -558,7 +558,7 @@ def test_defaults_panel_markup_is_unchanged_by_the_surface_cleanup():
         panel.index('<div class="access-defaults-head">'),
         panel.index('<div class="access-defaults-body">'),
         panel.index('<div class="access-defaults-grid">'),
-        panel.index('<div class="access-defaults-footer">'),
+        panel.index('<div class="access-defaults-footer btn-row">'),
     ]
     assert order == sorted(order)
     assert panel.count('<div class="access-default-card">') == 5

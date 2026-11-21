@@ -16,4 +16,4 @@ indexes SPECs only.
 | MP-3 A22 | Correcting the activity of an editable request (schema v17) | R3 | FROZEN 2026-10-19; slice 1 implemented; PROD upgrade and deploy (G1) pending | [`MP-3-A22-request-reclassification.md`](MP-3-A22-request-reclassification.md) |
 | OPS-LOG-01 | Governed daily backup logging reliability | R2 | CLOSED 2026-11-19 (local; publication HOLD, not installed) | [`OPS-LOG-01-daily-backup-logging.md`](OPS-LOG-01-daily-backup-logging.md) |
 | DIAG-500 | Versioned-activity diagnostic lookups | R3 | CLOSED 2026-11-21: retrospective record and A1 accepted by the owner (targeted-recheck exception approved); integrated into the development branch; not deployed | [`DIAG-500.md`](DIAG-500.md) |
-| DS-CONSISTENCY-01 | One section card and one button contract | R1 | FROZEN 2026-11-21; on `backlog/ds-consistency-01`, not integrated | [`DS-CONSISTENCY-01.md`](DS-CONSISTENCY-01.md) |
+| DS-CONSISTENCY-01 | One section card and one button contract | R1 | CLOSED 2026-11-21; on `backlog/ds-consistency-01`, integration awaits owner acceptance | [`DS-CONSISTENCY-01.md`](DS-CONSISTENCY-01.md) |
