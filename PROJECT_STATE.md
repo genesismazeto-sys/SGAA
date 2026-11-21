@@ -197,13 +197,21 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
 - Still awaiting the owner, separate from the release: the 28 historical UI rows awaiting visual
   confirmation (none has an acceptance on record) and UI-B15 (clean in Chromium; the owner's own
   Chrome decides).
-- UI-B46 (AUTH-RECOVERY-01 / UI-LOGIN-ERROR-01, owner request 2026-11-20), not part of the release
-  candidate: a dead password link renders the DS recovery card (`docs/design-system/README.md`
+- UI-B46 (AUTH-RECOVERY-01 / UI-LOGIN-ERROR-01), accepted by the owner 2026-11-20, not part of the
+  release candidate: a dead password link renders the DS recovery card (`docs/design-system/README.md`
   §2.6f) and resends through the existing self-service recovery, pre-filling the address only when
-  safe; every feedback message of the public auth pages is the shared DS auth alert (§2.6g).
-  Local branch `backlog/auth-recovery-01` on top of the candidate, not pushed or deployed;
-  awaits the owner's visual acceptance (package outside the repository,
-  `D:\SGAA_tmp\auth_recovery01\package`).
+  safe; every feedback message of the public auth pages is the shared DS auth alert (§2.6g); the
+  owner's Alertas colours are the DS's one alert palette (`--alert-*`, §2.1); Inter has one owner
+  for every document; the Requisições e-mail confirmation and the versioned-activities diagnostic
+  page are fully on DS tokens and components. Local branch `backlog/auth-recovery-01`, a
+  fast-forward of the candidate, not pushed or deployed (publication HOLD; integrating it into the
+  release needs the owner's push and GF1 decisions). Package and evidence outside the repository
+  (`D:\SGAA_tmp\auth_recovery01`).
+- Executor observations from UI-B46, not scheduled: the diagnostic page
+  (`/admin/diagnostico/atividades-versionadas/view`) answers HTTP 500 for an unknown `turma_id` or
+  `matriz_id` (also on `0247c1d`; a separate fix was proposed, not started); its red `.diag-alert`
+  can never render (lookup errors show as the grey `.diag-note`; whether they should be red is
+  the owner's call); 226 raw colours remain in product UI code (`MAX_RAW_COLOURS`).
 
 ## Environment facts
 
