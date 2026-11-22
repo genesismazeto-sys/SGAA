@@ -1574,3 +1574,56 @@ This paragraph records the **operator's local-chain report**, not an
 independently mounted/read local custody file. The GitHub documentation
 commit itself does not operate GX2, perform a backup, publish the drill
 receipt, amend PROD, or advance C14.
+
+
+### C14 readiness audit — 2026-11-22 (C13 recorded; C14 BLOCKED)
+
+Read-only audit of the production ledger after the OPS-LOG-01 installation (repository `95f39bf`). The
+chain is OK at 268 entries, head
+`dbdc04553ed73d735f4c1b9eb2e9d3c99a896482774adc7bad2049bdc7df3a2a`, no unresolved operation; C13 is
+entered at seq 83 (2026-10-12T21:57:03Z) and its 30-day rollback window has elapsed. The single GX2
+grant is seq 110 (reference `owner-a21-gx2-execute-20261015-2f0b090`); the single `cadence_exception`
+is seq 111, classification `NOT_COMPLIANT_HISTORICAL`, hash
+`f90b62598491d9244030d529b817c9ffffb72f609331023d6d44813132526e25`. The classification of the
+historical span is unchanged and remains the one the chain recorded.
+
+The ledger's own `_closure_facts` now derives **three** frozen Layer-2 breaches from the chain; the
+object cadence has no breach and there is no open gap:
+
+- 2026-10-13T15:07:54Z -> 2026-10-15T20:07:04Z, 190,750 s > 129,600 s (the recorded exception's record);
+- 2026-10-20T23:00:26Z -> 2026-10-22T23:00:34Z, 172,808 s > 129,600 s;
+- 2026-11-15T23:00:29Z -> 2026-11-17T23:49:44Z, 175,755 s > 129,600 s.
+
+Per A21 (2), each later breach freezes on the chain and moves the restitution start with no new grant
+and nothing erased. The current `clean_since` is therefore **2026-11-17T23:49:44Z**, and the qualifying
+30-day window completes at **2026-12-17T23:49:44Z** (2026-12-17 20:49:44 local). `_check_window`,
+evaluated in memory against the real ledger, refuses `QUALIFYING_WINDOW_NOT_ELAPSED`; nothing was
+written. C14 cannot be recorded before that boundary.
+
+Generation seq 268 (2026-11-22T01:11:46Z, manifest
+`d3bd6f63b0ef88a06330dc46c07a855e71d8bdea4ec1dd38671f725064b1e373`, object set
+`20261122T011143Z-auto-daily`) is a valid post-C13 in-window, source-bound generation: the offline
+`verify_generation` re-verified the Layer-2 artifact, sidecar, archive listing, sealed object set and
+every off-platform copy, with the PROD pooler identity (`system_identifier` `7692130048193495360`) and
+the PROD store (`uckadhcwfknklmdktuyi.supabase.co`) both recorded. It cannot serve the C14 drill: the
+receipt must be appended at or after the boundary (`RESTORE_VALIDATION_NOT_POST_WINDOW`), and the
+generation will have rotated out long before then. No drill was run and no receipt was recorded by this
+audit.
+
+The exact remaining sequence, at or after 2026-12-17T23:49:44Z:
+
+1. Take a governed generation with objects (the daily 20:00 run of 2026-12-18 local is the first
+   scheduled run after the boundary; an operator-run governed generation may be used instead) and
+   confirm its `backup` entry in the ledger.
+2. In the drill terminal (`DATABASE_URL` unset, `SGAA_RESTORE_TARGET_URL` a new empty PostgreSQL 17
+   database): `python tools/ops_backup.py drill --ledger-dir <ledger> --root <primary dir>
+   --off-platform <second dir> --generation <manifest_sha256>`. It records the `restore` receipt;
+   publish it through the governed path (`ops_backup.py publish`, or the next governed run).
+3. Under the owner's C14 authorization: `python tools/cutover_ledger.py advance --state C14
+   --ledger-dir <ledger> --expect-head <head> --evidence <json>` with `cadence_exception_sha256` =
+   `f90b6259…`, `restore_validated_manifest_sha256` = that generation's manifest and
+   `unresolved_reconciliation` = 0. The ledger derives the report (all three breaches with count and
+   digest, `NOT_COMPLIANT_HISTORICAL`/`COMPLIANT_OBSERVED`, the restitution interval); typed copies of
+   those derived fields are refused.
+
+C14 and MP-4 remain unrecorded and unstarted.
