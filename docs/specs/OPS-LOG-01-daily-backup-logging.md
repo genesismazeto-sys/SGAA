@@ -1,6 +1,6 @@
 # SPEC OPS-LOG-01 — Governed daily backup logging reliability
 
-Status: CLOSED 2026-11-19 (frozen 2026-11-19)
+Status: CLOSED 2026-11-19 (frozen 2026-11-19); installed 2026-11-21 (local; publication HOLD)
 Charter: "Eliminate the logging concurrency defect in the governed daily backup process, ensuring that
 simultaneous log observation cannot interrupt a valid backup operation." Local isolated testing only; PROD,
 live scheduled tasks, production credentials and deployed scripts unchanged. Publication: HOLD (local commits).
@@ -233,3 +233,36 @@ CLOSED 2026-11-19, local commits only (publication HOLD: not pushed, not install
 - Carried to `PROJECT_STATE.md`: the installation of §9 (owner gate) and, until then, the rule that nothing
   holds the live log open while the task runs; the push of these commits (HOLD).
 - Follow-ups: §15.
+
+## 18. Installation (operational, owner-authorized 2026-11-21)
+
+§9 was executed on 2026-11-21, 22:10-22:15 local (2026-11-22T01:10-01:15Z), from repository HEAD
+`477e18fd6a67853fa85f2d5956fb1f0de47a9a70`. Installation only; no development slice was reopened and no
+qualification was rerun.
+
+- Replaced `D:\SGAA_CUTOVER\daily_governed_backup.ps1`: original blob
+  `9cac1d478e53567943361011bdd2b60942de5c65` (SHA-256 `FE0E735887B1DDDBD545C25126FCAFC98FAD26D1CB53D4AC0D265C1B4BA079A4`),
+  preserved byte-identically beside it at
+  `D:\SGAA_CUTOVER\daily_governed_backup.ps1.pre-ops-log-01.20261121T221040.bak` (same blob and SHA-256),
+  and installed the repository file, blob `4d8db12c7daeafe2cd6a781d88e4b6bde724334e`
+  (SHA-256 `CCF449E7318C34CAEA64790E9095CBCFB1B31C95FFEBB1C8BA6EEF326AFA7744`). Both checked with
+  `git hash-object`; the staged copy was hash-checked before the rename.
+- `$Wt` kept at `D:\SGAA_wt\gf1_4087eaf`, the then-pinned worktree and the task's working directory. The
+  installed and repository files contain the same value (the same line in both).
+- Scheduled task unchanged: the exported definition has SHA-256
+  `412590F974C0D01AA6B4D66B285D297B00F38C378918782BA4B2CF24F6926182` before and after; interpreter
+  (`powershell.exe`), arguments, working directory, principal (`klebe`, Interactive, Limited),
+  `MultipleInstances` IgnoreNew, the 1 h limit and the daily 20:00 trigger are the same. The replacement
+  ran with the task `Ready` and no `daily_governed_backup.ps1` process active.
+- §9 confirmation run (the task's interpreter and flags, its working directory), 2026-11-21 22:11:19-22:15:33
+  local: exit code 0 in 4m14s. `ops_backup` steps DATABASE_BACKUP, DATABASE_VERIFY, OBJECT_BACKUP and
+  OBJECT_VERIFY all exit 0; ledger seq 268 (`backup`/`GENERATION`, `2026-11-22T01:11:46Z`), 268 entries,
+  chain OK, no unresolved operation, state unchanged at C13; generation
+  `sgaa-pg-20261122T011146Z-auto-daily` (402,251 bytes, SHA-256
+  `8fcfb731d81d4e682cc72add720f9933ca7b429a968aaf5a4a23b4827b3304e6`, matching its sidecar; manifest
+  `result ok`, schema 19, 41 tables, 71/71 domain checks, 19/19 triggers) and objects
+  `20261122T011143Z-auto-daily`, with the off-platform copies present and hash-matching. The run's six
+  lines are in `daily_governed_backup.log` (278 -> 284) and match the captured console exactly; no fallback
+  file was created.
+- Rollback: restore the preserved `.bak` over the installed file; no task change is needed.
+- Publication of the OPS-LOG-01 commits remains HOLD (local commits only).

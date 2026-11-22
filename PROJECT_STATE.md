@@ -97,8 +97,9 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   The first subsequently scheduled DUE pass is still awaiting observation;
   a no-op scheduled wake returned HTTP 200/NOT_DUE. The configured policy is the
   default 24 h database / 7 d objects / 2 retained / 30 d restoration drill.
-- OPS-LOG-01, governed daily backup logging reliability (R2): CLOSED; its wrapper is in the
-  development branch (outside the deployment) and remains UNINSTALLED (separate owner authorization).
+- OPS-LOG-01, governed daily backup logging reliability (R2): CLOSED 2026-11-19; INSTALLED 2026-11-21
+  in the Windows scheduled environment (see Production). The wrapper is outside the deployment export;
+  publication of its commits remains HOLD.
 - MP-3 A22 (`docs/specs/MP-3-A22-request-reclassification.md`): a student or administrator
   corrects the activity of an editable request in place (schema v17). In PROD since gate G1
   on 2026-10-19 (upgrade to v17, then the GF1 deploy of `f559e3d`, ledger seq 173-181).
@@ -147,7 +148,8 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   release assets byte for byte, four anonymous auth pages). The authenticated manual smoke
   (`SMOKE_107F63E.md` in `D:\SGAA_CUTOVER\gf1_107f63e`, which includes the outstanding SMOKE_V19
   checks) is PENDING / NOT EXECUTED: no test identities were provided and the executor does not sign
-  in to production. C14, MP-4 and OPS-LOG-01 (still uninstalled) are unchanged by this GF1.
+  in to production. C14, MP-4 and OPS-LOG-01 (then uninstalled; installed 2026-11-21) are unchanged by
+  this GF1.
   Record: `D:\SGAA_CUTOVER\gf1_107f63e\README.txt`.
 - GF1-2 (2026-11-21 21:44-21:47 local; 2026-11-22T00:45-00:47Z; owner-authorized, COMMITTED):
   published `227ec51` -- TECH-CLEANUP-01, UI-B47 and UI-B49 -- as a code-only release: schema v19
@@ -161,7 +163,7 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   manual smoke (`SMOKE_227EC51.md` in `D:\SGAA_CUTOVER\gf1_227ec51`, which incorporates the pending
   `SMOKE_107F63E.md`) is PENDING / NOT EXECUTED: no test identities were provided and the executor
   does not sign in to production. UI-B49 owner visual acceptance remains pending. C14, MP-4, UI-B48
-  and OPS-LOG-01 (still uninstalled) are unchanged by this GF1.
+  and OPS-LOG-01 (then uninstalled; installed 2026-11-21) are unchanged by this GF1.
   Record: `D:\SGAA_CUTOVER\gf1_227ec51\README.txt`.
 
 ## Production
@@ -198,16 +200,23 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   (unchanged by GF1-CONSOLIDATED and GF1-2); the runs of 2026-11-20 and 2026-11-21 produced
   generations seq 252 and seq 260 (schema 19, both VERIFIED; seq 260 re-verified after the GF1-2
   promotion). Its 20:00 run remains an operational obligation: it does not start on battery
-  (`DisallowStartIfOnBatteries`) and waits, queued, for AC power.
-- The installed copy still logs with Windows PowerShell 5.1 `Add-Content`, which refuses to append
-  while any process holds the log open and, under the script's `Continue`, drops the line silently:
-  the run completes, but its log lines -- the failure reason included -- are lost. Until the
-  corrected wrapper is installed, nothing may hold `daily_governed_backup.log` open while it runs.
-  The correction is OPS-LOG-01 (`docs/specs/OPS-LOG-01-daily-backup-logging.md`): the repository
-  now holds the wrapper, `tools/daily_governed_backup.ps1` (shared-mode append, bounded retry, a
-  per-run fallback file; backup, ledger and exit-code contracts unchanged). Installing it replaces
-  the deployed copy, needs a separate owner authorization and follows the SPEC's §9; it is not part
-  of a GF1 (`tools/` is outside the deployment export).
+  (`DisallowStartIfOnBatteries`) and waits, queued, for AC power. The OPS-LOG-01 installation
+  confirmation run of 2026-11-21 22:11 local produced seq 268 (schema 19, VERIFIED); the next
+  scheduled run is 2026-11-22 20:00.
+- The installed daily wrapper is the OPS-LOG-01 correction (`tools/daily_governed_backup.ps1`:
+  shared-mode append, bounded retry, a per-run fallback file; backup, ledger and exit-code contracts
+  unchanged), installed 2026-11-21 22:10 local from HEAD `477e18f` under SPEC §9. The original blob
+  `9cac1d4…` (SHA-256 `FE0E7358…`) is preserved byte-identically at
+  `D:\SGAA_CUTOVER\daily_governed_backup.ps1.pre-ops-log-01.20261121T221040.bak`; the installed blob
+  is `4d8db12…` (SHA-256 `CCF449E7…`); `$Wt` stays `D:\SGAA_wt\gf1_4087eaf`. The scheduled task
+  definition, interpreter, arguments, working directory, credentials and the daily 20:00 trigger were
+  not changed (task XML SHA-256 `412590F9…` identical before and after). The §9 confirmation run
+  (2026-11-21 22:11 local) exited 0 in 4m14s: generation `sgaa-pg-20261122T011146Z-auto-daily`
+  (VERIFIED; 402,251 bytes, dump SHA-256 matches its sidecar; manifest `result ok`, schema 19, 41
+  tables, 71/71 domain checks, 19/19 triggers), objects `20261122T011143Z-auto-daily` with
+  hash-matching off-platform copies, ledger seq 268 (head `dbdc0455…`), chain OK and no unresolved
+  operation; all six run lines are in `daily_governed_backup.log` and match the console, with no
+  fallback. Rollback: restore the preserved copy. Publication of the OPS-LOG-01 commits remains HOLD.
 - The workstation SQLite runtime is stopped and frozen: the rollback asset until the window
   closes (C14); its contraction is MP-4.
 - Residuals recorded by MP-2 (no hosting impact today): `main.py` still attaches a file handler
@@ -224,8 +233,8 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   says what every proof must hold; `docs/backlog/UI_ACCEPTANCE_BACKLOG.md`), together with UI-B46,
   DIAG-500 and DS-CONSISTENCY-01 (below). The owner accepted COMPROVANTES-01 and UI-B40 in VA-01 and
   the five BL-02 items on 2026-11-20 (packages outside the repository, `D:\SGAA_tmp\va01\package`
-  and `D:\SGAA_tmp\bl02\package`). OPS-LOG-01 is in the repository but outside the deployment and
-  stays uninstalled.
+  and `D:\SGAA_tmp\bl02\package`). OPS-LOG-01 is outside the deployment export; its corrected wrapper
+  was installed in the scheduled environment on 2026-11-21 (see Production).
 - Still awaiting the owner, separate from the release: the 28 historical UI rows awaiting visual
   confirmation (none has an acceptance on record) and UI-B15 (clean in Chromium; the owner's own
   Chrome decides).
