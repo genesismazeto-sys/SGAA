@@ -185,6 +185,13 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   were provided and the executor does not sign in to production. UI-B49 owner visual acceptance
   remains pending. C14, MP-4, OPS-LOG-01 publication and the visual-baseline decision are unchanged
   by this GF1. Record: `D:\SGAA_CUTOVER\gf1_502b14f\README.txt`.
+- GF1-4 (2026-11-22 01:08 local; 2026-11-22T04:08-04:12Z; owner-authorized in chat, COMMITTED):
+  published `2e19a39` -- the owner's desktop restorations of the DS screens (`1b90307`, `2e19a39`:
+  form dialogs centred, original button spacing, Novo reporte padding, Banco de dados headers and provider
+  grid, Configurações, Processar requisição and the student request rows as before) -- code-only, schema
+  v19, no migration. Deployment `dpl_BDkVyuBeTjp3zCStNQKhaHLhW6t6`, code `a3398fa6…`, ledger seq 276-282
+  (head `37c9c684…`); hosted_smoke PASS 10/10, public proof VERIFIED. Owner visual check pending.
+  Record: `D:\SGAA_CUTOVER\gf1_2e19a39\README.txt`.
 - SMOKE-AUTH-01 (2026-11-21 23:37 local; 2026-11-22T02:37Z; operational verification,
   PARTIALLY VERIFIED): the pending authenticated checks of `SMOKE_502B14F` / `SMOKE_227EC51` /
   `SMOKE_107F63E` / `SMOKE_V19` were consolidated into one nonduplicated checklist
