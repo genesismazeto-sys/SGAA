@@ -736,7 +736,7 @@ def _provider_card_markup(page: str, provider_title: str) -> str:
 
 
 def _secondary_action_controls(card: str) -> list[tuple[str, str]]:
-    action_grid = card.split('<div class="db-provider-secondary btn-row btn-row--pairs">', 1)[1].split(
+    action_grid = card.split('<div class="db-provider-secondary">', 1)[1].split(
         "</div>", 1
     )[0]
     controls = re.findall(
@@ -862,15 +862,12 @@ def test_admin_cloud_ui_keeps_google_active_and_onedrive_restored():
     assert "Credenciais Microsoft não configuradas" in template
     assert "Disponível após configurar as credenciais Microsoft (MS_CLIENT_ID, MS_CLIENT_SECRET, MS_TENANT_ID)" in template
     assert '<input type="hidden" name="provider" value="onedrive">\n                  <input type="hidden" name="action" value="test_connection">' in template
-    assert template.count('<div class="db-provider-secondary btn-row btn-row--pairs">') == 2
+    assert template.count('<div class="db-provider-secondary">') == 2
     assert ".db-provider-secondary.is-balanced" not in template
     assert "grid-template-columns:repeat(2, minmax(0, 1fr));" in template
     assert "align-content:start;" in template
-    # DS-CONSISTENCY-01 D3: the four provider actions are two rows of two at every width -- the
-    # button contract's .btn-row--pairs, no page-local single-column phone override.
+    # The phone keeps the provider actions in two columns too (owner, 2026-11-21).
     assert ".db-provider-secondary{ grid-template-columns:1fr; }" not in template
-    actions_css = open("static/css/components/actions.css", encoding="utf-8-sig").read()
-    assert ".btn-row--pairs{\n    grid-template-columns:repeat(2, minmax(0, 1fr));" in actions_css
     assert 'title="OneDrive não está configurado"' not in template
     assert 'title="OneDrive não está conectado"' in template
     assert "url_for('static', filename='img/google-drive.svg')" in template

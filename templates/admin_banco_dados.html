@@ -330,6 +330,11 @@
       gap:10px;
       align-content:start;
     }
+    .db-provider-secondary{
+      display:grid;
+      gap:8px;
+      grid-template-columns:repeat(2, minmax(0, 1fr));
+    }
     .db-provider-secondary form{
       margin:0;
       width:100%;
@@ -586,7 +591,7 @@
 
   <div class="db-admin-top">
     <article class="db-card">
-      <div class="db-card-head"><span class="db-section-label">Compatibilidade futura</span></div>
+      <h2>Compatibilidade futura</h2>
       <div class="db-meta">
         <div><strong>Versão atual:</strong> {{ schema_status.schema_version }}</div>
         <div><strong>Versão alvo:</strong> {{ schema_status.target_schema_version }}</div>
@@ -596,7 +601,7 @@
 
     {% if file_backup %}
     <article class="db-card">
-      <div class="db-card-head"><span class="db-section-label">Backup local</span></div>
+      <h2>Backup local</h2>
       <p>Snapshots versionados são salvos em uma pasta local controlada pelo sistema antes de qualquer restauração.</p>
       <div class="db-meta">
         <div><strong>Pasta:</strong> {{ local_backup_dir }}</div>
@@ -607,7 +612,7 @@
        are the full-width sections below (app.backup.pg_posture). #}
     {% set protection = database_protection or {'state': 'UNREADABLE'} %}
     <article class="db-card" data-database-protection="postgresql" data-protection-state="{{ protection.state }}">
-      <div class="db-card-head"><span class="db-section-label">Proteção do banco</span></div>
+      <h2>Proteção do banco</h2>
       <p>Backups do PostgreSQL enviados às contas em nuvem e gerações completas do operador, com restauração de teste. O plano do provedor não inclui backup próprio.</p>
       {% if protection.state == 'UNREADABLE' %}
         <p class="db-cloud-store-warning" role="status">Não foi possível ler os registros de backup deste banco.</p>
@@ -623,7 +628,7 @@
     {% endif %}
 
     <article class="db-card">
-      <div class="db-card-head"><span class="db-section-label">{% if file_backup %}Destinos em nuvem e externos{% else %}Contas em nuvem{% endif %}</span></div>
+      <h2>{% if file_backup %}Destinos em nuvem e externos{% else %}Contas em nuvem{% endif %}</h2>
         <div class="db-meta">
         {% if file_backup %}
           <div>
@@ -895,7 +900,7 @@
 
         {% if auth_can('banco_dados', 'edit') %}
           <div class="db-provider-actions">
-            <div class="db-provider-secondary btn-row btn-row--pairs">
+            <div class="db-provider-secondary">
               {% if gdrive_connected %}
                 <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -1113,7 +1118,7 @@
 
         {% if auth_can('banco_dados', 'edit') %}
           <div class="db-provider-actions">
-            <div class="db-provider-secondary btn-row btn-row--pairs">
+            <div class="db-provider-secondary">
               {% if onedrive_connected %}
                 <form method="post" action="{{ url_for('admin_banco_dados_drive_settings') }}">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

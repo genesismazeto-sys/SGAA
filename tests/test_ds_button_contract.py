@@ -129,6 +129,8 @@ def test_labels_levels_and_counts_are_chips_not_status_pills():
 
 PAGES_ADMIN = ["/admin/configuracoes", "/admin/banco-dados", "/admin/acesso", "/admin/alertas", "/admin/atividades",
                "/admin/turmas", "/admin/reportes", "/admin/requisicoes", "/admin/adicionar_aluno",
+               "/admin/arquivos", "/admin/adicionar_turma", "/admin/cursos/adicionar", "/admin/processar_requisicao/{req}",
+               "/admin/catalogo-versoes/{base}",
                "/admin/importar_requisicoes", "/admin/diagnostico/atividades-versionadas/view?turma_id={turma}",
                "/admin/catalogo-versoes/{base}/versoes/{versao}/editar"]
 PAGES_ALUNO = ["/aluno/reportar", "/aluno/nova-requisicao", "/aluno/requisicoes"]
@@ -158,7 +160,23 @@ MEASURE = r"""((phone) => {
     const label = (row.className + ' @ ' + items.map(e => (e.innerText || '').trim().split('\n')[0]).join(' | ')).slice(0, 160);
     const primary = items.findIndex(e => e.matches('.btn.primary'));
     const last = rects.reduce((best, r, i) => (r.right > rects[best].right + 1 || (Math.abs(r.right - rects[best].right) <= 1 && r.top < rects[best].top - 1)) ? i : best, 0);
-    out.push({label, center: row.matches('.btn-row--center, .form-actions.center'),
+    // Space between neighbouring buttons on one line, and how far the buttons sit from a dialog's edges.
+    let gap = null;
+    Object.values(lines).forEach(ix => { const xs = ix.map(i => rects[i]).sort((a, b) => a.left - b.left);
+      for (let i = 1; i < xs.length; i++) { const g = xs[i].left - xs[i - 1].right; gap = gap === null ? g : Math.min(gap, g); } });
+    const card = row.closest('.modal-card');
+    let edge = null, formDialog = false, cardSides = null;
+    if (card) {
+      const c = card.getBoundingClientRect();
+      edge = Math.min(...rects.map(r => Math.min(r.left - c.left, c.right - r.right, c.bottom - r.bottom)));
+      // In a dialog, the centre is the dialog's, not the row's (a content-sized row is always 'centred').
+      cardSides = [Math.min(...rects.map(r => r.left)) - c.left, c.right - Math.max(...rects.map(r => r.right))];
+      // A dialog with fields to fill is a form: its buttons sit in the centre (owner, 2026-11-21).
+      formDialog = !card.closest('#reporte-modal') && [...card.querySelectorAll(
+        'input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select, textarea, .file-card')].some(vis);
+    }
+    out.push({label, center: row.matches('.btn-row--center, .form-actions.center'), gap, edge, formDialog, cardSides,
+              toolbar: !!row.closest('.toolbar'),
               lines: Object.values(lines).map(ix => ({l: Math.min(...ix.map(i => rects[i].left)) - inner.l,
                                                     r: inner.r - Math.max(...ix.map(i => rects[i].right))})),
               primary, primaryRect: primary >= 0 ? [rects[primary].top, rects[primary].right] : null,
@@ -185,7 +203,8 @@ def _sql(query, params=()):
 def _ids():
     return {"turma": _sql("SELECT id FROM turmas ORDER BY id LIMIT 1")[0][0],
             "base": _sql("SELECT atividade_base_id FROM atividade_versao ORDER BY id LIMIT 1")[0][0],
-            "versao": _sql("SELECT id FROM atividade_versao ORDER BY id LIMIT 1")[0][0]}
+            "versao": _sql("SELECT id FROM atividade_versao ORDER BY id LIMIT 1")[0][0],
+            "req": (_sql("SELECT id FROM requisicoes ORDER BY id LIMIT 1") or [[1]])[0][0]}
 
 
 def _as_student(client):
@@ -210,6 +229,14 @@ def _offenders(rows, phone):
     for row in rows:
         if row["primaryCount"] > 1:
             bad.append(("more than one primary", row["label"]))
+        # Desktop: the list toolbar joins its controls (--btn-gap); every other row keeps its buttons 8px apart
+        # or more, inside the dialog's edges. The phone is left as it is (owner, 2026-11-21).
+        if not phone and not row["toolbar"] and row["gap"] is not None and row["gap"] < 7.5:
+            bad.append(("buttons without their gap", row["label"], row["gap"]))
+        if not phone and row["edge"] is not None and row["edge"] < 8:
+            bad.append(("buttons against the dialog's edge", row["label"], row["edge"]))
+        if not phone and row["formDialog"] and not row["center"]:
+            bad.append(("desktop: a form dialog's buttons not centered", row["label"]))
         if phone:
             holes = [ln for ln in row["lines"] if ln["l"] > 1.5 or ln["r"] > 1.5]
             if holes:
@@ -219,6 +246,9 @@ def _offenders(rows, phone):
             if len(row["lines"]) == 1:
                 if row["center"] and abs(line["l"] - line["r"]) > 2:
                     bad.append(("desktop: form actions not centered", row["label"], line))
+                sides = row.get("cardSides")
+                if row["center"] and sides and abs(sides[0] - sides[1]) > 4:
+                    bad.append(("desktop: a dialog's buttons not in its centre", row["label"], sides))
                 if not row["center"] and line["r"] > 1.5:
                     bad.append(("desktop: buttons not on the right", row["label"], line))
             if row["primary"] >= 0 and row["count"] > 1 and row["primary"] != row["rightmost"]:

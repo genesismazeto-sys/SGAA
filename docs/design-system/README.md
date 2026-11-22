@@ -801,9 +801,12 @@ toolbar implements the same rules in `modern-style.css`, its owner.
 the rightmost button and always blue (`btn primary`; `btn-primary` does not
 exist in the DS and renders white).
 
-**Desktop.** Card footers, modals and page actions: the buttons together on the
-right (`.btn-row`). Data-entry forms (Salvar + Voltar / Cancelar): centered
-(`.form-actions.center`, or `.btn-row--center`). A compact choice dialog -- a short question
+**Desktop.** Card footers, page actions and dialogs that only show something: the buttons
+together on the right (`.btn-row`). Data-entry forms (Salvar + Voltar / Cancelar): centered
+(`.form-actions.center`, or `.btn-row--center`) -- **a dialog with fields to fill is a form**
+(Nova requisição, Novo reporte, Novo alerta, Novo acesso, the imports…): its footer is
+`.modal-footer.btn-row.btn-row--center` (owner, 2026-11-21). Spacing between buttons on the
+desktop: 8px, 12px in `.form-actions`; the phone keeps the system gap. A compact choice dialog -- a short question
 answered by its buttons, such as the Requisições pending-email quick actions
 (UI-B49) -- centres its row too (owner, 2026-11-21):
 `.modal-footer.btn-row.btn-row--center`; every other modal stays on the right.

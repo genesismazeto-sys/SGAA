@@ -30,6 +30,12 @@
   flex-wrap:wrap;
   gap:var(--btn-gap, 8px);
 }
+/* Desktop: the space the rows had before this contract -- 8px between buttons, a data-entry form's own
+   12px (.form-actions). The phone keeps the system gap above. */
+@media (min-width:768px){
+  .btn-row{ gap:8px; }
+  .form-actions.btn-row{ gap:12px; }
+}
 .btn-row--center{ justify-content:center; }
 /* A compact choice dialog centres its row (owner, UI-B49). modal.css loads later
    and right-aligns every .modal-footer, so the opt-in needs both classes. */
