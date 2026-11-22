@@ -185,6 +185,15 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   were provided and the executor does not sign in to production. UI-B49 owner visual acceptance
   remains pending. C14, MP-4, OPS-LOG-01 publication and the visual-baseline decision are unchanged
   by this GF1. Record: `D:\SGAA_CUTOVER\gf1_502b14f\README.txt`.
+- SMOKE-AUTH-01 (2026-11-21 23:37 local; 2026-11-22T02:37Z; operational verification,
+  PARTIALLY VERIFIED): the pending authenticated checks of `SMOKE_502B14F` / `SMOKE_227EC51` /
+  `SMOKE_107F63E` / `SMOKE_V19` were consolidated into one nonduplicated checklist
+  (`D:\SGAA_CUTOVER\gf1_502b14f\SMOKE_AUTH_01.md`). The anonymous/public production portion was
+  revalidated PASS (`hosted_smoke` 10/10; login, recovery and dead links, security headers, admin
+  refusal, scheduler 401, UI-B48 CSS `z-index:20`/`no-cache`). No authorized test identity or
+  production session was available, so every authenticated read-only, production-write and
+  owner-visual step remains NOT EXECUTED; UI-B49 acceptance remains pending and UI-B48 remains
+  accepted. No functional defect found. Record: `D:\SGAA_CUTOVER\gf1_502b14f\SMOKE_AUTH_01.md`.
 
 ## Production
 

@@ -1,10 +1,10 @@
 # SPEC UI-B49 — Quick actions on the pending-email icon
 
-Status: CLOSED 2026-11-21 (frozen the same day)
+Status: CLOSED 2026-11-21; in PROD since GF1-2 (`227ec51`); owner visual acceptance pending
 Charter: "In Admin → Requisições, make the pending-email icon directly actionable" — a compact DS
 dialog with exactly Cancelar, Desmarcar and Enviar. Starting HEAD `8e5a29c`; synthetic data only;
-commit and push to the development branch; PRODUCTION HOLD. Owner note: a dialog box centres its
-buttons; deliver two screenshots (desktop, phone).
+commit and push to the development branch; PRODUCTION HOLD (superseded by GF1-2, §17).
+Owner note: a dialog box centres its buttons; deliver two screenshots (desktop, phone).
 Risk tier: R1 (presentation and client script over existing routes; no route, RBAC, schema or
 concurrency change).
 
@@ -180,4 +180,5 @@ Runs: T1 4; E-UI 1 (both widths, read-only profile included); regression set 502
 DS button contract, status-in-view geometry, e-mail suites, catalogue and route guards); popover
 contract 5. Mutation probes: a client call that reports success without dismissing, and a server
 that keeps the flag pending, both fail the browser test. Full suite not triggered (no TEP §5.1
-trigger). Review: R1 self-review. Owner visual acceptance pending (backlog UI-B49).
+trigger). Review: R1 self-review. Published by GF1-2 as part of `227ec51`; owner visual acceptance
+remains pending (backlog UI-B49). SMOKE-AUTH-01 consolidated the read-only and acceptance steps.
