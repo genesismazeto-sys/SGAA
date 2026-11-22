@@ -1,6 +1,6 @@
 # SPEC UI-B48 — Shared floating action bar below menus and modal layers
 
-Status: CLOSED 2026-11-21 (development branch; PRODUCTION HOLD; owner visual acceptance pending)
+Status: CLOSED 2026-11-21 (development branch; PRODUCTION HOLD; owner visual acceptance PASS 2026-11-21)
 Charter: "Correct the pre-existing stacking and visibility defects where floating row-action bars cover
 open menus, popovers or modal backdrops on SGAA list pages." Starting HEAD
 `a97b883b23f1782f18cc6b1107dc7d1b1596bf94`; synthetic data only; commit and push to the development
