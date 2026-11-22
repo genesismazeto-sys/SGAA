@@ -290,7 +290,7 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   the shared floating row-action bar now paints at `z-index:20` (`components/actions-float.css`), below
   `.popover` (1000) and `.modal-overlay` (40) and above the sticky header; open menus and dialogs are
   no longer covered on the fourteen list pages that use the bar. CSS-only; UI-B47/B49 behaviour
-  unchanged. Owner visual acceptance pending.
+  unchanged. Owner visual acceptance PASS (2026-11-21); not yet deployed.
 
 ## Environment facts
 
