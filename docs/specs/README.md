@@ -15,9 +15,9 @@ indexes SPECs only.
 | MP-3 A20 | Automated hosted backup execution | R3 | PROD deployed 2026-10-15; first triggered due backup complete on both drives; scheduled due-wake evidence pending before close | [`MP-3-A20-hosted-backup-automation.md`](MP-3-A20-hosted-backup-automation.md) |
 | MP-3 A22 | Correcting the activity of an editable request (schema v17) | R3 | FROZEN 2026-10-19; slice 1 implemented; PROD upgrade and deploy (G1) executed 2026-10-19; closure not recorded | [`MP-3-A22-request-reclassification.md`](MP-3-A22-request-reclassification.md) |
 | OPS-LOG-01 | Governed daily backup logging reliability | R2 | CLOSED 2026-11-19; installed 2026-11-21 (local; publication HOLD) | [`OPS-LOG-01-daily-backup-logging.md`](OPS-LOG-01-daily-backup-logging.md) |
-| DIAG-500 | Versioned-activity diagnostic lookups | R3 | CLOSED 2026-11-21: retrospective record and A1 accepted by the owner (targeted-recheck exception approved); integrated into the development branch; not deployed | [`DIAG-500.md`](DIAG-500.md) |
-| DS-CONSISTENCY-01 | One section card and one button contract | R1 | CLOSED 2026-11-21: accepted by the owner and integrated into the development branch; not deployed | [`DS-CONSISTENCY-01.md`](DS-CONSISTENCY-01.md) |
-| TECH-CLEANUP-01 | Bounded technical defects after GF1-CONSOLIDATED | R2 | CLOSED 2026-11-21: on the development branch; not deployed | [`TECH-CLEANUP-01.md`](TECH-CLEANUP-01.md) |
-| UI-B47 | Manual dismissal of the pending-email flag | R2 | CLOSED 2026-11-21: on the development branch; not deployed; owner visual acceptance pending | [`UI-B47.md`](UI-B47.md) |
-| UI-B48 | Shared floating action bar below menus and modal layers | R1 | CLOSED 2026-11-21: on the development branch; not deployed; owner visual acceptance pending | [`UI-B48.md`](UI-B48.md) |
-| UI-B49 | Quick actions on the pending-email icon | R1 | CLOSED 2026-11-21: on the development branch; not deployed; owner visual acceptance pending | [`UI-B49.md`](UI-B49.md) |
+| DIAG-500 | Versioned-activity diagnostic lookups | R3 | CLOSED 2026-11-21: retrospective record and A1 accepted by the owner (targeted-recheck exception approved); in PROD since GF1-CONSOLIDATED (`107f63e`) | [`DIAG-500.md`](DIAG-500.md) |
+| DS-CONSISTENCY-01 | One section card and one button contract | R1 | CLOSED 2026-11-21: accepted by the owner; in PROD since GF1-CONSOLIDATED (`107f63e`) | [`DS-CONSISTENCY-01.md`](DS-CONSISTENCY-01.md) |
+| TECH-CLEANUP-01 | Bounded technical defects after GF1-CONSOLIDATED | R2 | CLOSED 2026-11-21: in PROD since GF1-2 (`227ec51`) | [`TECH-CLEANUP-01.md`](TECH-CLEANUP-01.md) |
+| UI-B47 | Manual dismissal of the pending-email flag | R2 | CLOSED 2026-11-21: in PROD since GF1-2 (`227ec51`); owner visual acceptance PASS 2026-11-21 | [`UI-B47.md`](UI-B47.md) |
+| UI-B48 | Shared floating action bar below menus and modal layers | R1 | CLOSED 2026-11-21: in PROD since GF1-3 (`502b14f`); owner visual acceptance PASS 2026-11-21 | [`UI-B48.md`](UI-B48.md) |
+| UI-B49 | Quick actions on the pending-email icon | R1 | CLOSED 2026-11-21: in PROD since GF1-2 (`227ec51`); owner visual acceptance pending | [`UI-B49.md`](UI-B49.md) |

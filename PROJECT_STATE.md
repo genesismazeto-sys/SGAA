@@ -81,8 +81,8 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   frozen on the chain move the restitution start: 2026-10-20T23:00:26Z to
   2026-10-22T23:00:34Z (48 h 00 m 08 s) and 2026-11-15T23:00:29Z to
   2026-11-17T23:49:44Z (48 h 49 m 15 s); the object cadence has no breach and
-  there is no open gap. The ledger is at 268 entries, chain OK, head
-  `dbdc04553ed73d735f4c1b9eb2e9d3c99a896482774adc7bad2049bdc7df3a2a`,
+  there is no open gap. The ledger is at 275 entries, chain OK, head
+  `e3a0a79a6e7864185717f626f11fb9bc877946f7695dd643ac7b2d9391cf72cf`,
   no unresolved operation; C13 is at seq 83. The ledger's current
   `clean_since` is therefore 2026-11-17T23:49:44Z; the qualifying 30-day
   window completes at **2026-12-17T23:49:44Z** (2026-12-17 20:49:44 local),
@@ -171,22 +171,36 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   does not sign in to production. UI-B49 owner visual acceptance remains pending. C14, MP-4, UI-B48
   and OPS-LOG-01 (then uninstalled; installed 2026-11-21) are unchanged by this GF1.
   Record: `D:\SGAA_CUTOVER\gf1_227ec51\README.txt`.
+- GF1-3 (2026-11-21 23:20-23:24 local; 2026-11-22T02:20-02:24Z; owner-authorized, COMMITTED):
+  published `502b14f` -- UI-B48 -- as a code-only release: schema v19 unchanged, no migration.
+  Qualified READY the same day (outside the repository: `D:\SGAA_tmp\gf1q_502b14f`; T5 `e8c5107`
+  carried through TEP §6; the exact-byte lane passed 127 tests on `502b14f`, including real
+  Chromium at 1440 and 390). Ledger seq 269 the GF1 grant, 270-271 the deployment, 272-273
+  authorize-code COMMITTED, 274-275 the promotion COMMITTED; reopening backup seq 268
+  (2026-11-21, VERIFIED, off-platform copy VERIFIED, re-verified after the promotion). Anonymous
+  production smoke (`tools/hosted_smoke.py`) PASS 10/10; the public proof matched the export (served
+  code `793443ce…`, ten release assets byte for byte including `actions-float.css`, four anonymous
+  auth pages). The authenticated manual smoke (`SMOKE_502B14F.md` in `D:\SGAA_CUTOVER\gf1_502b14f`,
+  which incorporates the pending `SMOKE_227EC51.md`) is PENDING / NOT EXECUTED: no test identities
+  were provided and the executor does not sign in to production. UI-B49 owner visual acceptance
+  remains pending. C14, MP-4, OPS-LOG-01 publication and the visual-baseline decision are unchanged
+  by this GF1. Record: `D:\SGAA_CUTOVER\gf1_502b14f\README.txt`.
 
 ## Production
 
 - Web runtime: Vercel Hobby project `sgaa` (`https://sgaa.vercel.app`), Supabase Free PROD
   `sgaa-prod` (`uckadhcwfknklmdktuyi`) holding the migrated data, canonical storage bucket and the
   Google Drive mirror (proven at C11). Every PROD action follows the runbook and the ledger.
-- Code in production: `227ec513dc71f5bdff7afe21168d51f66c63cc10`, deployment
-  `dpl_E1vwP2HoHT98DMMSJLr1MBfnqqtS` (served code identity
-  `849c6b2b9d93863613d7b32d3f347f6f07056b1ae6a94f62ac20a24ae5f4e7c1`, deploy tree
-  `d72bac20…`, verified at the public address), schema v19, published by GF1-2 on 2026-11-21.
-  Previous deployment: `107f63e` / `dpl_4oVhKLCJacUj2Z3PWkesXxQoLgMh` (code `e81d9802…`),
+- Code in production: `502b14fe9b3252bc225a7f858f2461e2e7d7f2e6`, deployment
+  `dpl_4aMeSVbN6Xobp1PGgucrAHpwrVKa` (served code identity
+  `793443cea1c43678ab06da389c1fc10d59edca3496e9816cb1621c144925bc31`, deploy tree
+  `3e97b024…`, verified at the public address), schema v19, published by GF1-3 on 2026-11-21.
+  Previous deployment: `227ec51` / `dpl_E1vwP2HoHT98DMMSJLr1MBfnqqtS` (code `849c6b2b…`),
   superseded; after C13 it is never re-promoted (forward fix only). The Vercel project has no Git
   connection: pushes deploy nothing; every deployment is `tools/deploy_audit.py deploy` under a GF1.
-- Cutover ledger (outside the repository): at the close of GF1-2 (2026-11-22T00:47:21Z) it was
-  verified at C13, 267 entries, chain OK, head
-  `c48e1635d32fe5251ec11bc324c0c673b4a3cbc64c19b8fe8b8ea8077e540662`, no unresolved operation and
+- Cutover ledger (outside the repository): at the close of GF1-3 (2026-11-22T02:24:06Z) it was
+  verified at C13, 275 entries, chain OK, head
+  `e3a0a79a6e7864185717f626f11fb9bc877946f7695dd643ac7b2d9391cf72cf`, no unresolved operation and
   no write barrier. Each later daily generation appends an entry, so the current head is
   `cutover_ledger status`, not this line.
 - Backups: the production A20 scheduler runs on the hosted platform; it records
@@ -203,12 +217,12 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   posture remains pending via the governed `ops_backup publish` procedure.
 - The daily governed backup task (Windows Task Scheduler, 20:00) runs
   `D:\SGAA_CUTOVER\daily_governed_backup.ps1` from the v19 worktree of `4087eaf` since GF1-V19
-  (unchanged by GF1-CONSOLIDATED and GF1-2); the runs of 2026-11-20 and 2026-11-21 produced
+  (unchanged by GF1-CONSOLIDATED, GF1-2 and GF1-3); the runs of 2026-11-20 and 2026-11-21 produced
   generations seq 252 and seq 260 (schema 19, both VERIFIED; seq 260 re-verified after the GF1-2
   promotion). Its 20:00 run remains an operational obligation: it does not start on battery
   (`DisallowStartIfOnBatteries`) and waits, queued, for AC power. The OPS-LOG-01 installation
-  confirmation run of 2026-11-21 22:11 local produced seq 268 (schema 19, VERIFIED); the next
-  scheduled run is 2026-11-22 20:00.
+  confirmation run of 2026-11-21 22:11 local produced seq 268 (schema 19, VERIFIED; re-verified after
+  the GF1-3 promotion); the next scheduled run is 2026-11-22 20:00.
 - The installed daily wrapper is the OPS-LOG-01 correction (`tools/daily_governed_backup.ps1`:
   shared-mode append, bounded retry, a per-run fallback file; backup, ledger and exit-code contracts
   unchanged), installed 2026-11-21 22:10 local from HEAD `477e18f` under SPEC §9. The original blob
@@ -280,17 +294,17 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   `superseded` (schema v19 unchanged); nothing is sent and the request does not change; a page left
   open across a new decision is refused as stale. Route `admin_requisicoes_email_desmarcar`
   (requisicoes/edit). Accepted by the owner on 2026-11-21 (backlog UI-B47 DONE); residuals in its §15,
-  the shared overlay one tracked as UI-B48 (corrected 2026-11-21, below).
+  the shared overlay one tracked as UI-B48 (corrected 2026-11-21; in PROD since GF1-3, below).
 - UI-B49 (`docs/specs/UI-B49.md`, R1, CLOSED 2026-11-21), in PROD since GF1-2: the
   pending-email icon (blue or red) of a request opens Cancelar / Desmarcar / Enviar for that request
   (UI-B47's dismissal, no second confirmation; Enviar opens the existing preview); read-only profiles
   keep a plain status icon. A compact choice dialog centres its buttons
   (`.modal-footer.btn-row--center`, DS README §3.1). Owner visual acceptance pending.
-- UI-B48 (`docs/specs/UI-B48.md`, R1, CLOSED 2026-11-21), on the development branch and not deployed:
+- UI-B48 (`docs/specs/UI-B48.md`, R1, CLOSED 2026-11-21), in PROD since GF1-3:
   the shared floating row-action bar now paints at `z-index:20` (`components/actions-float.css`), below
   `.popover` (1000) and `.modal-overlay` (40) and above the sticky header; open menus and dialogs are
   no longer covered on the fourteen list pages that use the bar. CSS-only; UI-B47/B49 behaviour
-  unchanged. Owner visual acceptance PASS (2026-11-21); not yet deployed.
+  unchanged. Owner visual acceptance PASS (2026-11-21); published as part of `502b14f`.
 
 ## Environment facts
 

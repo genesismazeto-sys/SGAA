@@ -1,6 +1,6 @@
 # SPEC UI-B48 — Shared floating action bar below menus and modal layers
 
-Status: CLOSED 2026-11-21 (development branch; PRODUCTION HOLD; owner visual acceptance PASS 2026-11-21)
+Status: CLOSED 2026-11-21; in PROD since GF1-3 (`502b14f`, 2026-11-21); owner visual acceptance PASS 2026-11-21
 Charter: "Correct the pre-existing stacking and visibility defects where floating row-action bars cover
 open menus, popovers or modal backdrops on SGAA list pages." Starting HEAD
 `a97b883b23f1782f18cc6b1107dc7d1b1596bf94`; synthetic data only; commit and push to the development
@@ -100,7 +100,8 @@ The bar's buttons remain the same elements with the same handlers.
 
 CSS-only, served by the existing static route. No cache-busting change is required: the file is not
 version-pinned in the templates (the shared CSS query versions cover other files), and a reload picks
-it up. Development branch commit and push only; PRODUCTION HOLD; no deployment.
+it up. Development branch commit and push only; PRODUCTION HOLD; no deployment (superseded by
+GF1-3, §17).
 
 ## 10. External boundaries / environment permissions
 
@@ -169,8 +170,10 @@ None.
 
 ## 17. Closure
 
-Implemented 2026-11-21 on the development branch, not deployed; landed as `39e93dd`. Evidence is
-recorded in §11 and in the final report; visual acceptance is the owner's.
+Implemented 2026-11-21 on the development branch and landed as `39e93dd`; published by GF1-3 on
+2026-11-21 as part of `502b14f` (deployment `dpl_4aMeSVbN6Xobp1PGgucrAHpwrVKa`, code identity
+`793443ce…`, deploy tree `3e97b024…`, ledger seq 269-275; schema v19, no migration). Evidence is
+recorded in §11 and in the final report; visually accepted by the owner on 2026-11-21.
 
 - AC1/AC2/AC3 met — E-UI real Chromium at 1440 x 900 and 390 x 844: the Alunos menu overlaps the bar
   and is the hit target; the Acesso edit dialog covers the bar (bar 20, overlay 40; the bar's centre
