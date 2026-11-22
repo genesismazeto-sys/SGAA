@@ -84,7 +84,7 @@
     <input type="hidden" name="atividade_versao_id_registrada" value="{{ requisicao.atividade_versao_id }}">
 
     <!-- Botões de seleção de ação (process-action-buttons) -->
-    <div class="process-action-buttons btn-row btn-row--center" role="group" aria-label="Decisão" style="margin-bottom:12px;">
+    <div class="process-action-buttons btn-row btn-row--start btn-row--reverse" role="group" aria-label="Decisão" style="margin-bottom:12px;">
       <button type="button" class="btn btn-action-ghost btn-indeferir" data-process-status="Indeferida" aria-pressed="false" onclick="selectStatus(this)"><i class="lucide" data-lucide="x"></i><span class="btn-label">Indeferir</span></button>
       <button type="button" class="btn btn-action-ghost btn-parcial" data-process-status="Deferida Parcialmente" aria-pressed="false" onclick="selectStatus(this)"><i class="lucide" data-lucide="divide-square"></i><span class="btn-label">Deferir Parcialmente</span></button>
       <button type="button" class="btn btn-action-ghost btn-deferir" data-process-status="Deferida" aria-pressed="false" onclick="selectStatus(this)"><i class="lucide" data-lucide="check"></i><span class="btn-label">Deferir</span></button>
@@ -112,7 +112,7 @@
     </label>
 
     <!-- Botões de confirmação (process-form-actions) -->
-    <div class="process-form-actions btn-row btn-row--center" style="margin-top:8px;">
+    <div class="process-form-actions btn-row btn-row--start" style="margin-top:8px;">
       <a class="btn" href="{{ url_for('admin_requisicoes') }}">Voltar</a>
       <button class="btn primary" type="submit">Salvar</button>
     </div>

@@ -35,14 +35,19 @@
 @media (min-width:768px){
   .btn-row{ gap:8px; }
   .form-actions.btn-row{ gap:12px; }
+  /* Rows the owner keeps start-aligned on the desktop, as they were (student request detail). */
+  .btn-row.btn-row--start{ justify-content:flex-start; }
+  .form-actions.btn-row.btn-row--flush{ gap:8px; margin-top:0; }
+  /* Desktop shows the row in reverse, from the left (the processing page's decisions read
+     Deferir, Deferir Parcialmente, Indeferir there, as before; the phone keeps the DOM order). */
+  .btn-row.btn-row--start.btn-row--reverse{ flex-direction:row-reverse; justify-content:flex-end; }
 }
 .btn-row--center{ justify-content:center; }
 /* A compact choice dialog centres its row (owner, UI-B49). modal.css loads later
    and right-aligns every .modal-footer, so the opt-in needs both classes. */
 .modal-footer.btn-row--center{ justify-content:center; }
-/* A row or a button carrying [hidden] stays hidden: the row's display would beat the UA rule. */
-.btn-row[hidden],
-.btn-row > [hidden]{ display:none !important; }
+/* A row carrying [hidden] stays hidden: the row's display would beat the UA rule. */
+.btn-row[hidden]{ display:none !important; }
 /* A form or wrapper that only carries one button is transparent to the row. */
 .btn-row > form,
 .btn-row > .btn-row-item{ display:contents; }
@@ -53,6 +58,9 @@
 }
 
 @media (max-width:767.98px){
+  /* Phone: a button carrying [hidden] takes no part in the row. (The desktop keeps showing such a
+     button as it always did, e.g. the request dialog's disabled Salvar while processing.) */
+  .btn-row > [hidden]{ display:none !important; }
   /* No explicit width: a full-bleed footer (negative margins) keeps its edges. */
   .btn-row{
     flex-wrap:wrap-reverse;

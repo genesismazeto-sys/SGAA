@@ -81,6 +81,17 @@
       color:var(--text-primary);
       white-space:nowrap;
     }
+    .cfg-footer-left form { margin:0; }
+    /* Phone only: the note on top, then Salvar alterações, then Resetar contagem (as the button
+       contract lays them out on a phone, the primary first). */
+    @media (max-width:767.98px) {
+      .cfg-footer-reset { flex-direction:row; flex-wrap:wrap; gap:var(--btn-gap); }
+      .cfg-footer-reset .cfg-footer-left,
+      .cfg-footer-reset .cfg-footer-left > form { display:contents; }
+      .cfg-footer-reset .cfg-footer-note { order:-2; flex:1 1 100%; margin-bottom:calc(12px - var(--btn-gap)); }
+      .cfg-footer-reset .cfg-footer-actions { order:-1; flex:1 1 0; min-width:max-content; }
+      .cfg-footer-reset .cfg-footer-left .btn { flex:1 1 0; min-width:max-content; justify-content:center; }
+    }
     @media (max-width:640px) {
       .cfg-fields { grid-template-columns:1fr; }
       .cfg-field-bottom-row { flex-wrap:wrap; }
@@ -231,11 +242,8 @@
     </div>
 
     <!-- Card footer -->
-    <div class="cfg-card-footer">
+    <div class="cfg-card-footer cfg-footer-reset">
       <div class="cfg-footer-left">
-        <p class="cfg-footer-note">Resetar contagem reinicia a apuração para hoje, sem alterar o histórico das requisições.</p>
-      </div>
-      <div class="cfg-footer-actions btn-row">
         <form method="post" action="{{ url_for('admin_configuracoes_tempo_resposta_resetar') }}"
               onsubmit="return confirm('Resetar a apuração do tempo de resposta para hoje?');">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -243,6 +251,9 @@
             <i class="lucide" data-lucide="rotate-ccw"></i>Resetar contagem
           </button>
         </form>
+        <p class="cfg-footer-note">Reinicia a apuração para hoje, sem alterar o histórico das requisições.</p>
+      </div>
+      <div class="cfg-footer-actions btn-row">
         <button type="submit" form="response-settings-form" class="btn primary">
           <i class="lucide btn-icon-save" data-lucide="check"></i>Salvar alterações
         </button>

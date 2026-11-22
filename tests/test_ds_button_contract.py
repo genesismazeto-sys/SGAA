@@ -175,7 +175,7 @@ MEASURE = r"""((phone) => {
       formDialog = !card.closest('#reporte-modal') && [...card.querySelectorAll(
         'input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select, textarea, .file-card')].some(vis);
     }
-    out.push({label, center: row.matches('.btn-row--center, .form-actions.center'), gap, edge, formDialog, cardSides,
+    out.push({label, center: row.matches('.btn-row--center, .form-actions.center'), start: row.matches('.btn-row--start'), gap, edge, formDialog, cardSides,
               toolbar: !!row.closest('.toolbar'),
               lines: Object.values(lines).map(ix => ({l: Math.min(...ix.map(i => rects[i].left)) - inner.l,
                                                     r: inner.r - Math.max(...ix.map(i => rects[i].right))})),
@@ -249,7 +249,7 @@ def _offenders(rows, phone):
                 sides = row.get("cardSides")
                 if row["center"] and sides and abs(sides[0] - sides[1]) > 4:
                     bad.append(("desktop: a dialog's buttons not in its centre", row["label"], sides))
-                if not row["center"] and line["r"] > 1.5:
+                if not row["center"] and not row["start"] and line["r"] > 1.5:
                     bad.append(("desktop: buttons not on the right", row["label"], line))
             if row["primary"] >= 0 and row["count"] > 1 and row["primary"] != row["rightmost"]:
                 bad.append(("desktop: the primary is not the rightmost button", row["label"]))
