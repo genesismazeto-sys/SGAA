@@ -86,7 +86,9 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   no unresolved operation; C13 is at seq 83. The ledger's current
   `clean_since` is therefore 2026-11-17T23:49:44Z; the qualifying 30-day
   window completes at **2026-12-17T23:49:44Z** (2026-12-17 20:49:44 local),
-  and C14 is BLOCKED by `QUALIFYING_WINDOW_NOT_ELAPSED` until then. A fresh
+  and C14 is BLOCKED by `QUALIFYING_WINDOW_NOT_ELAPSED` until then. Any new
+  Layer-2 gap above 36 h before the boundary would move `clean_since` again, so
+  the daily 20:00 governed run must hold through 2026-12-17T23:49:44Z. A fresh
   post-window governed generation, its restore drill (receipt after the
   boundary) and the owner's C14 authorization remain required; the prior
   drills (seq 109, 238, 240, 250) predate the current window and cannot

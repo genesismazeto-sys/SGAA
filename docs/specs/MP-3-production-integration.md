@@ -1598,7 +1598,9 @@ Per A21 (2), each later breach freezes on the chain and moves the restitution st
 and nothing erased. The current `clean_since` is therefore **2026-11-17T23:49:44Z**, and the qualifying
 30-day window completes at **2026-12-17T23:49:44Z** (2026-12-17 20:49:44 local). `_check_window`,
 evaluated in memory against the real ledger, refuses `QUALIFYING_WINDOW_NOT_ELAPSED`; nothing was
-written. C14 cannot be recorded before that boundary.
+written. C14 cannot be recorded before that boundary. The window is not yet secure: any Layer-2 gap above
+36 h before the boundary freezes as a fourth breach and moves `clean_since` again (prospectively, with no
+new grant), so the daily 20:00 governed run must hold through 2026-12-17T23:49:44Z.
 
 Generation seq 268 (2026-11-22T01:11:46Z, manifest
 `d3bd6f63b0ef88a06330dc46c07a855e71d8bdea4ec1dd38671f725064b1e373`, object set
