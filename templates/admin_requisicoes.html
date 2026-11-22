@@ -369,8 +369,9 @@
 .req-email-result{ margin-top:10px; font-size:13px; font-weight:500; }
 
 /* O menu Ações, aberto por clique, fica acima da barra flutuante da linha
-   selecionada (z-index 1200, components/actions-float.css), que cobria os itens
-   de baixo do menu. */
+   selecionada. Desde UI-B48 a barra (components/actions-float.css) pinta
+   abaixo de todo .popover; este pino local permanece como defesa em
+   profundidade desta tela e não é o dono da correção. */
 #req-actions-menu{ z-index:1201; }
 /* A regra .menu-item (display:flex) vence o [hidden] do navegador: sem esta
    linha o item seria desenhado mesmo quando não se aplica. */

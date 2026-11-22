@@ -1,10 +1,16 @@
 /* Floating actions bar — contract (pedido-actions-float)
    Reuse across lists. Aligns to the right edge of the central content (.app-track).
+
+   Stacking contract: the bar is page chrome, never an overlay. It must paint
+   below every shared overlay so an open popover (z-index 1000), a modal
+   backdrop/dialog (40) or the mobile navigation (30/29) covers it, and above
+   the sticky table header (5). It was 1200, which put it over menus and modal
+   backdrops on every list page (UI-B48); do not raise it again.
 */
 #pedido-actions-float.pedido-actions-float{
   --pedido-float-right: 72px; /* base offset if JS fallback uses right */
   --pedido-float-btn: 26px;
-  position: fixed; top: 0; right: var(--pedido-float-right); z-index: 1200;
+  position: fixed; top: 0; right: var(--pedido-float-right); z-index: 20;
   display: flex; gap: 4px; background: var(--surface);
   padding: 4px 6px; border: 1px solid var(--border-strong); border-radius: 9px;
   box-shadow: 0 5px 16px -5px rgba(0,0,0,.25), 0 2px 6px -2px rgba(0,0,0,.15);
