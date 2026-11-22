@@ -149,23 +149,38 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   checks) is PENDING / NOT EXECUTED: no test identities were provided and the executor does not sign
   in to production. C14, MP-4 and OPS-LOG-01 (still uninstalled) are unchanged by this GF1.
   Record: `D:\SGAA_CUTOVER\gf1_107f63e\README.txt`.
+- GF1-2 (2026-11-21 21:44-21:47 local; 2026-11-22T00:45-00:47Z; owner-authorized, COMMITTED):
+  published `227ec51` -- TECH-CLEANUP-01, UI-B47 and UI-B49 -- as a code-only release: schema v19
+  unchanged, no migration. Qualified READY the same day (outside the repository:
+  `D:\SGAA_tmp\gf1q_227ec51`; T5 `e8c5107` carried through TEP §6, exact-byte lane 1945 passed with
+  the PG17 real-PG lanes and real Chromium). Ledger seq 261 the GF1 grant, 262-263 the deployment,
+  264-265 authorize-code COMMITTED, 266-267 the promotion COMMITTED; reopening backup seq 260
+  (2026-11-21, VERIFIED, off-platform copy VERIFIED, re-verified after the promotion). Anonymous
+  production smoke (`tools/hosted_smoke.py`) PASS 10/10; the public proof matched the export (served
+  code `849c6b2b…`, nine release assets byte for byte, four anonymous auth pages). The authenticated
+  manual smoke (`SMOKE_227EC51.md` in `D:\SGAA_CUTOVER\gf1_227ec51`, which incorporates the pending
+  `SMOKE_107F63E.md`) is PENDING / NOT EXECUTED: no test identities were provided and the executor
+  does not sign in to production. UI-B49 owner visual acceptance remains pending. C14, MP-4, UI-B48
+  and OPS-LOG-01 (still uninstalled) are unchanged by this GF1.
+  Record: `D:\SGAA_CUTOVER\gf1_227ec51\README.txt`.
 
 ## Production
 
 - Web runtime: Vercel Hobby project `sgaa` (`https://sgaa.vercel.app`), Supabase Free PROD
   `sgaa-prod` (`uckadhcwfknklmdktuyi`) holding the migrated data, canonical storage bucket and the
   Google Drive mirror (proven at C11). Every PROD action follows the runbook and the ledger.
-- Code in production: `107f63e2332d93ef9000b019156b278e02707bf4`, deployment
-  `dpl_4oVhKLCJacUj2Z3PWkesXxQoLgMh` (served code identity
-  `e81d980238ae350676b62c7c4f8efec13f1747083f7d12aa99bf85e08245bb35`, verified at the public
-  address), schema v19, published by GF1-CONSOLIDATED on 2026-11-21. Previous deployment:
-  `4087eaf` / `dpl_2PX2spzLjgTeNgrN9taFFSM9tsJo` (code `902a0be4…`), superseded; after C13 it is
-  never re-promoted (forward fix only). The Vercel project has no Git connection: pushes deploy
-  nothing; every deployment is `tools/deploy_audit.py deploy` under a GF1.
-- Cutover ledger (outside the repository): at the close of GF1-CONSOLIDATED (2026-11-21T20:45:27Z) it
-  was verified at C13, 259 entries, chain OK, head `d7c5774c6c3fea861a27fe0cdad126ca2acf28535306fffd48416070e4716822`,
-  no unresolved operation and no write barrier. Each later daily generation appends an entry, so the
-  current head is `cutover_ledger status`, not this line.
+- Code in production: `227ec513dc71f5bdff7afe21168d51f66c63cc10`, deployment
+  `dpl_E1vwP2HoHT98DMMSJLr1MBfnqqtS` (served code identity
+  `849c6b2b9d93863613d7b32d3f347f6f07056b1ae6a94f62ac20a24ae5f4e7c1`, deploy tree
+  `d72bac20…`, verified at the public address), schema v19, published by GF1-2 on 2026-11-21.
+  Previous deployment: `107f63e` / `dpl_4oVhKLCJacUj2Z3PWkesXxQoLgMh` (code `e81d9802…`),
+  superseded; after C13 it is never re-promoted (forward fix only). The Vercel project has no Git
+  connection: pushes deploy nothing; every deployment is `tools/deploy_audit.py deploy` under a GF1.
+- Cutover ledger (outside the repository): at the close of GF1-2 (2026-11-22T00:47:21Z) it was
+  verified at C13, 267 entries, chain OK, head
+  `c48e1635d32fe5251ec11bc324c0c673b4a3cbc64c19b8fe8b8ea8077e540662`, no unresolved operation and
+  no write barrier. Each later daily generation appends an entry, so the current head is
+  `cutover_ledger status`, not this line.
 - Backups: the production A20 scheduler runs on the hosted platform; it records
   complete deliveries to every connected drive. The separate operator-run governed
   Layer-2 generations (`tools/ops_backup.py --ledger-dir`) and off-platform copies
@@ -180,9 +195,10 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   posture remains pending via the governed `ops_backup publish` procedure.
 - The daily governed backup task (Windows Task Scheduler, 20:00) runs
   `D:\SGAA_CUTOVER\daily_governed_backup.ps1` from the v19 worktree of `4087eaf` since GF1-V19
-  (unchanged by GF1-CONSOLIDATED); the run of 2026-11-20 produced generation seq 252 (schema 19,
-  VERIFIED again on 2026-11-21). Its 20:00 run remains an operational obligation: it does not start
-  on battery (`DisallowStartIfOnBatteries`) and waits, queued, for AC power.
+  (unchanged by GF1-CONSOLIDATED and GF1-2); the runs of 2026-11-20 and 2026-11-21 produced
+  generations seq 252 and seq 260 (schema 19, both VERIFIED; seq 260 re-verified after the GF1-2
+  promotion). Its 20:00 run remains an operational obligation: it does not start on battery
+  (`DisallowStartIfOnBatteries`) and waits, queued, for AC power.
 - The installed copy still logs with Windows PowerShell 5.1 `Add-Content`, which refuses to append
   while any process holds the log open and, under the script's `Continue`, drops the line silently:
   the run completes, but its log lines -- the failure reason included -- are lost. Until the
@@ -228,7 +244,7 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   with 404 and the UI-B46 red alert instead of HTTP 500; a Turma without a Matriz is a neutral
   note; stored negative ids resolve. Amendment A1 (after the R3 cross-family finding) makes the
   page, its JSON link and its unmodified form read one query. A NUL byte in `turma_codigo` answers
-  the same 404 on PostgreSQL since TECH-CLEANUP-01 (development branch, not deployed).
+  the same 404 on PostgreSQL since TECH-CLEANUP-01 (in PROD since GF1-2).
 - DS-CONSISTENCY-01 (`docs/specs/DS-CONSISTENCY-01.md`, CLOSED 2026-11-21), accepted by the owner
   and integrated into the development branch on 2026-11-21, in PROD since GF1-CONSOLIDATED: one
   section card (`components/section-card.css`) and one button contract (`components/actions.css`,
@@ -238,19 +254,19 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   ordinary changes follow §3.8 and are delivered without waiting on unrelated suites.
 - Executor observation from UI-B46, not scheduled: 226 raw colours remain in product UI code
   (`MAX_RAW_COLOURS`).
-- TECH-CLEANUP-01 (`docs/specs/TECH-CLEANUP-01.md`, R2, CLOSED 2026-11-21), on the development
-  branch, not deployed: a NUL Turma code on the diagnostic routes is the DIAG-500 404 on PostgreSQL;
+- TECH-CLEANUP-01 (`docs/specs/TECH-CLEANUP-01.md`, R2, CLOSED 2026-11-21), in PROD since GF1-2:
+  a NUL Turma code on the diagnostic routes is the DIAG-500 404 on PostgreSQL;
   concurrent control-schema DDL (`app/backup/pg_posture.py::run_ddl`) runs under one advisory lock,
   so overlapping scheduler or backup invocations no longer fail with `tuple concurrently updated`;
   the known test debt below was repaired at its causes. What it deferred is in its §15.
-- UI-B47 (`docs/specs/UI-B47.md`, R2, CLOSED 2026-11-21), on the development branch, not deployed:
+- UI-B47 (`docs/specs/UI-B47.md`, R2, CLOSED 2026-11-21), in PROD since GF1-2:
   Admin → Requisições → Ações → "Desmarcar sinalização de e-mail" withdraws the pending-email flag of
   the selected decisions -- exactly the generations the page showed, all or none, closed as
   `superseded` (schema v19 unchanged); nothing is sent and the request does not change; a page left
   open across a new decision is refused as stale. Route `admin_requisicoes_email_desmarcar`
   (requisicoes/edit). Accepted by the owner on 2026-11-21 (backlog UI-B47 DONE); residuals in its §15,
   the shared overlay one tracked as UI-B48.
-- UI-B49 (`docs/specs/UI-B49.md`, R1, CLOSED 2026-11-21), on the development branch, not deployed: the
+- UI-B49 (`docs/specs/UI-B49.md`, R1, CLOSED 2026-11-21), in PROD since GF1-2: the
   pending-email icon (blue or red) of a request opens Cancelar / Desmarcar / Enviar for that request
   (UI-B47's dismissal, no second confirmation; Enviar opens the existing preview); read-only profiles
   keep a plain status icon. A compact choice dialog centres its buttons
@@ -271,8 +287,8 @@ non-blocking findings of closed fronts (each SPEC imports those in its scope).
   client tools in `SGAA_PG_BIN_DIR` and a PostgreSQL 17 target (local WSL cluster 127.0.0.1:54317):
   without the tools they fail with `NATIVE_TOOL_MISSING`, and against PostgreSQL 15 the restores fail.
   The live DEV rehearsal is opt-in: `SGAA_MP3_REHEARSAL=1` plus the DEV credential file. Full suite:
-  ~6,900 tests, 1 h 18 min with the real-PG lanes on (2026-11-20); run
-  detached with ≥5 GB free RAM, from a clean checkout (the project-root
+  ~7,183 tests collected on 2026-11-21; the last complete run (T5 `e8c5107`) took ~1 h 30 min with the
+  real-PG lanes on. Run detached with ≥5 GB free RAM, from a clean checkout (the project-root
   isolation guard fails the session when another process writes there).
 
 ## Known test debt (not blockers)
@@ -281,8 +297,9 @@ The failures recorded by the release qualification of 2026-11-20 (6,908 collecte
 the development branch (TECH-CLEANUP-01 §2 F3): stale file paths, version pins and schema
 declarations now follow their owners, with negative controls; the backup CLI isolation test also
 runs in a clean checkout; the scheduler overlap test's intermittent HTTP 500 was the concurrent DDL
-defect above. No full suite has run since (none triggered); the next triggered one re-measures the
-baseline. Collection needs `xlwt` in the test environment (`requirements-dev.txt`).
+defect above. The GF1-2 qualification ran an exact-byte T1-T4 lane on 2026-11-21 (1,945 passed, PG17
+real-PG lanes, real Chromium, no skips) and carried T5 `e8c5107` through TEP §6; no new full suite
+was triggered. Collection needs `xlwt` in the test environment (`requirements-dev.txt`).
 
 ## Roadmap
 
@@ -291,5 +308,5 @@ baseline. Collection needs `xlwt` in the test environment (`requirements-dev.txt
 | MP-0 | Spec-driven governance transition | CLOSED |
 | MP-1 | Storage convergence — Drive mirror worker (S4); legacy-migration tooling, census, DEV rehearsal (S5); storage reconciliation | CLOSED |
 | MP-2 | Hosting readiness — read-only filesystem, environment-only secrets, scheduler trigger (mirror worker included), object-byte backup (S7, part of S6) | CLOSED |
-| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | C13 PONR_RECORDED; admission OPEN, A19 deployed, A20 S5 operational with first hosted backup verified; `107f63e` (GF1-CONSOLIDATED, code only, schema v19) in PROD since 2026-11-21, authenticated manual smoke pending; autonomous due wake and C14 pending |
+| MP-3 | Production integration / cutover — S8, Phase C, real-data census and convergence, first live mirror run, DR proof, security review | C13 PONR_RECORDED; admission OPEN, A19 deployed, A20 S5 operational with first hosted backup verified; `227ec51` (GF1-2, code only, schema v19) in PROD since 2026-11-21, authenticated manual smoke pending; autonomous due wake and C14 pending |
 | MP-4 | Legacy contraction after the rollback window — legacy document paths and bytes, SQLite file backup, Windows scheduler, purge policy (rest of S6) | NOT STARTED |
