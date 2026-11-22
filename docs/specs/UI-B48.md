@@ -169,8 +169,8 @@ None.
 
 ## 17. Closure
 
-Implemented 2026-11-21 on the development branch, not deployed. Evidence is recorded in §11 and in the
-final report; visual acceptance is the owner's.
+Implemented 2026-11-21 on the development branch, not deployed; landed as `39e93dd`. Evidence is
+recorded in §11 and in the final report; visual acceptance is the owner's.
 
 - AC1/AC2/AC3 met — E-UI real Chromium at 1440 x 900 and 390 x 844: the Alunos menu overlaps the bar
   and is the hit target; the Acesso edit dialog covers the bar (bar 20, overlay 40; the bar's centre
